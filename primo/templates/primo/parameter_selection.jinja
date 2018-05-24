@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block subtitle %} {{ current_table.capitalize() }} Selection {% endblock %}
+{% block content %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script>
+$(document).ready(function() {
+    var isAllChecked = true;
+    $(".checkSingle").each(function() {
+        if(!this.checked) {
+            isAllChecked = false;
+        }
+    })
+    if(isAllChecked){ $("#checkAll").prop("checked", true); }
+
+
+    $("#checkAll").click(function(){
+        $('input:checkbox').prop('checked', this.checked);
+    });
+
+  $('.checkSingle').click(function() {
+    if ($(this).is(":checked")) {
+        var isAllChecked = true;
+        $(".checkSingle").each(function() {
+            if(!this.checked) {
+                isAllChecked = false;
+            }
+      })
+      if(isAllChecked){ $("#checkAll").prop("checked", true); }
+    } else {
+      $("#checkAll").prop("checked", false);
+    }
+  });
+});
+</script>
+<div id="query-wizard-filter-table-options">
+    <form action="{{ url('query_setup', request.session['scalar_or_3d']) }}" method="post" />
+    {% csrf_token %}
+    <input type="hidden" value="{{ current_table }}"    name="table"  />
+    <input type="submit" value="Cancel"                 name="commit" />
+    <input type="submit" value="Select Checked Options" name="commit" />
+    <input type="submit" value="Select All"             name="commit" />
+    <table width="100%">
+    <thead>
+    {% if current_table == 'variable' %}
+    <tr>
+        <th>Variable name</th>
+        <th>Variable label</th>
+        <th>ID</th>
+        <th style="padding-left:4px;"><input id="checkAll" type="checkbox"></th>
+    </tr>
+    </thead>
+    <tbody>
+        {% for val in vals: %}
+        <tr>
+            <td>{{ val['name'] }}</td>
+            <td>{{ val['label']}}</td>
+            <td>{{ val['id']}}</td>
+            <td><input type="checkbox" class="checkSingle" name='id' value="{{ val['id'] }}"
+                    {% if val['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
+        </tr>
+        {% endfor %}
+    {% elif current_table == 'bodypart' or current_table == 'taxon' %}
+        <link href="{{ static('primo/js/nlstree/nlstree.css') }}" media="screen" type="text/css" rel="stylesheet">
+        <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstree.js') }}"></script>
+        <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstreeext_state.js') }}"></script>
+
+    </thead>
+    <tbody>
+        <tr><td>
+        <div id="heirarchy">
+            <script>
+                var tree=new NlsTree("main");
+
+                tree.opt.icon = true;
+                tree.opt.sort="no";
+                tree.opt.check = true;
+
+                //maintain state using cookie
+                tree.opt.mntState=true;
+
+                //paste in tree structure
+                {{ javascript|safe }}
+                //render the tree
+                tree.renderAttributes();
+                tree.render();
+            </script>
+        </div>
+        </td></tr>
+    {% else %} {# sex or fossil #}
+    <tr>
+        <th width="80%">{{ current_table.capitalize()}}</th>
+        <th style="padding-left:4px;"><input id="checkAll" type="checkbox"></th>
+    </tr>
+    </thead>
+    <tbody>
+        {% for val in vals: %}
+        <tr>
+            <td width="80%">{{ val['name'] }}</td>
+            <td width="20%"><input type="checkbox" class="checkSingle" name='id' value="{{ val['id'] }}"
+                {% if val['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
+        </tr>
+        {% endfor %}
+    {% endif %}
+    </tbody>
+    </table>
+    <input type="submit" value="Cancel"                 name="commit" />
+    <input type="submit" value="Select Checked Options" name="commit" />
+    <input type="submit" value="Select All"             name="commit" />
+    </form>
+</div>
+{% endblock %}

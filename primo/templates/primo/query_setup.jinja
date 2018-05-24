@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+<script type="text/javascript" src="{{ static('primo/js/nlstree') }}"></script>
+{% block subtitle %} {{scalar_or_3d.title()}} Query Wizard {% endblock %}
+{% block content %}
+<p>The query generates data using the following criteria.</p>
+<div id="query-wizard-filter-tables">
+    <table width="30%" border="0" cellspacing="0">
+        <tr><th>Table</th><th>Attributes Selected</th></tr>
+{% for table in tables %}
+
+        <tr>
+            <td><a href="{{ url('parameter_selection', table['table_name']) }}">{{ table['display_name']|safe() }} &raquo;</a></td>
+            {% if selected[table['table_name']] %}
+            <td><img alt="selected" align="middle" src="{{ static('primo/images/tick.gif') }}" /></td>
+            {% else %}
+            <td><img alt="selected" align="middle" src="{{ static('primo/images/tick2_blank.gif') }}" /></td>
+            {% endif %}
+    {% endfor %}
+    </table>
+</div>
+    <br />
+
+    <a href="{{ url('query_start') }}">Reset Query </a>
+
+    {% if finished %}
+        &nbsp;&nbsp; | &nbsp;&nbsp;
+        {% if scalar_or_3d == "scalar" %}
+            <a href="{{ url('query_2d', 's', True) }}">Preview format  &raquo;</a>
+            &nbsp;&nbsp; | &nbsp;&nbsp;
+            <a href="{{ url('query_2d', 's', False) }}">See results  &raquo;</a>
+        {% else %}
+            <a href="{{ url('query_3d', 's', True) }}">Preview format  &raquo;</a>
+            &nbsp;&nbsp; | &nbsp;&nbsp;
+            <a href="{{ url('query_3d', 'Morphologika', False) }}">Download Morphologika file  &raquo;</a>
+            &nbsp;&nbsp; | &nbsp;&nbsp;
+            <a href="{{ url('query_3d', 'GRFND', False) }}">Download GRFND file  &raquo;</a>
+        {% endif %}
+
+    {% endif %}
+    <br />
+</div>
+
+
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block subtitle %} Query Wizard {% endblock %}
+{% block content %}
+<p>The query wizard will allow you to select specimens using the criteria:</p>
+    <ol type="a">
+    <li>taxa</li>
+    <li>variables (by body part)</li>
+    <li>sex</li>
+    <li>extant or fossil</li>
+    </ol>
+<p>and then download available data.</p>
+<p><a href="{{ url('query_setup', 'scalar') }}">Search for scalar data &raquo;</a></p>
+<p><a href="{{ url('query_setup', '3D') }}">Search for 3D data &raquo;</a></p>
+{% endblock %}

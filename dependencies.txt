@@ -1,0 +1,18 @@
+pip install anaconda, then
+
+conda install:
+    django
+    mysql-connector-python
+    mysqlclient
+
+pip install
+    django-jinja
+    django-debug-toolbar
+
+
+*********** In following I actually had to *hide* the mysql/lib directory *******
+if necessary, make symbolic link (or maybe copy) /usr/local/mysql/lib/libmysqlclient.18.dylib to /usr/local/mysql/lib/libmysqlclient.18.dylib
+
+possibly add usr/local/mysql/bin to $PATH
+
+mv /usr/local/mysql/lib /usr/local/mysql/lib2
