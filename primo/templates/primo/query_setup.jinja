@@ -25,9 +25,9 @@
     {% if finished %}
         &nbsp;&nbsp; | &nbsp;&nbsp;
         {% if scalar_or_3d == "scalar" %}
-            <a href="{{ url('query_2d', 's', True) }}">Preview format  &raquo;</a>
+            <a href="{{ url('query_2d', True) }}">Preview format  &raquo;</a>
             &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{{ url('query_2d', 's', False) }}">See results  &raquo;</a>
+            <a href="{{ url('query_2d', False) }}">See results  &raquo;</a>
         {% else %}
             <a href="{{ url('query_3d', 's', True) }}">Preview format  &raquo;</a>
             &nbsp;&nbsp; | &nbsp;&nbsp;

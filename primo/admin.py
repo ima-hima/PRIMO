@@ -18,8 +18,8 @@ class ScalarAdmin(admin.ModelAdmin):
 
 @admin.register(AgeClass)
 class AgeClassAdmin(admin.ModelAdmin):
-    list_display = ['id', 'age_class', 'ageclass_abbr', 'comments', ]
-    fields = ['age_class', 'ageclass_abbr', 'comments', ]
+    list_display = ['id', 'age_class', 'abbr', 'comments', ]
+    fields = ['age_class', 'abbr', 'comments', ]
     search_fields = ['id', ]
 
 
@@ -54,8 +54,8 @@ class BodypartVariableAdmin(admin.ModelAdmin):
 
 @admin.register(Captive)
 class CaptiveAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'captive_abbr', 'comments', ]
-    fields = ['name', 'captive_abbr', 'comments', ]
+    list_display = ['id', 'name', 'abbr', 'comments', ]
+    fields = ['name', 'abbr', 'comments', ]
 
 
 @admin.register(Continent)
@@ -66,10 +66,10 @@ class ContinentAdmin(admin.ModelAdmin):
 
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'country_abbr', 'comments', ]
-    fields = ['name', 'country_abbr', 'comments', ]
-    list_filter = (('name', DropdownFilter), ('country_abbr', DropdownFilter), )
-    search_fields = ['id', 'name', 'country_abbr', ]
+    list_display = ['id', 'name', 'abbr', 'comments', ]
+    fields = ['name', 'abbr', 'comments', ]
+    list_filter = (('name', DropdownFilter), ('abbr', DropdownFilter), )
+    search_fields = ['id', 'name', 'abbr', ]
     actions_on_top = True
     actions_on_bottom = True
 
@@ -81,16 +81,16 @@ class DatatypeAdmin(admin.ModelAdmin):
 
 @admin.register(Fossil)
 class FossilAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'fossil_abbr', 'comments', ]
-    fields = ['name', 'fossil_abbr', 'comments', ]
+    list_display = ['id', 'name', 'abbr', 'comments', ]
+    fields = ['name', 'abbr', 'comments', ]
 
 
 @admin.register(Institute)
 class InstituteAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'institute_abbr', 'institute_dept', 'locality', ]
-    fields = ['name', 'institute_abbr', 'institute_dept', 'locality', ]
-    list_filter = (('name', DropdownFilter), ('institute_abbr', DropdownFilter), ('locality__name', DropdownFilter), )
-    search_fields = ['name', 'institute_abbr', 'institute_dept', 'locality__name' ]
+    list_display = ['id', 'name', 'abbr', 'institute_dept', 'locality', ]
+    fields = ['name', 'abbr', 'institute_dept', 'locality', ]
+    list_filter = (('name', DropdownFilter), ('abbr', DropdownFilter), ('locality__name', DropdownFilter), )
+    search_fields = ['name', 'abbr', 'institute_dept', 'locality__name' ]
     actions_on_top = True
     actions_on_bottom = True
 
@@ -103,8 +103,8 @@ class IslandRegionAdmin(admin.ModelAdmin):
 
 @admin.register(Laterality)
 class LateralityAdmin(admin.ModelAdmin):
-    list_display = ['id', 'laterality', 'laterality_abbr', ]
-    fields = ['laterality', 'laterality_abbr', ]
+    list_display = ['id', 'laterality', 'abbr', ]
+    fields = ['laterality', 'abbr', ]
 
 
 @admin.register(Locality)
@@ -128,14 +128,14 @@ class ObserverAdmin(admin.ModelAdmin):
 
 @admin.register(Original)
 class OriginalAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'original_abbr', ]
-    fields = ['name', 'original_abbr', ]
+    list_display = ['id', 'name', 'abbr', ]
+    fields = ['name', 'abbr', ]
 
 
 @admin.register(Paired)
 class PairedAdmin(admin.ModelAdmin):
-    list_display = ['id', 'paired', 'paired_abbr', 'comments', ]
-    fields = ['paired', 'paired_abbr', 'comments', ]
+    list_display = ['id', 'name', 'abbr', 'comments', ]
+    fields = ['paired', 'abbr', 'comments', ]
 
 
 @admin.register(ProtocolVariable)
@@ -171,15 +171,15 @@ class SessionAdmin(admin.ModelAdmin):
     list_display = ['id', 'observer', 'specimen', 'protocol', 'original', 'iteration', 'comments', 'filename', ]
     fields = ['observer', 'specimen', 'protocol', 'original', 'iteration', 'comments', 'filename', ]
     list_filter = (('observer__name', DropdownFilter), ('specimen__hypocode', DropdownFilter), ('protocol__label', DropdownFilter), ('filename', DropdownFilter), )
-    search_fields = ['name', 'institute_abbr', 'institute_dept', 'locality__name' ]
+    search_fields = ['name', 'abbr', 'institute_dept', 'locality__name' ]
     actions_on_top = True
     actions_on_bottom = True
 
 
 @admin.register(Sex)
 class SexAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'sex_abbr', 'comments', ]
-    fields = ['name', 'sex_abbr', 'comments', ]
+    list_display = ['id', 'name', 'abbr', 'comments', ]
+    fields = ['name', 'abbr', 'comments', ]
 
 
 @admin.register(Specimen)
@@ -194,9 +194,9 @@ class SpecimenAdmin(admin.ModelAdmin):
 
 @admin.register(StateProvince)
 class StateProvinceAdmin(admin.ModelAdmin):
-    list_display = ['id', 'country', 'name', 'state_abbr', 'comments', ]
-    fields = ['country', 'name', 'state_abbr', 'comments', ]
-    list_filter = (('country__name', DropdownFilter), ('statname', DropdownFilter), ('statabbr', DropdownFilter), )
+    list_display = ['id', 'country', 'name', 'abbr', 'comments', ]
+    fields = ['country', 'name', 'abbr', 'comments', ]
+    list_filter = (('country__name', DropdownFilter), ('name', DropdownFilter), ('abbr', DropdownFilter), )
     actions_on_top = True
     actions_on_bottom = True
 
@@ -213,8 +213,8 @@ class TaxonAdmin(admin.ModelAdmin):
 
 @admin.register(Type)
 class TypeAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'type_abbr', 'comments', ]
-    fields = ['name', 'type_abbr', 'comments', ]
+    list_display = ['id', 'name', 'abbr', 'comments', ]
+    fields = ['name', 'abbr', 'comments', ]
 
 
 @admin.register(Variable)

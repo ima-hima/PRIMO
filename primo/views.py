@@ -14,7 +14,8 @@ from django.utils                   import timezone
 from django.views.generic           import TemplateView
 from functools                      import reduce
 
-import os
+from os   import mkdir
+from uuid import uuid1
 
 
 # Create your views here.
@@ -87,21 +88,19 @@ def exportMorphologika(fieldNames, metaData, values):
 
     metaDataLen = len(metaData)
 
-    dataOutString = "[individuals]retStrretStr"
-    dataOutString += metaDataLen + "retStrretStr"
-    dataOutString += "[landmarks]retStrretStr"
-    dataOutString += len(values) / metaDataLen + "retStrretStr"
-    dataOutString += "[dimensions]retStrretStr" + "3retStrretStr"
-    dataOutString += "[names]retStrretStr"
-    for key, value in metaData:
-        dataOutString += value['specimen_id'] + "retStr"
+    dataOutString =  '[individuals]' + retStr * 2
+    for strVal in [metaDataLen, '[landmarks]', len(values) / metaDataLen, '[dimensions]', '3', '[names]']:
+        dataOutString += strVal + retStr * 2
 
-    dataOutString += "retStr" + "[rawpoints]retStr"
-    flag = ''
+    for key, value in metaData:
+        dataOutString += value['specimen_id'] + retStr
+
+    dataOutString += retStr + '[rawpoints]' + retStr
+    flag = ''   # what is this for?
     for key, value in values:
         if value['specimen_id'] != flag:
             flag = value['specimen_id']
-            dataOutString += "retStr'" + preg_replace('/ /', '_', value['hypocode']) + "retStr"
+            dataOutString += retStr + "'" + preg_replace('/ /', '_', value['hypocode']) + retStr
             point_ctr = 1;
         if value['x'] == '9999.0000' and value['y'] == '9999.0000' and value['z'] == '9999.0000':
             dataOutString += '9999\t9999\t9999' + retStr
@@ -111,64 +110,38 @@ def exportMorphologika(fieldNames, metaData, values):
                 missing_pts[ value['specimen_id'] ] += ' ' + point_ctr;
 
         else:
-            dataOutString += value['x'] + "\t" + value['y'] + "\t" + value['z'] + "retStr";
+            dataOutString += value['x'] + "\t" + value['y'] + "\t" + value['z'] + retStr
 
-        point_ctr++;
+        point_ctr += 1
 
-#         } else if ($which == 'grfnd') {
-#             dataOutString = '1 ' + count($metaData) + 'L ' +  3 * (count(values) / count($metaData)). " 1 9999 DIM=3retStr";
-#             foreach ($metaData as $key => $value) {
-#                 dataOutString += $metaData[$key]['specimen_id'] + "retStr";
-#             }
-#             $flag = '';
-#             foreach (values as $key => $value) {
-#                 if ( (value['specimen_id'] != $flag) ) {
-#                     $flag = value['specimen_id'];
-#                     dataOutString += "retStr";
-#                     point_ctr = 1;
-#                 }
-#                 if (value['x'] == '9999.0000' and value['y'] == '9999.0000' and value['z'] == '9999.0000') {
-#                     dataOutString += "9999\t9999\t9999retStr";
-#                     if( !isset(missing_pts[value['specimen_id'] ]) ) {
-#                         missing_pts[ value['specimen_id'] ] = point_ctr;
-#                     } else {
-#                         missing_pts[ value['specimen_id'] ] += ' ' + point_ctr;
-#                     }
-#                 } else {
-#                     dataOutString += value['x'] + "\t" + value['y'] + "\t" + value['z'] + "retStr";
-#                 }
-#                 point_ctr++;
-#             }
-#         }
+        dirName = 'PRIMO_3D_' + uuid1()  # uuid1() creates UUID string
+        metaOutString = '';
+        try:
+            mkdir( '/tmp/' + dirName)
+            outFile = open('/tmp/' + dirName + '/specimen_data.csv', 'w')
+            outFlie.write( ' specimen id, hypocode, institute, catalog number, taxon name, sex, fossil or extant, captive or wild-caught, original or cast, protocol, session comments, specimen comments, missing points (indexed by specimen starting at 1)' + retStr )
+            outFlie.write( ', '.join(fieldNamesArray) )
+            for key, value in metaData:
+                for metaKey, metaValue in value: ## was    metaData[key]:
+                    if metaKey != 'datindex' and metaKey != 'variable_id':
+                        metaOutString += fixQuotes(metaVal) + ','
+                try:
+                    metaOutString += missing_pts[ value['specimen_id'] ]
+                except:
+                    pass
 
-#         $folderName = 'PRIMO_3D_' + uniqid();
-#         $metaOutString = '';
-#         if (mkdir ("/tmp/$folderName")) {
-#             $fp = fopen("/tmp/$folderName/specimen_data.csv", 'w');
-#             fwrite($fp, "specimen id, hypocode, institute, catalog number, taxon name, sex, fossil or extant, captive or wild-caught, original or cast, protocol, session comments, specimen comments, missing points (indexed by specimen starting at 1)retStr");
-#             fwrite ($fp, implode(', ', $fieldNamesArray));
-#             foreach ($metaData as $key => $value) {
-#                 foreach ($metaData[$key] as $metaKey => $metaVal) {
-#                     if( $metaKey !== 'datindex' and $metaKey !== 'variable_id' ) {
-#                         $metaOutString += $this->fixQuotes($metaVal) + ',';
-#                     }
-#                 }
-#                 if( isset(missing_pts[ $metaData[$key]['specimen_id'] ]) ) {
-#                     $metaOutString += missing_pts[ $metaData[$key]['specimen_id'] ];
-#                 }
-#                 $metaOutString += "retStr";
-#             }
-#             fwrite($fp, $metaOutString);
-#             //fwrite($fp, missing_pts);
-#             fclose($fp);
+                metaOutString += retStr;
 
-#             $fp = fopen("/tmp/$folderName/3d_data.txt", 'w');
-#             fwrite($fp, dataOutString);
-#             fclose($fp);
-#             exec("tar -czf /tmp/$folderName.tar.gz /tmp/$folderName/");
-#             unlink("/tmp/$folderName/3d_data.txt");
-#             unlink("/tmp/$folderName/specimen_data.csv");
-#             rmdir("/tmp/$folderName");
+            outFile.write(metaOutString)
+            outFile.close()
+
+            outFile = open('/tmp/' + dirName + '/3d_data.txt', 'w');
+            outFile.write(dataOutString)
+            outFile.close()
+            exec("tar -czf /tmp/$folderName.tar.gz /tmp/$folderName/");
+            unlink("/tmp/$folderName/3d_data.txt");
+            unlink("/tmp/$folderName/specimen_data.csv");
+            rmdir("/tmp/$folderName");
 
 #             $file = file_get_contents ("/tmp/$folderName.tar.gz");
 #             header("Content-type: application/x-compressed");
@@ -181,6 +154,44 @@ def exportMorphologika(fieldNames, metaData, values):
 
 #         exit;
 #     }
+        except:
+            pass
+
+
+def fixQuotes(inStr):
+    ''' Quote all the things that need to be quoted in a csv row. '''
+    needQuote = False;
+
+    # -----------------------------------------------------------------
+    #  Quotes in the value must be quoted.
+    # -----------------------------------------------------------------
+    if inStr.find('"') >= 0:
+        inStr     = inStr.replace('"', '""')
+        needQuote = True
+
+    # -----------------------------------------------------------------
+    #  The value separater must be quoted ("," in this case.)
+    # -----------------------------------------------------------------
+    elif inStr.find(",") >= 0:
+        needQuote = True
+
+    # -----------------------------------------------------------------
+    #  Quote line breaks if they are present.
+    # -----------------------------------------------------------------
+    elif (inStr.find('\n') >= 0) or (inStr.find('\r') >= 0): # \r is for mac
+        needQuote = True;
+
+    # -----------------------------------------------------------------
+    #  Quotes equal sign (Excel interprets this as a formula).
+    # -----------------------------------------------------------------
+    elif inStr.find('=') >= 0:
+        needQuote = True
+
+    if (needQuote):
+        inStr = '"' + inStr + '"'
+
+    return inStr
+
 
 
 def log_in(request):
@@ -399,33 +410,73 @@ def create_tree_javascript(request, parent_id, current_table):
 
 def query_2d(request, is_preview):
     # TODO: Look into doing this all with built-ins, rather than with .raw()
+    # Also, change name of captive.captive to captive.name, original.original to original.name
 
-    base = 'SELECT `scalar`.`id`, \
-                   `specimen` .`id`             AS specimen_id, \
-                   `specimen` .`hypocode`       AS hypocode, \
-                   `institute`.`institute_abbr` AS collection_acronym, \
-                   `specimen` .`catalog_number` AS catalog_number, \
-                   `specimen` .`mass`           AS mass, \
-                   `taxon`    .`name`           AS taxon_name, \
-                   `sex`      .`name`           AS sex_type, \
-                   `fossil`   .`name`           AS fossil_or_extant, \
-                   `captive`  .`name`           AS captive_or_wild, \
-                   `original` .`name`           AS original_or_cast, \
-                   `variable` .`label`          AS variable_label,\
-                   `scalar`   .`value`          AS scalar_value,\
-                   `session`  .`comments`       AS session_comments, \
-                   `specimen` .`comments`       AS specimen_comments \
-            FROM `scalar` \
-\
-            Inner Join `variable`          ON `scalar`           .`variable_id`  = `variable` .`id` \
-            Inner Join `session`           ON `scalar`           .`session_id`   = `session`  .`id` \
-            Inner Join `specimen`          ON `session`          .`specimen_id`  = `specimen` .`id` \
-            Inner Join `taxon`             ON `specimen`         .`taxon_id`     = `taxon`    .`id` \
-            Inner Join `sex`               ON `specimen`         .`sex_id`       = `sex`      .`id` \
-            Inner Join `fossil`            ON `specimen`         .`fossil_id`    = `fossil`   .`id` \
-            Inner Join `institute`         ON `specimen`         .`institute_id` = `institute`.`id` \
-            Inner Join `captive`           ON `specimen`         .`captive_id`   = `captive`  .`id` \
-            Inner Join `original`          ON `session`          .`original_id`  = `original` .`id`'
+    tables = [ '`scalar`',
+               '`specimen`',
+               '`specimen`',
+               '`institute`',
+               '`specimen`',
+               '`specimen`',
+               '`taxon`',
+               '`sex`',
+               '`fossil`',
+               '`captive`',
+               '`original`',
+               '`variable`',
+               '`scalar`',
+               '`session`',
+               '`specimen`',
+             ]
+
+    fields = [ '`id`',
+               '`id`',
+               '`hypocode`',
+               '`institute_abbr`',
+               '`catalog_number`',
+               '`mass`',
+               '`name`',
+               '`name`',
+               '`name`',
+               '`name`',
+               '`name`',
+               '`label`',
+               '`value`',
+               '`comments`',
+               '`comments`',
+             ]
+
+    aliases = [ 'specimen_id',
+                'hypocode',
+                'collection_acronym',
+                'catalog_number',
+                'mass',
+                'taxon_name',
+                'sex_type',
+                'fossil_or_extant',
+                'captive_or_wild',
+                'original_or_cast',
+                'variable_labe',
+                'scalar_value',
+                'session_comments',
+                'specimen_comments',
+              ]
+
+    base = 'SELECT '
+
+    for item in zip(tables, fields, aliases):
+        base += item[1] + '.' + item[2] + ' AS ' + item[3] + ', '
+
+    base[:-1] += 'FROM `scalar` \
+            Inner Join `variable` ON `scalar`   .`variable_id`  = `variable` .`id` \
+            Inner Join `session`  ON `scalar`   .`session_id`   = `session`  .`id` \
+            Inner Join `specimen` ON `session`  .`specimen_id`  = `specimen` .`id` \
+            Inner Join `taxon`    ON `specimen` .`taxon_id`     = `taxon`    .`id` \
+            Inner Join `sex`      ON `specimen` .`sex_id`       = `sex`      .`id` \
+            Inner Join `fossil`   ON `specimen` .`fossil_id`    = `fossil`   .`id` \
+            Inner Join `institute`ON `specimen` .`institute_id` = `institute`.`id` \
+            Inner Join `captive`  ON `specimen` .`captive_id`   = `captive`  .`id` \
+            Inner Join `original` ON `session`  .`original_id`  = `original` .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
