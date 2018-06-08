@@ -95,7 +95,7 @@ class AuthUserUserPermissions(models.Model):
 
 class Bodypart(models.Model):
     name           = models.CharField   ('Bodypart name',   max_length=191, blank=True,  null=True,                unique=True)
-    parent         = models.ForeignKey  ('Bodypart',                              null=True, on_delete=models.PROTECT)
+    parent         = models.ForeignKey  ('Bodypart',                              null=True, on_delete=models.PROTECT, verbose_name="Parent Bodypart")
     expand_in_tree = models.BooleanField(                                   blank=False, null=False, default=False)
     tree_root      = models.BooleanField(                                   blank=False, null=False, default=False)
     comments       = models.TextField   (                                   blank=True,  null=True)
@@ -122,9 +122,9 @@ class BodypartVariable(models.Model):
 
 class Captive(models.Model):
     CHOICES  = ( ('captive', 'captive'), ('wild-caught', 'wild-caught'), ('probably captive', 'probably captive'), )
-    name     = models.CharField(                max_length=16, blank=True, null=True, choices=CHOICES)
-    abbr     = models.CharField('Abbreviation', max_length=2,  blank=True, null=True)
-    comments = models.TextField(                               blank=True, null=True)
+    name     = models.CharField('Captive or wild-caught', max_length=16, blank=True, null=True, choices=CHOICES)
+    abbr     = models.CharField('Abbreviation',           max_length=2,  blank=True, null=True)
+    comments = models.TextField(                                         blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -253,9 +253,9 @@ class DjangoSession(models.Model):
 
 
 class Fossil(models.Model):
-    name     = models.CharField(max_length=16, blank=True, null=True)
-    abbr     = models.CharField(max_length=2,  blank=True, null=True)
-    comments = models.TextField(               blank=True, null=True)
+    name     = models.CharField('Fossil or Extant',  max_length=16, blank=True, null=True)
+    abbr     = models.CharField("Abbreviation",      max_length=2,  blank=True, null=True)
+    comments = models.TextField(                                    blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -270,7 +270,7 @@ class Fossil(models.Model):
 
 class Institute(models.Model):
     abbr           = models.CharField ('Abbreviation', max_length=8,   blank=True, null=True)
-    name           = models.CharField ('Institure',    max_length=255, blank=True, null=True)
+    name           = models.CharField ('Institute',    max_length=255, blank=True, null=True)
     institute_dept = models.CharField ('Department',   max_length=255, blank=True, null=True)
     locality       = models.ForeignKey('Locality', on_delete=models.PROTECT)
     comments       = models.TextField (                                blank=True, null=True)
@@ -285,8 +285,8 @@ class Institute(models.Model):
 
 
 class IslandRegion(models.Model):
-    name     = models.CharField(max_length=255, blank=True, null=True)
-    comments = models.TextField(                blank=True, null=True)
+    name     = models.CharField('Region Name', max_length=255, blank=True, null=True)
+    comments = models.TextField(                               blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -468,7 +468,7 @@ class Session(models.Model):
     observer  = models.ForeignKey  ('Observer', on_delete=models.PROTECT)
     specimen  = models.ForeignKey  ('Specimen', on_delete=models.PROTECT)
     protocol  = models.ForeignKey  ('Protocol', on_delete=models.PROTECT)
-    original  = models.ForeignKey  ('Original', on_delete=models.PROTECT)
+    original  = models.ForeignKey  ('Original', on_delete=models.PROTECT, verbose_name="Original or Cast")
     iteration = models.IntegerField(                                        blank=True, null=True)
     comments  = models.TextField   (                                        blank=True, null=True)
     filename  = models.CharField   (                        max_length=255, blank=True, null=True)
@@ -506,18 +506,18 @@ class Sex(models.Model):
 
 
 class Specimen(models.Model):
-    hypocode       = models.CharField   (                 max_length=20, blank=True, null=True)
-    taxon          = models.ForeignKey  ('Taxon',     on_delete=models.PROTECT)
-    institute      = models.ForeignKey  ('Institute', on_delete=models.PROTECT)
-    catalog_number = models.CharField   (                 max_length=64, blank=True, null=True)
-    mass           = models.IntegerField(                                blank=True, null=True)
-    locality       = models.ForeignKey  ('Locality',  on_delete=models.PROTECT)
-    sex            = models.ForeignKey  ('Sex',       on_delete=models.PROTECT)
-    ageclass       = models.ForeignKey  ('AgeClass',  on_delete=models.PROTECT)
-    fossil         = models.ForeignKey  ('Fossil',    on_delete=models.PROTECT)
-    captive        = models.ForeignKey  ('Captive',   on_delete=models.PROTECT)
-    type           = models.ForeignKey  ('Type',      on_delete=models.PROTECT)
-    comments       = models.TextField   (                                blank=True, null=True)
+    hypocode       = models.CharField   (                    max_length=20, blank=True, null=True)
+    taxon          = models.ForeignKey  ('Taxon',        on_delete=models.PROTECT)
+    institute      = models.ForeignKey  ('Institute',    on_delete=models.PROTECT)
+    catalog_number = models.CharField   (                    max_length=64, blank=True, null=True)
+    mass           = models.IntegerField(                                   blank=True, null=True)
+    locality       = models.ForeignKey  ('Locality',     on_delete=models.PROTECT)
+    sex            = models.ForeignKey  ('Sex',          on_delete=models.PROTECT)
+    ageclass       = models.ForeignKey  ('AgeClass',     on_delete=models.PROTECT)
+    fossil         = models.ForeignKey  ('Fossil',       on_delete=models.PROTECT)
+    captive        = models.ForeignKey  ('Captive',      on_delete=models.PROTECT)
+    specimentype   = models.ForeignKey  ('SpecimenType', on_delete=models.PROTECT)
+    comments       = models.TextField   (                                   blank=True, null=True)
 
     def __str__(self):
         return self.hypocode
@@ -526,6 +526,21 @@ class Specimen(models.Model):
         managed  = True
         db_table = 'specimen'
         ordering = ['id']
+
+
+class SpecimenType(models.Model):
+    name     = models.CharField('Specimen Type', max_length=16, blank=True, null=True)
+    abbr     = models.CharField('Abbreviation',  max_length=2,  blank=True, null=True)
+    comments = models.TextField(                                blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        managed      = True
+        db_table     = 'type'
+        ordering     = ['id']
+        verbose_name = 'specimen type'
 
 
 class StateProvince(models.Model):
@@ -543,13 +558,13 @@ class StateProvince(models.Model):
 
 
 class Taxon(models.Model):
-    parent         = models.ForeignKey  ('Taxon',       on_delete=models.PROTECT,                   null=True)
-    rank           = models.ForeignKey  ('Rank',        on_delete=models.PROTECT)
-    name           = models.CharField   (                              max_length=255, blank=True,  null=True)
-    fossil         = models.ForeignKey  ('Fossil',      on_delete=models.PROTECT)
-    expand_in_tree = models.BooleanField(                                              blank=False, null=False, default=False)
-    tree_root      = models.BooleanField(                                              blank=False, null=False, default=False)
-    comments       = models.TextField   (                                              blank=True,  null=True)
+    parent         = models.ForeignKey  ('Taxon',  on_delete=models.PROTECT,                   null=True, verbose_name="Parent Taxon")
+    rank           = models.ForeignKey  ('Rank',   on_delete=models.PROTECT)
+    name           = models.CharField   ('Taxon name',            max_length=255, blank=True,  null=True)
+    fossil         = models.ForeignKey  ('Fossil', on_delete=models.PROTECT)
+    expand_in_tree = models.BooleanField(                                         blank=False, null=False, default=False)
+    tree_root      = models.BooleanField(                                         blank=False, null=False, default=False)
+    comments       = models.TextField   (                                         blank=True,  null=True)
 
     def __str__(self):
         return self.name
@@ -559,21 +574,6 @@ class Taxon(models.Model):
         db_table            = 'taxon'
         verbose_name_plural = 'taxa'
         ordering            =['name']
-
-
-class Type(models.Model):
-    name     = models.CharField('Type',         max_length=16, blank=True, null=True)
-    abbr     = models.CharField('Abbreviation', max_length=2,  blank=True, null=True)
-    comments = models.TextField(                                    blank=True, null=True)
-
-    def __str__(self):
-        return self.name
-
-    class Meta:
-        managed      = True
-        db_table     = 'type'
-        ordering     = ['id']
-        verbose_name = 'type'
 
 
 class Variable(models.Model):

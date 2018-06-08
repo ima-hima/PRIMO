@@ -432,7 +432,7 @@ def query_2d(request, is_preview):
     fields = [ '`id`',
                '`id`',
                '`hypocode`',
-               '`institute_abbr`',
+               '`abbr`',
                '`catalog_number`',
                '`mass`',
                '`name`',
@@ -446,7 +446,8 @@ def query_2d(request, is_preview):
                '`comments`',
              ]
 
-    aliases = [ 'specimen_id',
+    aliases = [ 'scalar_id',
+                'specimen_id',
                 'hypocode',
                 'collection_acronym',
                 'catalog_number',
@@ -456,27 +457,27 @@ def query_2d(request, is_preview):
                 'fossil_or_extant',
                 'captive_or_wild',
                 'original_or_cast',
-                'variable_labe',
+                'variable_label',
                 'scalar_value',
                 'session_comments',
                 'specimen_comments',
               ]
 
-    base = 'SELECT '
+    selects = 'SELECT '
 
     for item in zip(tables, fields, aliases):
-        base += item[1] + '.' + item[2] + ' AS ' + item[3] + ', '
+        selects += item[0] + '.' + item[1] + ' AS ' + item[2] + ', '
 
-    base[:-1] += 'FROM `scalar` \
-            Inner Join `variable` ON `scalar`   .`variable_id`  = `variable` .`id` \
-            Inner Join `session`  ON `scalar`   .`session_id`   = `session`  .`id` \
-            Inner Join `specimen` ON `session`  .`specimen_id`  = `specimen` .`id` \
-            Inner Join `taxon`    ON `specimen` .`taxon_id`     = `taxon`    .`id` \
-            Inner Join `sex`      ON `specimen` .`sex_id`       = `sex`      .`id` \
-            Inner Join `fossil`   ON `specimen` .`fossil_id`    = `fossil`   .`id` \
-            Inner Join `institute`ON `specimen` .`institute_id` = `institute`.`id` \
-            Inner Join `captive`  ON `specimen` .`captive_id`   = `captive`  .`id` \
-            Inner Join `original` ON `session`  .`original_id`  = `original` .`id`'
+    base = selects[:-2] + ' FROM `scalar` \
+            INNER JOIN `variable` ON `scalar`   .`variable_id`  = `variable` .`id` \
+            INNER JOIN `session`  ON `scalar`   .`session_id`   = `session`  .`id` \
+            INNER JOIN `specimen` ON `session`  .`specimen_id`  = `specimen` .`id` \
+            INNER JOIN `taxon`    ON `specimen` .`taxon_id`     = `taxon`    .`id` \
+            INNER JOIN `sex`      ON `specimen` .`sex_id`       = `sex`      .`id` \
+            INNER JOIN `fossil`   ON `specimen` .`fossil_id`    = `fossil`   .`id` \
+            INNER JOIN `institute`ON `specimen` .`institute_id` = `institute`.`id` \
+            INNER JOIN `captive`  ON `specimen` .`captive_id`   = `captive`  .`id` \
+            INNER JOIN `original` ON `session`  .`original_id`  = `original` .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
@@ -485,7 +486,7 @@ def query_2d(request, is_preview):
     request.session['query'] = final_sql
 
     with connection.cursor() as variable_query:
-        variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s;", [request.session['selected']['variable']] )
+        variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s ORDER BY `label` ASC;", [request.session['selected']['variable']] )
         variable_labels = [label for label in variable_query.fetchall()]
 
     # use cursor here?
@@ -501,7 +502,7 @@ def query_2d(request, is_preview):
                       )
         # Now return all rows as a dictionary object. Note that each variable name will have its own row,
         # so I'm going to have to jump through some hoops to get the names out correctly for the
-        # table headers in the view. TODO: There has to be a better way to do that.
+        # table headers in the view. TODO: There has to be a better way to do this.
 
         # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
@@ -517,12 +518,58 @@ def query_2d(request, is_preview):
                                                             # concatVariableList(request.session['selected']['bodypart']),
                                                             request.session['selected']['variable'],
                                                           ),
-        'query_results'   : query_results,
+        'query_results'   : build_table_2d(query_results),
         'variable_labels' : variable_labels,
         'variable_ids'    : request.session['selected']['variable'],
     }
 
     return render(request, 'primo/query_results.jinja', context, )
+
+
+def build_table_2d(query_results):
+    """ Return a list of dictionaries where each dictionary has the keys
+        Specimen ID
+        Hypocode
+        Collection Acronym
+        Catalog No.
+        Taxon name
+        Sex
+        Fossil or Extant
+        Captive or Wild
+        Session Comments
+        Specimen Comments
+        All variables """
+    current_specimen = query_results[0]['hypocode']
+    output = []
+    current_dict = build_query_value_dict(query_results[0])
+    for row in query_results:
+        if row['hypocode'] == current_specimen:
+            current_dict[row['variable_label']] = row['scalar_value']
+        else:
+            output.append(current_dict)
+            current_dict = build_query_value_dict(row)
+            output[row['variable_label']] = row['scalar_value']
+    return output
+
+
+def build_query_value_dict(query_result):
+    output = {'specimen_id'        : query_result['specimen_id'],
+              'hypocode'           : query_result['hypocode'],
+              'collection_acronym' : query_result['collection_acronym'],
+              'catalog_number'     : query_result['catalog_number'],
+              'mass'               : query_result['mass'],
+              'taxon_name'         : query_result['taxon_name'],
+              'sex_type'           : query_result['sex_type'],
+              'fossil_or_extant'   : query_result['fossil_or_extant'],
+              'captive_or_wild'    : query_result['captive_or_wild'],
+              'original_or_cast'   : query_result['original_or_cast'],
+              'variable_label'     : query_result['variable_label'],
+              'scalar_value'       : query_result['scalar_value'],
+              'session_comments'   : query_result['session_comments'],
+              'specimen_comments'  : query_result['specimen_comments'],
+             }
+    return output
+
 
 
 def query_3d(request, which_3d_output_type, is_preview):
@@ -549,18 +596,18 @@ def query_3d(request, which_3d_output_type, is_preview):
                             `data3d`   .`variable_id` \
             FROM data3d \
 \
-            Inner Join `variable`          ON `data3d`           .`variable_id`  = `variable`  .`id` \
-            Inner Join `bodypart_variable` ON `bodypart_variable`.`variable_id`  = `variable`  .`id` \
-            Inner Join `bodypart`          ON `bodypart_variable`.`bodypart_id`  = `bodypart`  .`id` \
-            Inner Join `session`           ON `data3d`           .`session_id`   = `session`   .`id` \
-            Inner Join `specimen`          ON `session`          .`specimen_id`  = `specimen`  .`id` \
-            Inner Join `taxon`             ON `specimen`         .`taxon_id`     = `taxon`     .`id` \
-            Inner Join `sex`               ON `specimen`         .`sex_id`       = `sex`       .`id` \
-            Inner Join `fossil`            ON `specimen`         .`fossil_id`    = `fossil`    .`id` \
-            Inner Join `institute`         ON `specimen`         .`institute_id` = `institute` .`id` \
-            Inner Join `protocol`          ON `session`          .`protocol_id`  = `protocol`  .`id` \
-            Inner Join `captive`           ON `specimen`         .`captive_id`   = `captive`   .`id` \
-            Inner Join `original`          ON `session`          .`original_id`  = `original`  .`id`'
+            INNER JOIN `variable`          ON `data3d`           .`variable_id`  = `variable`  .`id` \
+            INNER JOIN `bodypart_variable` ON `bodypart_variable`.`variable_id`  = `variable`  .`id` \
+            INNER JOIN `bodypart`          ON `bodypart_variable`.`bodypart_id`  = `bodypart`  .`id` \
+            INNER JOIN `session`           ON `data3d`           .`session_id`   = `session`   .`id` \
+            INNER JOIN `specimen`          ON `session`          .`specimen_id`  = `specimen`  .`id` \
+            INNER JOIN `taxon`             ON `specimen`         .`taxon_id`     = `taxon`     .`id` \
+            INNER JOIN `sex`               ON `specimen`         .`sex_id`       = `sex`       .`id` \
+            INNER JOIN `fossil`            ON `specimen`         .`fossil_id`    = `fossil`    .`id` \
+            INNER JOIN `institute`         ON `specimen`         .`institute_id` = `institute` .`id` \
+            INNER JOIN `protocol`          ON `session`          .`protocol_id`  = `protocol`  .`id` \
+            INNER JOIN `captive`           ON `specimen`         .`captive_id`   = `captive`   .`id` \
+            INNER JOIN `original`          ON `session`          .`original_id`  = `original`  .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`id`, `data3d`.`datindex` ASC'
@@ -569,8 +616,8 @@ def query_3d(request, which_3d_output_type, is_preview):
     request.session['query'] = final_sql
 
     with connection.cursor() as variable_query:
-        variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s;", [request.session['selected']['variable']] )
-        variable_labels = [label for label in variable_query.fetchall()]
+        variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s ORDER BY `label` ASC;", [request.session['selected']['variable']] )
+        variable_labels = [label[0] for label in variable_query.fetchall()]
 
     with connection.cursor() as cursor:
 

@@ -52,8 +52,9 @@ $(document).ready(function()
         <td>{{variable}}</td>
     {% endfor %} #}
     {% for label in variable_labels %}
-        {% if row['variable_label'] == label[0] %}         <!-- the last element in the tuple is the dictionary of {variable id : variable label} -->
-            <td>{{ row['scalar_value'] }}</td> <!-- so print value at that location -->
+        <!-- <br />{{label}} {{row['variable_label']}} {{row['scalar_value']}} {{row['hypocode']}} -->
+        {% if label in row %}         <!-- the last element in the tuple is the dictionary of {variable id : variable label} -->
+            <td>{{ row['label'] }}</td> <!-- so print value at that location -->
         {% else %}
             <td></td>
         {% endif %}
