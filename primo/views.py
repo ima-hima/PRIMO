@@ -29,10 +29,54 @@ class IndexView(TemplateView):
 
 
 def concatVariableList(myList):
+    """ Return myList as comma-seperated string of values enclosed in parens. """
     return '(' + reduce((lambda b,c : b + str(c) + ','), myList, '' )[:-1] + ')'
 
 
+def create_tree_javascript(request, parent_id, current_table):
+    """ Create javascript for heirarchical tree display. Formal parameters for
+        tree.add() are:
+        add(node_id, parent_id, node name, url, icon, expand?, precheck?, extra info,
+        text on mouse hover).
+        The last two are currently unneeded, and therefore ignored below.
+        Function is recursive on parent_id and returns a properly-formatted string
+        of Javascript code, although from reading nlstree docs (https://www.addobject.com/nlstree),
+        it seems order is unimportant, so recursion may be unnecessary (wasteful?).
+        Oh, wait: necessary because of if statement dealing with Eocatarrhini.
+        Okay, so *eventually* unnecessary? """
+    javascript = ''
+    js_item_delimiter = '", "'
+
+    vals = apps.get_model(app_label='primo',
+                          model_name=current_table.capitalize()).objects.values('id',
+                                                                                'name',
+                                                                                'parent_id',
+                                                                                'expand_in_tree',
+                                                                               ).filter(parent_id=parent_id)
+    #print(vals)
+    for val in vals:
+        # remove quote marks from `name`, as they'll screw up Javascript
+        name      = val['name'].replace('"', '')
+        item_id   = val['id']
+        parent_id = val['parent_id']
+        expand    = 'true' if val['expand_in_tree'] else 'false'
+        #print(name)
+        if name != 'Eocatarrhini': # I'm not clear why I don't need to recurse up Eocatarrhini heirarchy
+            javascript += 'tree.add("' \
+                        + str(item_id)   + js_item_delimiter \
+                        + str(parent_id) + js_item_delimiter \
+                        + name           + js_item_delimiter \
+                        + str(item_id)   + js_item_delimiter + '", ' \
+                        + expand + ', '
+
+            javascript += 'false );\n' if item_id not in request.session['selected'][current_table] else 'true );\n'
+            javascript += create_tree_javascript(request, item_id, current_table)
+
+    return javascript
+
+
 def email(request):
+    """ Create email form, collect info, send email. """
     form = EmailForm(request.POST or None)
 
     success = False
@@ -61,11 +105,15 @@ def email(request):
 
 
 def erd(request):
+    """ Retrieve relational database table pdf. """
     return render(request, 'primo/erd.jinja')
 
 
 def exportCsvFile(fieldNames, values):
-    ''' This is for 2D data. For 3D data we write either or Morphologika or GRFND file. '''
+    """ Collate data returned from SQL query, render into csv, save csv to tmp directory,
+        start download.
+        This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
+
     #reminder: The format will be yy_mm_dd_hh_mm
     with open(datetime.now().strftime('%y_%m_%d_%H_%M'), 'w') as csvfile:
         csv_rows = [
@@ -159,7 +207,8 @@ def exportMorphologika(fieldNames, metaData, values):
 
 
 def fixQuotes(inStr):
-    ''' Quote all the things that need to be quoted in a csv row. '''
+    """ Quote all the things that need to be quoted in a csv row. """
+
     needQuote = False;
 
     # -----------------------------------------------------------------
@@ -192,6 +241,27 @@ def fixQuotes(inStr):
 
     return inStr
 
+
+def init_query_table(query_result):
+    """ Initialize query table (actually a dictionary) that is to be used for data
+        that will be pushed out to view. A single query row is received and put into
+        dictionary. """
+    output = {'specimen_id'        : query_result['specimen_id'],
+              'hypocode'           : query_result['hypocode'],
+              'collection_acronym' : query_result['collection_acronym'],
+              'catalog_number'     : query_result['catalog_number'],
+              'mass'               : query_result['mass'],
+              'taxon_name'         : query_result['taxon_name'],
+              'sex_type'           : query_result['sex_type'],
+              'fossil_or_extant'   : query_result['fossil_or_extant'],
+              'captive_or_wild'    : query_result['captive_or_wild'],
+              'original_or_cast'   : query_result['original_or_cast'],
+              'variable_label'     : query_result['variable_label'],
+              'scalar_value'       : query_result['scalar_value'],
+              'session_comments'   : query_result['session_comments'],
+              'specimen_comments'  : query_result['specimen_comments'],
+             }
+    return output
 
 
 def log_in(request):
@@ -233,9 +303,9 @@ def logout_view(request):
 
 @login_required
 def query_setup(request, scalar_or_3d = 'scalar'):
-    '''tables will be all of the tables that are available to search on for a particular search type (e.g. scalar or 3D).
-       Some of those tables, like sex, should be pre-filled with all values selected. In that case,
-       do a second query for all possible values and fill those values in.'''
+    """ tables will be all of the tables that are available to search on for a particular search type (e.g. scalar or 3D).
+        Some of those tables, like sex, should be pre-filled with all values selected. In that case,
+        do a second query for all possible values and fill those values in. """
     # if there's a POST, then parameter_selection has been called, and some values have been sent back
     if request.method == 'POST':
         current_table = request.POST.get('table')
@@ -302,15 +372,6 @@ def query_setup(request, scalar_or_3d = 'scalar'):
 
 
 @login_required
-def query_start(request):
-    request.session['tables']            = []
-    request.session['selected']          = dict()
-    request.session['selected']['table'] = []
-    request.session['scalar_or_3d']      = ''
-    return render(request, 'primo/query_start.jinja')
-
-
-@login_required
 def parameter_selection(request, current_table):
     javascript = ''
 
@@ -369,120 +430,40 @@ def parameter_selection(request, current_table):
                                                               } )
 
 
-def create_tree_javascript(request, parent_id, current_table):
-    ''' Creates javascript for heirarchical tree display. Formal parameters for tree.add() are:
-        add(node_id, parent_id, node name, url, icon, expand?, precheck?, extra info, text on mouse hover).
-        The last two are currently unneeded, and therefore ignored below.
-        Function is recursive on parent_id and returns a properly-formatted string of Javascript code,
-        although from reading nlstree docs (https://www.addobject.com/nlstree), it seems order is unimportant,
-        so recursion may be unnecessary (wasteful?). Oh, wait: necessary because of if statement dealing with Eocatarrhini.
-        Okay, so *eventually* unnecessary?'''
-    javascript = ''
-    js_item_delimiter = '", "'
-
-    vals = apps.get_model(app_label='primo',
-                          model_name=current_table.capitalize()).objects.values('id',
-                                                                                'name',
-                                                                                'parent_id',
-                                                                                'expand_in_tree',
-                                                                               ).filter(parent_id=parent_id)
-    #print(vals)
-    for val in vals:
-        # remove quote marks from `name`, as they'll screw up Javascript
-        name      = val['name'].replace('"', '')
-        item_id   = val['id']
-        parent_id = val['parent_id']
-        expand    = 'true' if val['expand_in_tree'] else 'false'
-        #print(name)
-        if name != 'Eocatarrhini': # I'm not clear why I don't need to recurse up Eocatarrhini heirarchy
-            javascript += 'tree.add("' \
-                        + str(item_id)   + js_item_delimiter \
-                        + str(parent_id) + js_item_delimiter \
-                        + name           + js_item_delimiter \
-                        + str(item_id)   + js_item_delimiter + '", ' \
-                        + expand + ', '
-
-            javascript += 'false );\n' if item_id not in request.session['selected'][current_table] else 'true );\n'
-            javascript += create_tree_javascript(request, item_id, current_table)
-
-    return javascript
-
-
 def query_2d(request, is_preview):
+    """ Set up the 2D query SQL. Do query. Call result table display. """
     # TODO: Look into doing this all with built-ins, rather than with .raw()
-    # Also, change name of captive.captive to captive.name, original.original to original.name
 
-    tables = [ '`scalar`',
-               '`specimen`',
-               '`specimen`',
-               '`institute`',
-               '`specimen`',
-               '`specimen`',
-               '`taxon`',
-               '`sex`',
-               '`fossil`',
-               '`captive`',
-               '`original`',
-               '`variable`',
-               '`scalar`',
-               '`session`',
-               '`specimen`',
-             ]
+    base = 'SELECT `scalar`    . `id`             AS  scalar_id, \
+                   `specimen`  . `id`             AS  specimen_id, \
+                   `specimen`  . `hypocode`       AS  hypocode, \
+                   `institute` . `abbr`           AS  collection_acronym, \
+                   `specimen`  . `catalog_number` AS  catalog_number, \
+                   `specimen`  . `mass`           AS  mass, \
+                   `taxon`     . `name`           AS  taxon_name, \
+                   `sex`       . `name`           AS  sex_type, \
+                   `fossil`    . `name`           AS  fossil_or_extant, \
+                   `captive`   . `name`           AS  captive_or_wild, \
+                   `original`  . `name`           AS  original_or_cast, \
+                   `variable`  . `label`          AS  variable_label, \
+                   `scalar`    . `value`          AS  scalar_value, \
+                   `session`   . `comments`       AS  session_comments, \
+                   `specimen`  . `comments`       AS  specimen_comments '
 
-    fields = [ '`id`',
-               '`id`',
-               '`hypocode`',
-               '`abbr`',
-               '`catalog_number`',
-               '`mass`',
-               '`name`',
-               '`name`',
-               '`name`',
-               '`name`',
-               '`name`',
-               '`label`',
-               '`value`',
-               '`comments`',
-               '`comments`',
-             ]
-
-    aliases = [ 'scalar_id',
-                'specimen_id',
-                'hypocode',
-                'collection_acronym',
-                'catalog_number',
-                'mass',
-                'taxon_name',
-                'sex_type',
-                'fossil_or_extant',
-                'captive_or_wild',
-                'original_or_cast',
-                'variable_label',
-                'scalar_value',
-                'session_comments',
-                'specimen_comments',
-              ]
-
-    selects = 'SELECT '
-
-    for item in zip(tables, fields, aliases):
-        selects += item[0] + '.' + item[1] + ' AS ' + item[2] + ', '
-
-    base = selects[:-2] + ' FROM `scalar` \
-            INNER JOIN `variable` ON `scalar`   .`variable_id`  = `variable` .`id` \
-            INNER JOIN `session`  ON `scalar`   .`session_id`   = `session`  .`id` \
-            INNER JOIN `specimen` ON `session`  .`specimen_id`  = `specimen` .`id` \
-            INNER JOIN `taxon`    ON `specimen` .`taxon_id`     = `taxon`    .`id` \
-            INNER JOIN `sex`      ON `specimen` .`sex_id`       = `sex`      .`id` \
-            INNER JOIN `fossil`   ON `specimen` .`fossil_id`    = `fossil`   .`id` \
-            INNER JOIN `institute`ON `specimen` .`institute_id` = `institute`.`id` \
-            INNER JOIN `captive`  ON `specimen` .`captive_id`   = `captive`  .`id` \
-            INNER JOIN `original` ON `session`  .`original_id`  = `original` .`id`'
+    base += 'FROM `scalar` \
+             INNER JOIN `variable` ON `scalar`   .`variable_id`  = `variable` .`id` \
+             INNER JOIN `session`  ON `scalar`   .`session_id`   = `session`  .`id` \
+             INNER JOIN `specimen` ON `session`  .`specimen_id`  = `specimen` .`id` \
+             INNER JOIN `taxon`    ON `specimen` .`taxon_id`     = `taxon`    .`id` \
+             INNER JOIN `sex`      ON `specimen` .`sex_id`       = `sex`      .`id` \
+             INNER JOIN `fossil`   ON `specimen` .`fossil_id`    = `fossil`   .`id` \
+             INNER JOIN `institute`ON `specimen` .`institute_id` = `institute`.`id` \
+             INNER JOIN `captive`  ON `specimen` .`captive_id`   = `captive`  .`id` \
+             INNER JOIN `original` ON `session`  .`original_id`  = `original` .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
-    limit     = ' LIMIT 15' if is_preview else ''
-    final_sql = (base + where +  ordering + limit + ';') # .format( concatVariableList(request.session['selected']['sex']) )
+    final_sql = (base + where +  ordering + ';') # .format( concatVariableList(request.session['selected']['sex']) )
     request.session['query'] = final_sql
 
     with connection.cursor() as variable_query:
@@ -511,6 +492,11 @@ def query_2d(request, is_preview):
             for row in cursor.fetchall()
         ]
 
+    are_results = True
+    try:
+        query_results = tabulate_2d(query_results, is_preview)
+    except:
+        are_results = False
     context = {
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
                                                             request.session['selected']['fossil'],
@@ -518,61 +504,30 @@ def query_2d(request, is_preview):
                                                             # concatVariableList(request.session['selected']['bodypart']),
                                                             request.session['selected']['variable'],
                                                           ),
-        'query_results'   : build_table_2d(query_results),
+        'query_results'   : query_results,
+        'are_results'     : are_results,
+        'total'           : len(query_results),
         'variable_labels' : variable_labels,
         'variable_ids'    : request.session['selected']['variable'],
+        'is_preview'      : is_preview,
     }
 
     return render(request, 'primo/query_results.jinja', context, )
 
 
-def build_table_2d(query_results):
-    """ Return a list of dictionaries where each dictionary has the keys
-        Specimen ID
-        Hypocode
-        Collection Acronym
-        Catalog No.
-        Taxon name
-        Sex
-        Fossil or Extant
-        Captive or Wild
-        Session Comments
-        Specimen Comments
-        All variables """
-    current_specimen = query_results[0]['hypocode']
-    output = []
-    current_dict = build_query_value_dict(query_results[0])
-    for row in query_results:
-        if row['hypocode'] == current_specimen:
-            current_dict[row['variable_label']] = row['scalar_value']
-        else:
-            output.append(current_dict)
-            current_dict = build_query_value_dict(row)
-            output[row['variable_label']] = row['scalar_value']
-    return output
-
-
-def build_query_value_dict(query_result):
-    output = {'specimen_id'        : query_result['specimen_id'],
-              'hypocode'           : query_result['hypocode'],
-              'collection_acronym' : query_result['collection_acronym'],
-              'catalog_number'     : query_result['catalog_number'],
-              'mass'               : query_result['mass'],
-              'taxon_name'         : query_result['taxon_name'],
-              'sex_type'           : query_result['sex_type'],
-              'fossil_or_extant'   : query_result['fossil_or_extant'],
-              'captive_or_wild'    : query_result['captive_or_wild'],
-              'original_or_cast'   : query_result['original_or_cast'],
-              'variable_label'     : query_result['variable_label'],
-              'scalar_value'       : query_result['scalar_value'],
-              'session_comments'   : query_result['session_comments'],
-              'specimen_comments'  : query_result['specimen_comments'],
-             }
-    return output
-
+@login_required
+def query_start(request):
+    """ Start query by creating necessary empty data structures. """
+    request.session['tables']            = []
+    request.session['selected']          = dict()
+    request.session['selected']['table'] = []
+    request.session['scalar_or_3d']      = ''
+    return render(request, 'primo/query_start.jinja')
 
 
 def query_3d(request, which_3d_output_type, is_preview):
+    """ Set up the 3D query SQL. Do query. Send results to either Morphologika or
+        GRFND creator and downloader. """
     # TODO: Look into doing this all with built-ins, rather than with .raw()
 
     base = 'SELECT DISTINCT `data3d`   .`id`, \
@@ -611,8 +566,7 @@ def query_3d(request, which_3d_output_type, is_preview):
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`id`, `data3d`.`datindex` ASC'
-    limit     = ' LIMIT 15' if is_preview else ''
-    final_sql = (base + where +  ordering + limit + ';') # .format( concatVariableList(request.session['selected']['sex']) )
+    final_sql = (base + where +  ordering + ';')
     request.session['query'] = final_sql
 
     with connection.cursor() as variable_query:
@@ -651,3 +605,43 @@ def query_3d(request, which_3d_output_type, is_preview):
     }
 
     return render(request, 'primo/query_results.jinja', context, )
+
+
+def tabulate_2d(query_results, is_preview):
+    """ Return a list of dictionaries where each dictionary has the keys
+        Specimen ID
+        Hypocode
+        Collection Acronym
+        Catalog No.
+        Taxon name
+        Sex
+        Fossil or Extant
+        Captive or Wild
+        Session Comments
+        Specimen Comments
+        All variables """
+    current_specimen = query_results[0]['hypocode']
+    output = []
+    current_dict = init_query_table(query_results[0])
+    num_specimens = 1
+    for row in query_results:
+        # Is this a new specimen? If so need to set up new empty dictionary and
+        # append it.
+        if row['hypocode'] == current_specimen:
+            current_dict[row['variable_label']] = row['scalar_value']
+        else:
+            num_specimens += 1
+            output.append(current_dict)
+            del(current_dict)
+            current_dict = init_query_table(row)
+            # This next so we can look up values quickly in view rather than having
+            # to do constant conditionals.
+            current_dict[row['variable_label']] = row['scalar_value']
+            current_specimen = row['hypocode']
+        # TODO: Figure out SQL so we don't have to do entire query and cull it here.
+        if is_preview == 'True' and num_specimens >= 15:
+            break
+    output.append(current_dict)
+    return output
+
+

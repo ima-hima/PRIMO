@@ -4,7 +4,13 @@
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
 <link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
+
+{% if are_results %}
 <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
+
+<p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+
+<p><a href="download_2d">Download CSV file</a></p>
 
 <script type="text/javascript" >
 $(document).ready(function()
@@ -14,7 +20,11 @@ $(document).ready(function()
 );
 </script>
 
+{# {query_results} #}
+{# {final_sql} #}
 
+<br />
+<p><strong>{{total}} specimens found.</strong></p>
 <table id="resultsTable" class="tablesorter">
 <thead>
 <tr>
@@ -34,8 +44,6 @@ $(document).ready(function()
 </tr>
 </thead>
 <tbody>
-{{total, final_sql}}
-
 {% for row in query_results %}
 <tr>
     <td>{{row['specimen_id']}}</td>
@@ -52,9 +60,9 @@ $(document).ready(function()
         <td>{{variable}}</td>
     {% endfor %} #}
     {% for label in variable_labels %}
-        <!-- <br />{{label}} {{row['variable_label']}} {{row['scalar_value']}} {{row['hypocode']}} -->
-        {% if label in row %}         <!-- the last element in the tuple is the dictionary of {variable id : variable label} -->
-            <td>{{ row['label'] }}</td> <!-- so print value at that location -->
+        <!-- <br />{{label[0]}} {{row['variable_label']}} {{row['scalar_value']}} {{row['hypocode']}} -->
+        {% if label[0] in row %}           <!-- the last element in the tuple is the dictionary of {variable id : variable label} -->
+            <td>{{ row[label[0]] }}</td> <!-- so print value at that location -->
         {% else %}
             <td></td>
         {% endif %}
@@ -64,6 +72,15 @@ $(document).ready(function()
 
 </tbody>
 </table>
+
+<p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+
+{% if not is_preview %}
+<p><a href="download_2d">Download CSV file</a></p>
+{% endif %}
+{% else %}
+<h3>No results were returned.</h3>
+{% endif %}
 
 <!-- {% for row in request.session['results'] %}
 <tr>
@@ -78,7 +95,7 @@ $(document).ready(function()
 {% endfor %}
 
 {{ request.session['query'] }}
-<!-- <tr>
+ <tr>
     <td>Smith</td>
     <td>John</td>
     <td>jsmith@gmail.com</td>
