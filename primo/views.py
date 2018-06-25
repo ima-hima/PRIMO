@@ -3,8 +3,9 @@ from .models                        import *
 from csv                            import DictWriter
 from datetime                       import datetime
 from django.apps                    import apps
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth            import authenticate, login, logout
+from django.contrib.auth.models     import User
+from django.contrib.auth.decorators import login_required
 from django.core.mail               import send_mail
 from django.db                      import connection
 from django.http                    import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -494,6 +495,8 @@ def query_2d(request, is_preview):
 
     are_results = True
     try:
+        if request.user.username == 'user':
+            is_preview = True
         query_results = tabulate_2d(query_results, is_preview)
     except:
         are_results = False
@@ -602,6 +605,7 @@ def query_3d(request, which_3d_output_type, is_preview):
         'query_results'   : query_results,
         'variable_labels' : variable_labels,
         'variable_ids'    : request.session['selected']['variable'],
+        'groups'          : request.user.get_group_permissions()
     }
 
     return render(request, 'primo/query_results.jinja', context, )
@@ -639,7 +643,7 @@ def tabulate_2d(query_results, is_preview):
             current_dict[row['variable_label']] = row['scalar_value']
             current_specimen = row['hypocode']
         # TODO: Figure out SQL so we don't have to do entire query and cull it here.
-        if is_preview == 'True' and num_specimens >= 15:
+        if is_preview == True and num_specimens >= 15:
             break
     output.append(current_dict)
     return output

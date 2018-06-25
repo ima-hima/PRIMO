@@ -35,16 +35,6 @@ class AuthGroup(models.Model):
         db_table = 'auth_group'
 
 
-class AuthGroupPermissions(models.Model):
-    group      = models.ForeignKey('AuthGroup', on_delete=models.PROTECT)
-    permission = models.ForeignKey('AuthPermission', on_delete=models.PROTECT)
-
-    class Meta:
-        managed         = True
-        # db_table        = 'auth_group_permissions'
-        unique_together = (('group', 'permission'),)
-
-
 class AuthPermission(models.Model):
     name         = models.CharField (                    max_length=255)
     content_type = models.ForeignKey('DjangoContentType', on_delete=models.PROTECT)
@@ -52,8 +42,18 @@ class AuthPermission(models.Model):
 
     class Meta:
         managed         = True
-        db_table        = 'auth_permission'
+        # db_table        = 'auth_permission'
         unique_together = (('content_type', 'codename'),)
+
+
+class AuthGroupPermissions(models.Model):
+    group      = models.ForeignKey(AuthGroup, on_delete=models.PROTECT)
+    permission = models.ForeignKey(AuthPermission, on_delete=models.PROTECT)
+
+    class Meta:
+        managed         = True
+        # db_table        = 'auth_group_permissions'
+        unique_together = (('group', 'permission'),)
 
 
 class AuthUser(models.Model):
@@ -74,7 +74,7 @@ class AuthUser(models.Model):
 
 
 class AuthUserGroups(models.Model):
-    user  = models.ForeignKey(AuthUser, on_delete=models.PROTECT)
+    user  = models.ForeignKey(AuthUser,  on_delete=models.PROTECT)
     group = models.ForeignKey(AuthGroup, on_delete=models.PROTECT)
 
     class Meta:
@@ -84,7 +84,7 @@ class AuthUserGroups(models.Model):
 
 
 class AuthUserUserPermissions(models.Model):
-    user       = models.ForeignKey(AuthUser, on_delete=models.PROTECT)
+    user       = models.ForeignKey(AuthUser,       on_delete=models.PROTECT)
     permission = models.ForeignKey(AuthPermission, on_delete=models.PROTECT)
 
     class Meta:
@@ -164,7 +164,7 @@ class Country(models.Model):
 
 
 class Data3D(models.Model):
-    session  = models.ForeignKey  ('Session', on_delete=models.PROTECT)
+    session  = models.ForeignKey  ('Session',  on_delete=models.PROTECT)
     variable = models.ForeignKey  ('Variable', on_delete=models.PROTECT)
     datindex = models.IntegerField(            blank=True, null=True)
     x        = models.FloatField  (            blank=True, null=True)

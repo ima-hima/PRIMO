@@ -5,81 +5,84 @@
 <script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
 <link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
 
-{% if are_results %}
-<p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
 
-<p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+    {% if are_results %}
+    <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
 
-<p><a href="download_2d">Download CSV file</a></p>
+    {% if is_preview == 'False' %}
+        <p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
 
-<script type="text/javascript" >
-$(document).ready(function()
-    {
-        $("#resultsTable").tablesorter();
-    }
-);
-</script>
+        <p><a href="download_2d">Download CSV file</a></p>
+    {% endif %}
 
-{# {query_results} #}
-{# {final_sql} #}
+    <script type="text/javascript" >
+    $(document).ready(function()
+        {
+            $("#resultsTable").tablesorter();
+        }
+    );
+    </script>
 
-<br />
-<p><strong>{{total}} specimens found.</strong></p>
-<table id="resultsTable" class="tablesorter">
-<thead>
-<tr>
-    <th>Specimen ID</th>
-    <th>Hypocode</th>
-    <th>Collection Acronym</th>
-    <th>Catalog No.</th>
-    <th>Taxon name</th>
-    <th>Sex</th>
-    <th>Fossil or Extant</th>
-    <th>Captive or Wild</th>
-    <th>Session Comments</th>
-    <th>Specimen Comments</th>
-    {% for var_id in variable_labels %}
-        <th>{{var_id[0]}}</th>
+    {# {query_results} #}
+    {# {final_sql} #}
+
+    <br />
+    <p><strong>{{total}} specimens found.</strong></p>
+    <table id="resultsTable" class="tablesorter">
+    <thead>
+    <tr>
+        <th>Specimen ID</th>
+        <th>Hypocode</th>
+        <th>Collection Acronym</th>
+        <th>Catalog No.</th>
+        <th>Taxon name</th>
+        <th>Sex</th>
+        <th>Fossil or Extant</th>
+        <th>Captive or Wild</th>
+        <th>Session Comments</th>
+        <th>Specimen Comments</th>
+        {% for var_id in variable_labels %}
+            <th>{{var_id[0]}}</th>
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for row in query_results %}
+    <tr>
+        <td>{{row['specimen_id']}}</td>
+        <td>{{row['hypocode']}}</td>
+        <td>{{row['collection_acronym']}}</td>
+        <td>{{row['catalog_number']}}</td>
+        <td>{{row['taxon_name']}}</td>
+        <td>{{row['sex_type']}}</td>
+        <td>{{row['fossil_or_extant']}}</td>
+        <td>{{row['captive_or_wild']}}</td>
+        <td>{{row['session_comments']}}</td>
+        <td>{{row['specimen_comments']}}</td>
+        {# {% for variable in variable_labels: %}
+            <td>{{variable}}</td>
+        {% endfor %} #}
+        {% for label in variable_labels %}
+            {% if row[label[0]] %}           <!-- The last element in the tuple
+                                                  is the dictionary {variable id : variable label} -->
+                <td>{{ row[label[0]] }}</td> <!-- so print value at that location -->
+            {% else %}
+                <td></td>
+            {% endif %}
+        {% endfor %}
+    </tr>
     {% endfor %}
-</tr>
-</thead>
-<tbody>
-{% for row in query_results %}
-<tr>
-    <td>{{row['specimen_id']}}</td>
-    <td>{{row['hypocode']}}</td>
-    <td>{{row['collection_acronym']}}</td>
-    <td>{{row['catalog_number']}}</td>
-    <td>{{row['taxon_name']}}</td>
-    <td>{{row['sex_type']}}</td>
-    <td>{{row['fossil_or_extant']}}</td>
-    <td>{{row['captive_or_wild']}}</td>
-    <td>{{row['session_comments']}}</td>
-    <td>{{row['specimen_comments']}}</td>
-    {# {% for variable in variable_labels: %}
-        <td>{{variable}}</td>
-    {% endfor %} #}
-    {% for label in variable_labels %}
-        <!-- <br />{{label[0]}} {{row['variable_label']}} {{row['scalar_value']}} {{row['hypocode']}} -->
-        {% if label[0] in row %}           <!-- the last element in the tuple is the dictionary of {variable id : variable label} -->
-            <td>{{ row[label[0]] }}</td> <!-- so print value at that location -->
-        {% else %}
-            <td></td>
-        {% endif %}
-    {% endfor %}
-</tr>
-{% endfor %}
 
-</tbody>
-</table>
+    </tbody>
+    </table>
 
-<p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+    {% if is_preview == 'False' %}
+        <p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
 
-{% if not is_preview %}
-<p><a href="download_2d">Download CSV file</a></p>
-{% endif %}
+        <p><a href="download_2d">Download CSV file</a></p>
+    {% endif %}
 {% else %}
-<h3>No results were returned.</h3>
+    <h3>No results were returned.</h3>
 {% endif %}
 
 <!-- {% for row in request.session['results'] %}
