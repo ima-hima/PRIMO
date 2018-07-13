@@ -1,11 +1,10 @@
 from .forms                         import *
 from .models                        import *
-from csv                            import DictWriter
-from datetime                       import datetime
 from django.apps                    import apps
 from django.contrib.auth            import authenticate, login, logout
 from django.contrib.auth.models     import User
 from django.contrib.auth.decorators import login_required
+from django.core.files              import File
 from django.core.mail               import send_mail
 from django.db                      import connection
 from django.http                    import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -13,10 +12,12 @@ from django.shortcuts               import get_object_or_404, redirect, render, 
 from django.urls                    import reverse
 from django.utils                   import timezone
 from django.views.generic           import TemplateView
-from functools                      import reduce
 
-from os   import mkdir
-from uuid import uuid1
+from csv                            import DictWriter
+from datetime                       import datetime
+from functools                      import reduce
+from os                             import mkdir
+from uuid                           import uuid1
 
 
 # Create your views here.
@@ -110,15 +111,17 @@ def erd(request):
     return render(request, 'primo/erd.jinja')
 
 
-def exportCsvFile(fieldNames, values):
+def exportCsvFile(request):
     """ Collate data returned from SQL query, render into csv, save csv to tmp directory,
         start download.
         This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
 
-    #reminder: The format will be yy_mm_dd_hh_mm
-    with open(datetime.now().strftime('%y_%m_%d_%H_%M'), 'w') as csvfile:
+    # reminder: The format will be yy_mm_dd_hh_mm
+    # datetime.now().strftime('%y_%m_%d_%H_%M')
+    with open('/tmp/thisthis' , 'w') as f:
+        csvfile = File(f)
         csv_rows = [
-            dict(zip(fieldNames, values))
+            dict(zip(request.session['specimen_metadata'], values))
         ]
 
         writer = DictWriter(csvfile, fieldnames=fieldNames)
@@ -126,6 +129,7 @@ def exportCsvFile(fieldNames, values):
         writer.writeheader()
         for row in csv_rows:
             writer.writerow(row)
+
 
 
 def exportMorphologika(fieldNames, metaData, values):
@@ -435,6 +439,19 @@ def query_2d(request, is_preview):
     """ Set up the 2D query SQL. Do query. Call result table display. """
     # TODO: Look into doing this all with built-ins, rather than with .raw()
 
+    specimen_metadata = [ ('specimen_id',        'Specimen ID'),
+                          ('hypocode',           'Hypocode'),
+                          ('collection_acronym', 'Collection Acronym'),
+                          ('catalog_number',     'Catalog No.'),
+                          ('taxon_name',         'Taxon name'),
+                          ('sex_type',           'Sex'),
+                          ('mass',               'Mass'),
+                          ('fossil_or_extant',   'Fossil or Extant'),
+                          ('captive_or_wild',    'Captive or Wild'),
+                          ('original_or_cast',   'Original or Cast'),
+                          ('session_comments',   'Session Comments'),
+                          ('specimen_comments',  'Specimen Comments'),
+                        ]
     base = 'SELECT `scalar`    . `id`             AS  scalar_id, \
                    `specimen`  . `id`             AS  specimen_id, \
                    `specimen`  . `hypocode`       AS  hypocode, \
@@ -473,7 +490,6 @@ def query_2d(request, is_preview):
 
     # use cursor here?
     with connection.cursor() as cursor:
-        a = 5
         cursor.execute( final_sql, [
                            request.session['selected']['sex'],
                            request.session['selected']['fossil'],
@@ -495,7 +511,7 @@ def query_2d(request, is_preview):
 
     are_results = True
     try:
-        if request.user.username == 'user':
+        if request.user.username == 'user':     # TODO: This could be a little more nicer.
             is_preview = True
         query_results = tabulate_2d(query_results, is_preview)
     except:
@@ -507,12 +523,13 @@ def query_2d(request, is_preview):
                                                             # concatVariableList(request.session['selected']['bodypart']),
                                                             request.session['selected']['variable'],
                                                           ),
-        'query_results'   : query_results,
-        'are_results'     : are_results,
-        'total'           : len(query_results),
-        'variable_labels' : variable_labels,
-        'variable_ids'    : request.session['selected']['variable'],
-        'is_preview'      : is_preview,
+        'query_results'     : query_results,
+        'are_results'       : are_results,
+        'total'             : len(query_results),
+        'variable_labels'   : variable_labels,
+        'variable_ids'      : request.session['selected']['variable'],
+        'is_preview'        : is_preview,
+        'specimen_metadata' : specimen_metadata
     }
 
     return render(request, 'primo/query_results.jinja', context, )

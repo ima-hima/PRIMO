@@ -10,9 +10,9 @@
     <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
 
     {% if is_preview == 'False' %}
-        <p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+        <p>If these data are what you desired, click on <a href="exportCsvFile">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
 
-        <p><a href="download_2d">Download CSV file</a></p>
+        <p><a href="exportCsvFile">Download CSV file</a></p>
     {% endif %}
 
     <script type="text/javascript" >
@@ -31,16 +31,9 @@
     <table id="resultsTable" class="tablesorter">
     <thead>
     <tr>
-        <th>Specimen ID</th>
-        <th>Hypocode</th>
-        <th>Collection Acronym</th>
-        <th>Catalog No.</th>
-        <th>Taxon name</th>
-        <th>Sex</th>
-        <th>Fossil or Extant</th>
-        <th>Captive or Wild</th>
-        <th>Session Comments</th>
-        <th>Specimen Comments</th>
+        {% for metadata in specimen_metadata %}
+            <th>{{metadata[1]}}</th>
+        {% endfor %}
         {% for var_id in variable_labels %}
             <th>{{var_id[0]}}</th>
         {% endfor %}
@@ -49,16 +42,10 @@
     <tbody>
     {% for row in query_results %}
     <tr>
-        <td>{{row['specimen_id']}}</td>
-        <td>{{row['hypocode']}}</td>
-        <td>{{row['collection_acronym']}}</td>
-        <td>{{row['catalog_number']}}</td>
-        <td>{{row['taxon_name']}}</td>
-        <td>{{row['sex_type']}}</td>
-        <td>{{row['fossil_or_extant']}}</td>
-        <td>{{row['captive_or_wild']}}</td>
-        <td>{{row['session_comments']}}</td>
-        <td>{{row['specimen_comments']}}</td>
+        {% for metadata in specimen_metadata %}
+            <td>{{row[metadata[0]]}}</td>
+        {% endfor %}
+
         {# {% for variable in variable_labels: %}
             <td>{{variable}}</td>
         {% endfor %} #}
@@ -77,9 +64,9 @@
     </table>
 
     {% if is_preview == 'False' %}
-        <p>If these data are what you desired, click on <a href="download_2d">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+        <p>If these data are what you desired, click on <a href="{{ url('exportCsvFile') }}">Download CSV file</a> to get the entire result. Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv. Or if you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
 
-        <p><a href="download_2d">Download CSV file</a></p>
+        <p><a href="exportCsvFile">Download CSV file</a></p>
     {% endif %}
 {% else %}
     <h3>No results were returned.</h3>
