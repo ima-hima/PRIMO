@@ -14,7 +14,12 @@ urlpatterns = [
     url(r'login/',   views.log_in,              name="login"),
     url(r'^logout/', views.logout_view,         name="logout"),
 
-    url(r'^exportCsvFile/(?P<current_table>\w+)',
+    url(r'^downloadSuccess/',
+        views.downloadSuccess,
+        name="downloadSuccess"),
+
+    url(r'^exportCsvFile/',
+    # url(r'^exportCsvFile/(?P<current_table>\w+)/(?P<is_preview>\w+)',
         views.exportCsvFile,
         name="exportCsvFile"),
 

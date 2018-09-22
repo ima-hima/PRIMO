@@ -1,6 +1,7 @@
 from .forms                         import *
 from .models                        import *
 from django.apps                    import apps
+from django.conf                    import settings
 from django.contrib.auth            import authenticate, login, logout
 from django.contrib.auth.models     import User
 from django.contrib.auth.decorators import login_required
@@ -11,12 +12,13 @@ from django.http                    import HttpRequest, HttpResponse, HttpRespon
 from django.shortcuts               import get_object_or_404, redirect, render, render_to_response
 from django.urls                    import reverse
 from django.utils                   import timezone
+from django.utils.encoding          import smart_str
 from django.views.generic           import TemplateView
 
 from csv                            import DictWriter
 from datetime                       import datetime
 from functools                      import reduce
-from os                             import mkdir
+from os                             import mkdir, path, remove
 from uuid                           import uuid1
 
 
@@ -26,7 +28,7 @@ from uuid                           import uuid1
 #     return render(request, 'frontend/index.html')
 
 class IndexView(TemplateView):
-    """docstring for IndexView"""
+    """ docstring for IndexView """
     template_name = 'primo/index.jinja'
 
 
@@ -77,6 +79,23 @@ def create_tree_javascript(request, parent_id, current_table):
     return javascript
 
 
+def download(request):
+    """ Download one of csv, morphologika, grfnd. File has been written to path before this is called. """
+    filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
+    if path.exists(filepath):
+        with open(filepath, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="text/csv")
+            response['Content-Disposition'] = 'inline; filename=%s' % smart_str(path.basename(request.session['file_to_download']))
+            response['X-Sendfile'] = smart_str(filepath)
+            return response
+    raise Http404
+
+
+def downloadSuccess(request):
+    remove( path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download']) )
+    return render(request, 'primo/download_success.jinja', {})
+
+
 def email(request):
     """ Create email form, collect info, send email. """
     form = EmailForm(request.POST or None)
@@ -116,20 +135,24 @@ def exportCsvFile(request):
         start download.
         This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
 
-    # reminder: The format will be yy_mm_dd_hh_mm
-    # datetime.now().strftime('%y_%m_%d_%H_%M')
-    with open('/tmp/thisthis' , 'w') as f:
+    # reminder: The format of the file name will be yy_mm_dd_hh_mm_ss_msmsms
+    filename = datetime.now().strftime('%y_%m_%d_%H_%M_%S_%f') + '.csv'
+    dirName  = settings.DOWNLOAD_ROOT
+    request.session['file_to_download'] = filename # this for use in download()
+    with open( path.join(dirName, filename), 'w' ) as f:
         csvfile = File(f)
-        csv_rows = [
-            dict(zip(request.session['specimen_metadata'], values))
-        ]
+        meta_names = [ m[0] for m in request.session['specimen_metadata'] ]
+        var_names  = [ v[0] for v in request.session['variable_labels'] ]
+        #     (request.session['specimen_metadata'], request.session['query_results']))
+        # ]
 
-        writer = DictWriter(csvfile, fieldnames=fieldNames)
+        writer = DictWriter(csvfile, fieldnames=meta_names + var_names)
 
         writer.writeheader()
-        for row in csv_rows:
-            writer.writerow(row)
-
+        for row in request.session['query_results']:
+            inDict = { k : row[k] for k in row.keys() if k != 'scalar_value' and k != 'variable_label' }
+            writer.writerow(inDict)
+    return download(request)
 
 
 def exportMorphologika(fieldNames, metaData, values):
@@ -452,6 +475,7 @@ def query_2d(request, is_preview):
                           ('session_comments',   'Session Comments'),
                           ('specimen_comments',  'Specimen Comments'),
                         ]
+
     base = 'SELECT `scalar`    . `id`             AS  scalar_id, \
                    `specimen`  . `id`             AS  specimen_id, \
                    `specimen`  . `hypocode`       AS  hypocode, \
@@ -482,7 +506,6 @@ def query_2d(request, is_preview):
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
     final_sql = (base + where +  ordering + ';') # .format( concatVariableList(request.session['selected']['sex']) )
-    request.session['query'] = final_sql
 
     with connection.cursor() as variable_query:
         variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s ORDER BY `label` ASC;", [request.session['selected']['variable']] )
@@ -490,12 +513,12 @@ def query_2d(request, is_preview):
 
     # use cursor here?
     with connection.cursor() as cursor:
-        cursor.execute( final_sql, [
-                           request.session['selected']['sex'],
-                           request.session['selected']['fossil'],
-                           request.session['selected']['taxon'],
-                           # # concatVariableList(request.session['selected']['bodypart']),
-                           request.session['selected']['variable'],
+        cursor.execute( final_sql,
+                        [ request.session['selected']['sex'],
+                          request.session['selected']['fossil'],
+                          request.session['selected']['taxon'],
+                          # # concatVariableList(request.session['selected']['bodypart']),
+                          request.session['selected']['variable'],
                         ]
                       )
         # Now return all rows as a dictionary object. Note that each variable name will have its own row,
@@ -512,10 +535,16 @@ def query_2d(request, is_preview):
     are_results = True
     try:
         if request.user.username == 'user':     # TODO: This could be a little more nicer.
-            is_preview = True
+            is_preview = True                   # It's already True if a preview was requested by the user.
         query_results = tabulate_2d(query_results, is_preview)
+        request.session['query_results'] = query_results
     except:
         are_results = False
+
+    # These are for use in exportCsvFile().
+    request.session['specimen_metadata'] = specimen_metadata
+    request.session['variable_labels']   = variable_labels
+
     context = {
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
                                                             request.session['selected']['fossil'],
@@ -587,12 +616,10 @@ def query_3d(request, which_3d_output_type, is_preview):
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`id`, `data3d`.`datindex` ASC'
     final_sql = (base + where +  ordering + ';')
-    request.session['query'] = final_sql
 
     with connection.cursor() as variable_query:
         variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s ORDER BY `label` ASC;", [request.session['selected']['variable']] )
         variable_labels = [label[0] for label in variable_query.fetchall()]
-
     with connection.cursor() as cursor:
 
         cursor.execute( final_sql, [
@@ -611,6 +638,8 @@ def query_3d(request, which_3d_output_type, is_preview):
             dict(zip(columns, row))
             for row in cursor.fetchall()
         ]
+
+    request.session['query']           = final_sql
 
     context = {
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
@@ -640,7 +669,7 @@ def tabulate_2d(query_results, is_preview):
         Captive or Wild
         Session Comments
         Specimen Comments
-        All variables """
+        All requested variables """
     current_specimen = query_results[0]['hypocode']
     output = []
     current_dict = init_query_table(query_results[0])
