@@ -135,11 +135,9 @@ def exportCsvFile(request):
         start download.
         This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
 
-    # reminder: The format of the file name will be yy_mm_dd_hh_mm_ss_msmsms
-    filename = datetime.now().strftime('%y_%m_%d_%H_%M_%S_%f') + '.csv'
-    dirName  = settings.DOWNLOAD_ROOT
-    request.session['file_to_download'] = filename # this for use in download()
-    with open( path.join(dirName, filename), 'w' ) as f:
+    setUpDownload(request)
+
+    with open( path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download']), newline=request.session['newlineChar'] ) as f:
         csvfile = File(f)
         meta_names = [ m[0] for m in request.session['specimen_metadata'] ]
         var_names  = [ v[0] for v in request.session['variable_labels'] ]
@@ -156,11 +154,13 @@ def exportCsvFile(request):
 
 
 def exportMorphologika(fieldNames, metaData, values):
-    retStr = '\n'
-    if find( HttpRequestAgent.HTTP_USER_AGENT.lower(), 'win' ):
-        retStr = '\r\n'
+    """ Collate data returned from 3D SQL query.
+        Print out two files: a csv of metadata and a Morphologika file. Fields included in metadata
+        are enumerated below. """
 
-    missing_pts = {}
+    setUpDownload(request)
+
+    missing_pts = {} # These will be output in metadata csv file.
 
     metaDataLen = len(metaData)
 
@@ -192,11 +192,11 @@ def exportMorphologika(fieldNames, metaData, values):
 
         dirName = 'PRIMO_3D_' + uuid1()  # uuid1() creates UUID string
         metaOutString = '';
-        try:
-            mkdir( '/tmp/' + dirName)
-            outFile = open('/tmp/' + dirName + '/specimen_data.csv', 'w')
-            outFlie.write( ' specimen id, hypocode, institute, catalog number, taxon name, sex, fossil or extant, captive or wild-caught, original or cast, protocol, session comments, specimen comments, missing points (indexed by specimen starting at 1)' + retStr )
-            outFlie.write( ', '.join(fieldNamesArray) )
+        with open( path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download']), newline=request.session['newlineChar'] ) as f:
+            csvfile = File(f)
+
+            outFile.write( ' specimen id, hypocode, institute, catalog number, taxon name, mass, sex, fossil or extant, captive or wild-caught, original or cast, protocol, session comments, specimen comments, missing points (indexed by specimen starting at 1)' + retStr )
+            outFile.write( ', '.join(fieldNamesArray) )
             for key, value in metaData:
                 for metaKey, metaValue in value: ## was    metaData[key]:
                     if metaKey != 'datindex' and metaKey != 'variable_id':
@@ -230,8 +230,9 @@ def exportMorphologika(fieldNames, metaData, values):
 
 #         exit;
 #     }
-        except:
-            pass
+        # TODO: What did this use to do?
+        # except:
+        #     pass
 
 
 def fixQuotes(inStr):
@@ -330,6 +331,65 @@ def logout_view(request):
 
 
 @login_required
+def parameter_selection(request, current_table):
+    javascript = ''
+
+    current_model = apps.get_model( app_label = 'primo', model_name = current_table.capitalize() )
+
+    if current_table == 'variable':
+        if len(request.session.get('selected')['bodypart']) > 0:
+            bodypart_list          = request.session.get('selected')['bodypart']
+            bodypart_variable_ids  = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
+            variable_ids           = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
+            vals                   = current_model.objects.values('id',
+                                                                  'name',
+                                                                  'label',
+                                                                 ).filter(pk__in=variable_ids).order_by('id')
+        else:
+            vals = apps.get_model( app_label='primo',
+                                   model_name=current_table.capitalize() \
+                                 ).objects.values('name',
+                                                  'label',
+                                                  'bodypartvariable__bodypart_id',
+                                                 ).all()
+
+    elif current_table == 'bodypart' or current_table == 'taxon':
+        vals = []
+        # do original query to get root of tree
+        val = apps.get_model( app_label='primo',
+                              model_name=current_table.capitalize()
+                            ).objects.values('id', 'name', 'parent_id', 'expand_in_tree').filter(tree_root = 1)[0]
+
+        name       = val['name'].replace('"', '')
+        item_id    = val['id']
+        parent_id  = val['parent_id']
+        expand     = 'true' if val['expand_in_tree'] else 'false'
+        javascript = 'tree.add("' + str(item_id) \
+                                  + '", "' \
+                                  + str(parent_id) \
+                                  + '", "' \
+                                  + name \
+                                  + '", "", "", ' \
+                                  + expand \
+                                  + ', '
+
+        javascript += 'false );\n' if item_id not in request.session['selected'][current_table] else 'true );\n'
+
+        # now do follow-up query using root as parent
+        javascript += create_tree_javascript(request, item_id, current_table)
+
+    else:
+        # for fossil, sex
+        vals = current_model.objects.values('id', 'name').all()
+
+
+    return render(request, 'primo/parameter_selection.jinja', {'current_table': current_table,
+                                                               'vals': vals,
+                                                               'javascript': javascript,
+                                                              } )
+
+
+@login_required
 def query_setup(request, scalar_or_3d = 'scalar'):
     """ tables will be all of the tables that are available to search on for a particular search type (e.g. scalar or 3D).
         Some of those tables, like sex, should be pre-filled with all values selected. In that case,
@@ -399,69 +459,11 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                  )
 
 
-@login_required
-def parameter_selection(request, current_table):
-    javascript = ''
-
-    current_model = apps.get_model( app_label = 'primo', model_name = current_table.capitalize() )
-
-    if current_table == 'variable':
-        if len(request.session.get('selected')['bodypart']) > 0:
-            bodypart_list          = request.session.get('selected')['bodypart']
-            bodypart_variable_ids  = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
-            variable_ids           = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
-            vals                   = current_model.objects.values('id',
-                                                                  'name',
-                                                                  'label',
-                                                                 ).filter(pk__in=variable_ids).order_by('id')
-        else:
-            vals = apps.get_model( app_label='primo',
-                                   model_name=current_table.capitalize() \
-                                 ).objects.values('name',
-                                                  'label',
-                                                  'bodypartvariable__bodypart_id',
-                                                 ).all()
-
-    elif current_table == 'bodypart' or current_table == 'taxon':
-        vals = []
-        # do original query to get root of tree
-        val = apps.get_model( app_label='primo',
-                              model_name=current_table.capitalize()
-                            ).objects.values('id', 'name', 'parent_id', 'expand_in_tree').filter(tree_root = 1)[0]
-
-        name       = val['name'].replace('"', '')
-        item_id    = val['id']
-        parent_id  = val['parent_id']
-        expand     = 'true' if val['expand_in_tree'] else 'false'
-        javascript = 'tree.add("' + str(item_id) \
-                                  + '", "' \
-                                  + str(parent_id) \
-                                  + '", "' \
-                                  + name \
-                                  + '", "", "", ' \
-                                  + expand \
-                                  + ', '
-
-        javascript += 'false );\n' if item_id not in request.session['selected'][current_table] else 'true );\n'
-
-        # now do follow-up query using root as parent
-        javascript += create_tree_javascript(request, item_id, current_table)
-
-    else:
-        # for fossil, sex
-        vals = current_model.objects.values('id', 'name').all()
-
-
-    return render(request, 'primo/parameter_selection.jinja', {'current_table': current_table,
-                                                               'vals': vals,
-                                                               'javascript': javascript,
-                                                              } )
-
-
 def query_2d(request, is_preview):
     """ Set up the 2D query SQL. Do query. Call result table display. """
     # TODO: Look into doing this all with built-ins, rather than with .raw()
 
+    # This is for cleaner code when composing header row for csv.
     specimen_metadata = [ ('specimen_id',        'Specimen ID'),
                           ('hypocode',           'Hypocode'),
                           ('collection_acronym', 'Collection Acronym'),
@@ -481,8 +483,8 @@ def query_2d(request, is_preview):
                    `specimen`  . `hypocode`       AS  hypocode, \
                    `institute` . `abbr`           AS  collection_acronym, \
                    `specimen`  . `catalog_number` AS  catalog_number, \
-                   `specimen`  . `mass`           AS  mass, \
                    `taxon`     . `name`           AS  taxon_name, \
+                   `specimen`  . `mass`           AS  mass, \
                    `sex`       . `name`           AS  sex_type, \
                    `fossil`    . `name`           AS  fossil_or_extant, \
                    `captive`   . `name`           AS  captive_or_wild, \
@@ -574,18 +576,33 @@ def query_start(request):
     return render(request, 'primo/query_start.jinja')
 
 
-def query_3d(request, which_3d_output_type, is_preview):
+def query_3d(request, which_output_type, is_preview):
     """ Set up the 3D query SQL. Do query. Send results to either Morphologika or
-        GRFND creator and downloader. """
+        GRFND creator and downloader. If is_preview ignore which_output_type. """
     # TODO: Look into doing this all with built-ins, rather than with .raw()
+
+    # This is for cleaner code when composing header row for metadata csv.
+    specimen_metadata = [ ('specimen_id',        'Specimen ID'),
+                          ('hypocode',           'Hypocode'),
+                          ('collection_acronym', 'Collection Acronym'),
+                          ('catalog_number',     'Catalog No.'),
+                          ('taxon_name',         'Taxon name'),
+                          ('sex_type',           'Sex'),
+                          ('mass',               'Mass'),
+                          ('fossil_or_extant',   'Fossil or Extant'),
+                          ('captive_or_wild',    'Captive or Wild'),
+                          ('original_or_cast',   'Original or Cast'),
+                          ('session_comments',   'Session Comments'),
+                          ('specimen_comments',  'Specimen Comments'),
+                        ]
 
     base = 'SELECT DISTINCT `data3d`   .`id`, \
                             `specimen` .`id`             AS specimen_id, \
                             `specimen` .`hypocode`       AS hypocode, \
                             `institute`.`institute_abbr` AS collection_acronym, \
                             `specimen` .`catalog_number` AS catalog_number, \
-                            `specimen` .`mass`           AS mass, \
                             `taxon`    .`name`           AS taxon_name, \
+                            `specimen` .`mass`           AS mass, \
                             `sex`      .`name`           AS sex_type, \
                             `fossil`   .`name`           AS fossil_or_extant, \
                             `captive`  .`name`           AS captive_or_wild, \
@@ -656,6 +673,19 @@ def query_3d(request, which_3d_output_type, is_preview):
 
     return render(request, 'primo/query_results.jinja', context, )
 
+
+def setUpDownload(request):
+    """ Set the newline character, set name of file based on current time. Put both in session variable. """
+
+    # Stupid Windows: we need to make sure the newline is set correctly. Abundance of caution.
+    retStr = '\n'
+    if find( HttpRequestAgent.HTTP_USER_AGENT.lower(), 'win' ):
+        retStr = '\r\n'
+    request.session['newlineChar'] = retStr
+
+    # reminder: The format of the file name will be yy_mm_dd_hh_mm_ss_msmsms
+    filename = datetime.now().strftime('%y_%m_%d_%H_%M_%S_%f') + '.csv'
+    request.session['file_to_download'] = filename # this for use in download()
 
 def tabulate_2d(query_results, is_preview):
     """ Return a list of dictionaries where each dictionary has the keys
