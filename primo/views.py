@@ -462,6 +462,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
 def query_2d(request, is_preview):
     """ Set up the 2D query SQL. Do query. Call result table display. """
     # TODO: Look into doing this all with built-ins, rather than with .raw()
+    # TODO: Move all of this, and 3D into db. As it was before, dammit.
 
     # This is for cleaner code when composing header row for csv.
     specimen_metadata = [ ('specimen_id',        'Specimen ID'),
@@ -478,6 +479,8 @@ def query_2d(request, is_preview):
                           ('specimen_comments',  'Specimen Comments'),
                         ]
 
+    # This is okay to include in publicly-available code (i.e. git), because
+    # the database structure diagram is already published on the website anyway.
     base = 'SELECT `scalar`    . `id`             AS  scalar_id, \
                    `specimen`  . `id`             AS  specimen_id, \
                    `specimen`  . `hypocode`       AS  hypocode, \
@@ -509,6 +512,7 @@ def query_2d(request, is_preview):
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
     final_sql = (base + where +  ordering + ';') # .format( concatVariableList(request.session['selected']['sex']) )
 
+    # We have to query for the variable names separately.
     with connection.cursor() as variable_query:
         variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s ORDER BY `label` ASC;", [request.session['selected']['variable']] )
         variable_labels = [label for label in variable_query.fetchall()]
@@ -519,7 +523,7 @@ def query_2d(request, is_preview):
                         [ request.session['selected']['sex'],
                           request.session['selected']['fossil'],
                           request.session['selected']['taxon'],
-                          # # concatVariableList(request.session['selected']['bodypart']),
+                          # concatVariableList(request.session['selected']['bodypart']),
                           request.session['selected']['variable'],
                         ]
                       )
@@ -576,10 +580,11 @@ def query_start(request):
     return render(request, 'primo/query_start.jinja')
 
 
-def query_3d(request, which_output_type, is_preview):
+def query_3d(request, which_3d_output_type, is_preview):
     """ Set up the 3D query SQL. Do query. Send results to either Morphologika or
         GRFND creator and downloader. If is_preview ignore which_output_type. """
     # TODO: Look into doing this all with built-ins, rather than with .raw()
+    # TODO: Move all of this, and 3D into db. As it was before, dammit.
 
     # This is for cleaner code when composing header row for metadata csv.
     specimen_metadata = [ ('specimen_id',        'Specimen ID'),
@@ -596,10 +601,12 @@ def query_3d(request, which_output_type, is_preview):
                           ('specimen_comments',  'Specimen Comments'),
                         ]
 
+    # This is okay to include in publicly-available code (i.e. git), because
+    # the database structure diagram is already published on the website anyway.
     base = 'SELECT DISTINCT `data3d`   .`id`, \
                             `specimen` .`id`             AS specimen_id, \
                             `specimen` .`hypocode`       AS hypocode, \
-                            `institute`.`institute_abbr` AS collection_acronym, \
+                            `institute`.`abbr`           AS collection_acronym, \
                             `specimen` .`catalog_number` AS catalog_number, \
                             `taxon`    .`name`           AS taxon_name, \
                             `specimen` .`mass`           AS mass, \
@@ -632,17 +639,15 @@ def query_3d(request, which_output_type, is_preview):
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`id`, `data3d`.`datindex` ASC'
-    final_sql = (base + where +  ordering + ';')
+    final_sql = (base + where + ordering + ';')
 
-    with connection.cursor() as variable_query:
-        variable_query.execute( "SELECT `label` FROM `variable` WHERE `variable`.`id` IN %s ORDER BY `label` ASC;", [request.session['selected']['variable']] )
-        variable_labels = [label[0] for label in variable_query.fetchall()]
+    # We skip varibles in 3D; we're getting all of them.
+
     with connection.cursor() as cursor:
-
         cursor.execute( final_sql, [
-                           concatVariableList(request.session['selected']['sex']),
-                           concatVariableList(request.session['selected']['fossil']),
-                           concatVariableList(request.session['selected']['taxon']),
+                           request.session['selected']['sex'],
+                           request.session['selected']['fossil'],
+                           request.session['selected']['taxon'],
                         ]
                       )
         # Now return all rows as a dictionary object. Note that each variable name will have its own row,
@@ -656,18 +661,14 @@ def query_3d(request, which_output_type, is_preview):
             for row in cursor.fetchall()
         ]
 
-    request.session['query']           = final_sql
+    request.session['query'] = final_sql
 
     context = {
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
                                                             request.session['selected']['fossil'],
                                                             request.session['selected']['taxon'],
-                                                            # concatVariableList(request.session['selected']['bodypart']),
-                                                            request.session['selected']['variable'],
                                                           ),
         'query_results'   : query_results,
-        'variable_labels' : variable_labels,
-        'variable_ids'    : request.session['selected']['variable'],
         'groups'          : request.user.get_group_permissions()
     }
 
@@ -687,6 +688,7 @@ def setUpDownload(request):
     filename = datetime.now().strftime('%y_%m_%d_%H_%M_%S_%f') + '.csv'
     request.session['file_to_download'] = filename # this for use in download()
 
+
 def tabulate_2d(query_results, is_preview):
     """ Return a list of dictionaries where each dictionary has the keys
         Specimen ID
@@ -700,6 +702,7 @@ def tabulate_2d(query_results, is_preview):
         Session Comments
         Specimen Comments
         All requested variables """
+
     current_specimen = query_results[0]['hypocode']
     output = []
     current_dict = init_query_table(query_results[0])
