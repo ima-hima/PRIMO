@@ -603,8 +603,7 @@ def query_3d(request, which_3d_output_type, is_preview):
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
-    base = 'SELECT DISTINCT `data3d`   .`id`, \
-                            `specimen` .`id`             AS specimen_id, \
+    base = 'SELECT DISTINCT `specimen` .`id`             AS specimen_id, \
                             `specimen` .`hypocode`       AS hypocode, \
                             `institute`.`abbr`           AS collection_acronym, \
                             `specimen` .`catalog_number` AS catalog_number, \
@@ -622,8 +621,8 @@ def query_3d(request, which_3d_output_type, is_preview):
                             `data3d`   .`z`, \
                             `data3d`   .`datindex`, \
                             `data3d`   .`variable_id` \
-            FROM data3d \
-\
+            FROM \
+                data3d \
             INNER JOIN `variable`          ON `data3d`           .`variable_id`  = `variable`  .`id` \
             INNER JOIN `bodypart_variable` ON `bodypart_variable`.`variable_id`  = `variable`  .`id` \
             INNER JOIN `bodypart`          ON `bodypart_variable`.`bodypart_id`  = `bodypart`  .`id` \
@@ -638,10 +637,14 @@ def query_3d(request, which_3d_output_type, is_preview):
             INNER JOIN `original`          ON `session`          .`original_id`  = `original`  .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
+    variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data3d")'
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`id`, `data3d`.`datindex` ASC'
-    final_sql = (base + where + ordering + ';')
+    final_sql = (base + where + variables + ordering + ';')
 
     # We skip varibles in 3D; we're getting all of them.
+    # with connection.cursor() as variable_query:
+    #     variable_query.execute( 'SELECT `id` FROM `variable` WHERE `variable`.`datatype_id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data3d")' )
+    #     variable_ids = [id for id in variable_query.fetchall()]
 
     with connection.cursor() as cursor:
         cursor.execute( final_sql, [
@@ -661,15 +664,25 @@ def query_3d(request, which_3d_output_type, is_preview):
             for row in cursor.fetchall()
         ]
 
+    are_results = bool(query_results)
+
+    # try:
+    #     if request.user.username == 'user':     # TODO: This could be a little more nicer.
+    #         is_preview = True                   # It's already True if a preview was requested by the user.
+    #     query_results = tabulate_2d(query_results, is_preview)
+    #     request.session['query_results'] = query_results
+    # except:
+    #     are_results = False
+
     request.session['query'] = final_sql
 
     context = {
-        'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
-                                                            request.session['selected']['fossil'],
-                                                            request.session['selected']['taxon'],
-                                                          ),
-        'query_results'   : query_results,
-        'groups'          : request.user.get_group_permissions()
+        'final_sql'     : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
+                                                                request.session['selected']['fossil'],
+                                                                request.session['selected']['taxon'],
+                                                              ).replace('[', '(').replace(']',')'),
+        'query_results' : query_results,
+        'groups'        : request.user.get_group_permissions()
     }
 
     return render(request, 'primo/query_results.jinja', context, )
@@ -726,5 +739,4 @@ def tabulate_2d(query_results, is_preview):
             break
     output.append(current_dict)
     return output
-
 

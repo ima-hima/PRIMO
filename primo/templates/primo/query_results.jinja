@@ -5,8 +5,9 @@
 <script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
 <link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
 
+    {{final_sql}}
 
-    {% if are_results %}
+    {% if query_results %}
         {% if is_preview == 'False' %}
             <p>If these data are what you desired, click on <a href="{{ url('exportCsvFile') }}" class="waitAndRedirect">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}" class="waitAndRedirect">front page</a> for instructions on how to get one.</p>
             <p>Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
@@ -31,7 +32,6 @@
         </script>
 
         {#{query_results}#}
-        {#{final_sql}#}
 
         <br />
         <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
