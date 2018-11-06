@@ -18,7 +18,7 @@ class ScalarAdmin(admin.ModelAdmin):
 
 @admin.register(AgeClass)
 class AgeClassAdmin(admin.ModelAdmin):
-    list_display = ['id', 'age_class', 'abbr', 'comments', ]
+    list_display = ['id', 'name', 'abbr', 'comments', ]
     fields = ['age_class', 'abbr', 'comments', ]
     search_fields = ['id', ]
 
@@ -87,10 +87,10 @@ class FossilAdmin(admin.ModelAdmin):
 
 @admin.register(Institute)
 class InstituteAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'abbr', 'institute_dept', 'locality', ]
-    fields = ['name', 'abbr', 'institute_dept', 'locality', ]
+    list_display = ['id', 'name', 'abbr', 'institute_department', 'locality', ]
+    fields = ['name', 'abbr', 'institute_department', 'locality', ]
     list_filter = (('name', DropdownFilter), ('abbr', DropdownFilter), ('locality__name', DropdownFilter), )
-    search_fields = ['name', 'abbr', 'institute_dept', 'locality__name' ]
+    search_fields = ['name', 'abbr', 'institute_department', 'locality__name' ]
     actions_on_top = True
     actions_on_bottom = True
 
@@ -103,7 +103,7 @@ class IslandRegionAdmin(admin.ModelAdmin):
 
 @admin.register(Laterality)
 class LateralityAdmin(admin.ModelAdmin):
-    list_display = ['id', 'laterality', 'abbr', ]
+    list_display = ['id', 'name', 'abbr', ]
     fields = ['laterality', 'abbr', ]
 
 
@@ -184,7 +184,7 @@ class SexAdmin(admin.ModelAdmin):
 
 @admin.register(Specimen)
 class SpecimenAdmin(admin.ModelAdmin):
-    list_display = ['id', 'hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimentype', 'locality', 'sex', 'ageclass', 'fossil', 'captive', 'comments', ]
+    list_display = ['id', 'hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'ageclass', 'fossil', 'captive', 'comments', ]
     fields = ('hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimentype', 'locality', 'sex', 'ageclass', 'fossil', 'captive', 'comments', )
     list_filter = (('taxon__name', DropdownFilter), ('institute__name', DropdownFilter), ('sex__name', DropdownFilter), ('specimentype__name', DropdownFilter), ('ageclass__age_class', DropdownFilter), ('captive__name', DropdownFilter), ('fossil__name', DropdownFilter), )
     search_fields = ['id']
@@ -219,7 +219,7 @@ class TaxonAdmin(admin.ModelAdmin):
 
 @admin.register(Variable)
 class VariableAdmin(admin.ModelAdmin):
-    list_display = ['id', 'label', 'name', 'laterality', 'datatype', 'pairing', 'comments', ]
+    list_display = ['id', 'label', 'name', 'laterality', 'datatype', 'paired_with', 'comments', ]
     fields = ['label', 'name', 'laterality', 'datatype', 'pairing', 'comments', ]
     list_filter = (('name', DropdownFilter), ('label', DropdownFilter), ('laterality__laterality', DropdownFilter), ('datatype__data_table', DropdownFilter), )
     search_fields = ['id']

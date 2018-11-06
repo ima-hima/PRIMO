@@ -13,16 +13,16 @@ from django.db import models
 
 
 class AgeClass(models.Model):
-    age_class = models.CharField('Age class',    max_length=50, blank=True, null=True)
-    abbr      = models.CharField("Abbreviation", max_length=50, blank=True, null=True)
-    comments  = models.TextField(                               blank=True, null=True)
+    name     = models.CharField('Age class',    max_length=50, blank=True, null=True)
+    abbr     = models.CharField("Abbreviation", max_length=50, blank=True, null=True)
+    comments = models.TextField(                               blank=True, null=True)
 
     def __str__(self):
         return self.age_class
 
     class Meta:
         managed             = True
-        db_table            = 'ageclass'
+        db_table            = 'age_class'
         verbose_name_plural = "age classes"
 
 
@@ -269,11 +269,11 @@ class Fossil(models.Model):
 
 
 class Institute(models.Model):
-    abbr           = models.CharField ('Abbreviation', max_length=8,   blank=True, null=True)
-    name           = models.CharField ('Institute',    max_length=255, blank=True, null=True)
-    institute_dept = models.CharField ('Department',   max_length=255, blank=True, null=True)
-    locality       = models.ForeignKey('Locality', on_delete=models.PROTECT)
-    comments       = models.TextField (                                blank=True, null=True)
+    abbr                 = models.CharField ('Abbreviation', max_length=8,   blank=True, null=True)
+    name                 = models.CharField ('Institute',    max_length=255, blank=True, null=True)
+    institute_department = models.CharField ('Department',   max_length=255, blank=True, null=True)
+    locality             = models.ForeignKey('Locality', on_delete=models.PROTECT)
+    comments             = models.TextField (                                blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -304,9 +304,9 @@ class Laterality(models.Model):
                 ('median', 'median'),
                 ('right', 'right'),
                 ('left', 'left'), )
-    laterality = models.CharField(                max_length=255, blank=True, null=True, choices=CHOICES)
-    abbr       = models.CharField('Abbreviation', max_length=1,   blank=True, null=True)
-    comments   = models.TextField(                                blank=True, null=True)
+    name     = models.CharField(                max_length=255, blank=True, null=True, choices=CHOICES)
+    abbr     = models.CharField('Abbreviation', max_length=1,   blank=True, null=True)
+    comments = models.TextField(                                blank=True, null=True)
 
     def __str__(self):
         return self.laterality
@@ -506,18 +506,18 @@ class Sex(models.Model):
 
 
 class Specimen(models.Model):
-    hypocode       = models.CharField   (                    max_length=20, blank=True, null=True)
-    taxon          = models.ForeignKey  ('Taxon',        on_delete=models.PROTECT)
-    institute      = models.ForeignKey  ('Institute',    on_delete=models.PROTECT)
-    catalog_number = models.CharField   (                    max_length=64, blank=True, null=True)
-    mass           = models.IntegerField(                                   blank=True, null=True)
-    locality       = models.ForeignKey  ('Locality',     on_delete=models.PROTECT)
-    sex            = models.ForeignKey  ('Sex',          on_delete=models.PROTECT)
-    ageclass       = models.ForeignKey  ('AgeClass',     on_delete=models.PROTECT)
-    fossil         = models.ForeignKey  ('Fossil',       on_delete=models.PROTECT)
-    captive        = models.ForeignKey  ('Captive',      on_delete=models.PROTECT)
-    specimentype   = models.ForeignKey  ('SpecimenType', on_delete=models.PROTECT)
-    comments       = models.TextField   (                                   blank=True, null=True)
+    hypocode        = models.CharField   (                    max_length=20, blank=True, null=True)
+    taxon           = models.ForeignKey  ('Taxon',        on_delete=models.PROTECT)
+    institute       = models.ForeignKey  ('Institute',    on_delete=models.PROTECT)
+    catalog_number  = models.CharField   (                    max_length=64, blank=True, null=True)
+    mass            = models.IntegerField(                                   blank=True, null=True)
+    locality        = models.ForeignKey  ('Locality',     on_delete=models.PROTECT)
+    sex             = models.ForeignKey  ('Sex',          on_delete=models.PROTECT)
+    ageclass        = models.ForeignKey  ('AgeClass',     on_delete=models.PROTECT)
+    fossil          = models.ForeignKey  ('Fossil',       on_delete=models.PROTECT)
+    captive         = models.ForeignKey  ('Captive',      on_delete=models.PROTECT)
+    specimen_type   = models.ForeignKey  ('SpecimenType', on_delete=models.PROTECT)
+    comments        = models.TextField   (                                   blank=True, null=True)
 
     def __str__(self):
         return self.hypocode
@@ -538,7 +538,7 @@ class SpecimenType(models.Model):
 
     class Meta:
         managed      = True
-        db_table     = 'type'
+        db_table     = 'specimen_type'
         ordering     = ['id']
         verbose_name = 'specimen type'
 
@@ -577,12 +577,12 @@ class Taxon(models.Model):
 
 
 class Variable(models.Model):
-    label      = models.CharField (              max_length=32,  blank=True, null=True)
-    name       = models.CharField (              max_length=255, blank=True, null=True)
-    laterality = models.ForeignKey('Laterality',                                         on_delete=models.PROTECT)
-    datatype   = models.ForeignKey('Datatype',                                           on_delete=models.PROTECT)
-    pairing    = models.ForeignKey('Variable',                                null=True, on_delete=models.PROTECT)
-    comments   = models.TextField (                               blank=True, null=True)
+    label          = models.CharField (              max_length=32,  blank=True, null=True)
+    name           = models.CharField (              max_length=255, blank=True, null=True)
+    laterality     = models.ForeignKey('Laterality',                                        on_delete=models.PROTECT)
+    datatype       = models.ForeignKey('Datatype',                                          on_delete=models.PROTECT)
+    paired_with = models.ForeignKey('Variable',                               null=True, on_delete=models.PROTECT)
+    comments       = models.TextField (                              blank=True, null=True)
 
     def __str__(self):
         return self.name
