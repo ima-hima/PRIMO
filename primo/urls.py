@@ -7,12 +7,12 @@ from django.contrib.auth import views                  as auth_views
 from . import views
 
 urlpatterns = [
-    url(r'^$',       views.IndexView.as_view(), name='index'),
-    path('admin/',   admin.site.urls,           name='admin'),
-    url(r'^email/',  views.email,               name="email"),
-    url(r'^erd/',    views.erd,                 name="erd"),
-    url(r'login/',   views.log_in,              name="login"),
-    url(r'^logout/', views.logout_view,         name="logout"),
+    url(r'^$',                            views.IndexView.as_view(), name='index'),
+    path('admin/',                        admin.site.urls,           name='admin'),
+    url(r'^email/',                       views.email,               name="email"),
+    url(r'^entity_relationship_diagram/', views.erd,                 name="erd"),
+    url(r'login/',                        views.log_in,              name="login"),
+    url(r'^logout/',                      views.logout_view,         name="logout"),
 
     url(r'^downloadSuccess/',
         views.downloadSuccess,

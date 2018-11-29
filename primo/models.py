@@ -418,7 +418,7 @@ class Protocol(models.Model):
 
 
 class QueryWizardQuery(models.Model):
-    query_type   = models.CharField(max_length=20, blank=True, null=True)
+    data_table   = models.CharField(max_length=20, blank=True, null=True)
     query        = models.TextField(               blank=True, null=True)
     query_suffix = models.TextField(               blank=True, null=True)
 
@@ -577,12 +577,12 @@ class Taxon(models.Model):
 
 
 class Variable(models.Model):
-    label          = models.CharField (              max_length=32,  blank=True, null=True)
-    name           = models.CharField (              max_length=255, blank=True, null=True)
-    laterality     = models.ForeignKey('Laterality',                                        on_delete=models.PROTECT)
-    datatype       = models.ForeignKey('Datatype',                                          on_delete=models.PROTECT)
+    label       = models.CharField (              max_length=32,  blank=True, null=True)
+    name        = models.CharField (              max_length=255, blank=True, null=True)
+    laterality  = models.ForeignKey('Laterality',                                        on_delete=models.PROTECT)
+    datatype    = models.ForeignKey('Datatype',                                          on_delete=models.PROTECT)
     paired_with = models.ForeignKey('Variable',                               null=True, on_delete=models.PROTECT)
-    comments       = models.TextField (                              blank=True, null=True)
+    comments    = models.TextField (                              blank=True, null=True)
 
     def __str__(self):
         return self.name

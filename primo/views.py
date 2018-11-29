@@ -127,7 +127,7 @@ def email(request):
 
 def erd(request):
     """ Retrieve relational database table pdf. """
-    return render(request, 'primo/erd.jinja')
+    return render(request, 'primo/entity_relation_diagram.jinja')
 
 
 def exportCsvFile(request):
@@ -153,12 +153,18 @@ def exportCsvFile(request):
     return download(request)
 
 
-def exportMorphologika(fieldNames, metaData, values):
+def exportMorphologika(request, fieldNames, metaData, values):
     """ Collate data returned from 3D SQL query.
         Print out two files: a csv of metadata and a Morphologika file. Fields included in metadata
         are enumerated below. """
 
     setUpDownload(request)
+
+    retStr = '\n'
+    # TODO: deal with this
+    # if( strpos( strtolower( $_SERVER['HTTP_USER_AGENT'] ), 'win' ) ) {
+    #         $ret = "\r\n";
+    # }
 
     missing_pts = {} # These will be output in metadata csv file.
 
@@ -391,7 +397,7 @@ def parameter_selection(request, current_table):
 
 @login_required
 def query_setup(request, scalar_or_3d = 'scalar'):
-    """ tables will be all of the tables that are available to search on for a particular search type (e.g. scalar or 3D).
+    """ Tables will be all of the tables that are available to search on for a particular search type (e.g. scalar or 3D).
         Some of those tables, like sex, should be pre-filled with all values selected. In that case,
         do a second query for all possible values and fill those values in. """
     # if there's a POST, then parameter_selection has been called, and some values have been sent back
@@ -429,12 +435,12 @@ def query_setup(request, scalar_or_3d = 'scalar'):
         request.session['scalar_or_3d'] = scalar_or_3d
 
         # note for this query that "tables" is set as the related name in Models.py
-        tables   = QueryWizardQuery.objects.get(query_type=scalar_or_3d.capitalize()).tables.all()
+        tables   = QueryWizardQuery.objects.get(data_table=scalar_or_3d.capitalize()).tables.all()
         selected = dict() # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
         request.session['tables']   = []
         request.session['selected'] = dict()
         for table in tables:
-            #if len(request.session['selected'][table.filter_table_name]) == 0:
+            # if len(request.session['selected'][table.filter_table_name]) == 0:
             request.session['tables'].append( {'table_name': table.filter_table_name, 'display_name': table.display_name} )
             if table.preselected:
                 model  = apps.get_model(app_label='primo', model_name=table.filter_table_name.capitalize())
@@ -452,9 +458,9 @@ def query_setup(request, scalar_or_3d = 'scalar'):
             finished = False
     request.session.modified = True
     return render( request, 'primo/query_setup.jinja', {'scalar_or_3d': scalar_or_3d,
-                                                        'tables':   tables,
-                                                        'selected': selected,
-                                                        'finished': finished,
+                                                        'tables':       tables,
+                                                        'selected':     selected,
+                                                        'finished':     finished,
                                                        }
                  )
 
@@ -481,32 +487,32 @@ def query_2d(request, is_preview):
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
-    base = 'SELECT `scalar`    . `id`             AS  scalar_id, \
-                   `specimen`  . `id`             AS  specimen_id, \
-                   `specimen`  . `hypocode`       AS  hypocode, \
-                   `institute` . `abbr`           AS  collection_acronym, \
-                   `specimen`  . `catalog_number` AS  catalog_number, \
-                   `taxon`     . `name`           AS  taxon_name, \
-                   `specimen`  . `mass`           AS  mass, \
-                   `sex`       . `name`           AS  sex_type, \
-                   `fossil`    . `name`           AS  fossil_or_extant, \
-                   `captive`   . `name`           AS  captive_or_wild, \
-                   `original`  . `name`           AS  original_or_cast, \
-                   `variable`  . `label`          AS  variable_label, \
-                   `scalar`    . `value`          AS  scalar_value, \
-                   `session`   . `comments`       AS  session_comments, \
-                   `specimen`  . `comments`       AS  specimen_comments '
+    base = 'SELECT `data_scalar`. `id`             AS  scalar_id, \
+                   `specimen`   . `id`             AS  specimen_id, \
+                   `specimen`   . `hypocode`       AS  hypocode, \
+                   `institute`  . `abbr`           AS  collection_acronym, \
+                   `specimen`   . `catalog_number` AS  catalog_number, \
+                   `taxon`      . `name`           AS  taxon_name, \
+                   `specimen`   . `mass`           AS  mass, \
+                   `sex`        . `name`           AS  sex_type, \
+                   `fossil`     . `name`           AS  fossil_or_extant, \
+                   `captive`    . `name`           AS  captive_or_wild, \
+                   `original`   . `name`           AS  original_or_cast, \
+                   `variable`   . `label`          AS  variable_label, \
+                   `data_scalar`. `value`          AS  scalar_value, \
+                   `session`    . `comments`       AS  session_comments, \
+                   `specimen`   . `comments`       AS  specimen_comments '
 
-    base += 'FROM `scalar` \
-             INNER JOIN `variable` ON `scalar`   .`variable_id`  = `variable` .`id` \
-             INNER JOIN `session`  ON `scalar`   .`session_id`   = `session`  .`id` \
-             INNER JOIN `specimen` ON `session`  .`specimen_id`  = `specimen` .`id` \
-             INNER JOIN `taxon`    ON `specimen` .`taxon_id`     = `taxon`    .`id` \
-             INNER JOIN `sex`      ON `specimen` .`sex_id`       = `sex`      .`id` \
-             INNER JOIN `fossil`   ON `specimen` .`fossil_id`    = `fossil`   .`id` \
-             INNER JOIN `institute`ON `specimen` .`institute_id` = `institute`.`id` \
-             INNER JOIN `captive`  ON `specimen` .`captive_id`   = `captive`  .`id` \
-             INNER JOIN `original` ON `session`  .`original_id`  = `original` .`id`'
+    base += 'FROM `data_scalar` \
+             INNER JOIN `variable` ON `data_scalar`.`variable_id`  = `variable` .`id` \
+             INNER JOIN `session`  ON `data_scalar`.`session_id`   = `session`  .`id` \
+             INNER JOIN `specimen` ON `session`    .`specimen_id`  = `specimen` .`id` \
+             INNER JOIN `taxon`    ON `specimen`   .`taxon_id`     = `taxon`    .`id` \
+             INNER JOIN `sex`      ON `specimen`   .`sex_id`       = `sex`      .`id` \
+             INNER JOIN `fossil`   ON `specimen`   .`fossil_id`    = `fossil`   .`id` \
+             INNER JOIN `institute`ON `specimen`   .`institute_id` = `institute`.`id` \
+             INNER JOIN `captive`  ON `specimen`   .`captive_id`   = `captive`  .`id` \
+             INNER JOIN `original` ON `session`    .`original_id`  = `original` .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
@@ -597,8 +603,14 @@ def query_3d(request, which_3d_output_type, is_preview):
                           ('fossil_or_extant',   'Fossil or Extant'),
                           ('captive_or_wild',    'Captive or Wild'),
                           ('original_or_cast',   'Original or Cast'),
+                          ('protocol',           'Protocol'),
                           ('session_comments',   'Session Comments'),
                           ('specimen_comments',  'Specimen Comments'),
+                          ('x',                  'x'),
+                          ('y',                  'y'),
+                          ('z',                  'z'),
+                          ('datindex',           'Data index'),
+                          ('variable_id',        'Variable ID'),
                         ]
 
     # This is okay to include in publicly-available code (i.e. git), because
@@ -616,17 +628,17 @@ def query_3d(request, which_3d_output_type, is_preview):
                             `protocol` .`label`          AS protocol, \
                             `session`  .`comments`       AS session_comments, \
                             `specimen` .`comments`       AS specimen_comments, \
-                            `data3d`   .`x`, \
-                            `data3d`   .`y`, \
-                            `data3d`   .`z`, \
-                            `data3d`   .`datindex`, \
-                            `data3d`   .`variable_id` \
+                            `data_3d`  .`x`, \
+                            `data_3d`  .`y`, \
+                            `data_3d`  .`z`, \
+                            `data_3d`  .`datindex`, \
+                            `data_3d`  .`variable_id` \
             FROM \
-                data3d \
-            INNER JOIN `variable`          ON `data3d`           .`variable_id`  = `variable`  .`id` \
+                data_3d \
+            INNER JOIN `variable`          ON `data_3d`          .`variable_id`  = `variable`  .`id` \
             INNER JOIN `bodypart_variable` ON `bodypart_variable`.`variable_id`  = `variable`  .`id` \
             INNER JOIN `bodypart`          ON `bodypart_variable`.`bodypart_id`  = `bodypart`  .`id` \
-            INNER JOIN `session`           ON `data3d`           .`session_id`   = `session`   .`id` \
+            INNER JOIN `session`           ON `data_3d`          .`session_id`   = `session`   .`id` \
             INNER JOIN `specimen`          ON `session`          .`specimen_id`  = `specimen`  .`id` \
             INNER JOIN `taxon`             ON `specimen`         .`taxon_id`     = `taxon`     .`id` \
             INNER JOIN `sex`               ON `specimen`         .`sex_id`       = `sex`       .`id` \
@@ -637,14 +649,11 @@ def query_3d(request, which_3d_output_type, is_preview):
             INNER JOIN `original`          ON `session`          .`original_id`  = `original`  .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
-    variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data3d")'
-    ordering  = ' ORDER BY `specimen`.`id`, `variable`.`id`, `data3d`.`datindex` ASC'
-    final_sql = (base + where + variables + ordering + ';')
+    # variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data_3d")'
+    ordering  = ' ORDER BY `specimen`.`id`, `variable_id`, `data_3d`.`datindex` ASC'
+    final_sql = (base + where + ordering + ';')
 
     # We skip varibles in 3D; we're getting all of them.
-    # with connection.cursor() as variable_query:
-    #     variable_query.execute( 'SELECT `id` FROM `variable` WHERE `variable`.`datatype_id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data3d")' )
-    #     variable_ids = [id for id in variable_query.fetchall()]
 
     with connection.cursor() as cursor:
         cursor.execute( final_sql, [
@@ -681,8 +690,9 @@ def query_3d(request, which_3d_output_type, is_preview):
                                                                 request.session['selected']['fossil'],
                                                                 request.session['selected']['taxon'],
                                                               ).replace('[', '(').replace(']',')'),
-        'query_results' : query_results,
-        'groups'        : request.user.get_group_permissions()
+        'query_results'     : query_results,
+        'groups'            : request.user.get_group_permissions(),
+        'specimen_metadata' : specimen_metadata,
     }
 
     return render(request, 'primo/query_results.jinja', context, )
