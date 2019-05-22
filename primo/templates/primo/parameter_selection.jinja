@@ -47,7 +47,7 @@ $(document).ready(function() {
     <tr>
         <th>Variable name</th>
         <th>Variable label</th>
-        <!-- <th>ID</th> -->
+        <th>ID</th>
         <th style="padding-left:4px;"><input id="checkAll" type="checkbox"></th>
     </tr>
     </thead>
@@ -56,7 +56,7 @@ $(document).ready(function() {
         <tr>
             <td>{{ val['name'] }}</td>
             <td>{{ val['label']}}</td>
-            <!-- <td>{{ val['id']}}</td> -->
+            <td>{{ val['id']}}</td>
             <td><input type="checkbox" class="checkSingle" name='id' value="{{ val['id'] }}"
                     {% if val['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
         </tr>

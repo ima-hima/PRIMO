@@ -46,17 +46,18 @@ def create_tree_javascript(request, parent_id, current_table):
         Function is recursive on parent_id and returns a properly-formatted string
         of Javascript code, although from reading nlstree docs (https://www.addobject.com/nlstree),
         it seems order is unimportant, so recursion may be unnecessary (wasteful?).
-        Oh, wait: necessary because of if statement dealing with Eocatarrhini.
+        Oh, wait: necessary because of if statement dealing with Eucatarrhini.
         Okay, so *eventually* unnecessary? """
     javascript = ''
     js_item_delimiter = '", "'
 
-    vals = apps.get_model(app_label='primo',
-                          model_name=current_table.capitalize()).objects.values('id',
-                                                                                'name',
-                                                                                'parent_id',
-                                                                                'expand_in_tree',
-                                                                               ).filter(parent_id=parent_id)
+    vals = apps.get_model( app_label  = 'primo',
+                           model_name = current_table.capitalize()
+                         ).objects.values( 'id',
+                                           'name',
+                                           'parent_id',
+                                           'expand_in_tree',
+                                         ).filter(parent_id = parent_id)
     #print(vals)
     for val in vals:
         # remove quote marks from `name`, as they'll screw up Javascript
@@ -65,7 +66,8 @@ def create_tree_javascript(request, parent_id, current_table):
         parent_id = val['parent_id']
         expand    = 'true' if val['expand_in_tree'] else 'false'
         #print(name)
-        if name != 'Eocatarrhini': # I'm not clear why I don't need to recurse up Eocatarrhini heirarchy
+        if name != 'Eocatarrhini': # I'm not clear why I don't need to recurse up Eucatarrhini heirarchy.
+                                   # Note that there's an extra blank entry for icon after the second item_id.
             javascript += 'tree.add("' \
                         + str(item_id)   + js_item_delimiter \
                         + str(parent_id) + js_item_delimiter \
@@ -92,7 +94,6 @@ def download(request):
 
 
 def downloadSuccess(request):
-    remove( path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download']) )
     return render(request, 'primo/download_success.jinja', {})
 
 
@@ -137,7 +138,12 @@ def exportCsvFile(request):
 
     setUpDownload(request)
 
-    with open( path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download']), newline=request.session['newlineChar'] ) as f:
+    with open( path.join( settings.DOWNLOAD_ROOT,
+                          request.session['file_to_download'],
+                        ),
+               'w',
+               newline=request.session['newlineChar'],
+             ) as f:
         csvfile = File(f)
         meta_names = [ m[0] for m in request.session['specimen_metadata'] ]
         var_names  = [ v[0] for v in request.session['variable_labels'] ]
@@ -153,18 +159,12 @@ def exportCsvFile(request):
     return download(request)
 
 
-def exportMorphologika(request, fieldNames, metaData, values):
+def exportMorphologika(request):
     """ Collate data returned from 3D SQL query.
         Print out two files: a csv of metadata and a Morphologika file. Fields included in metadata
         are enumerated below. """
 
     setUpDownload(request)
-
-    retStr = '\n'
-    # TODO: deal with this
-    # if( strpos( strtolower( $_SERVER['HTTP_USER_AGENT'] ), 'win' ) ) {
-    #         $ret = "\r\n";
-    # }
 
     missing_pts = {} # These will be output in metadata csv file.
 
@@ -198,7 +198,12 @@ def exportMorphologika(request, fieldNames, metaData, values):
 
         dirName = 'PRIMO_3D_' + uuid1()  # uuid1() creates UUID string
         metaOutString = '';
-        with open( path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download']), newline=request.session['newlineChar'] ) as f:
+        with open( path.join( settings.DOWNLOAD_ROOT,
+                              request.session['file_to_download']
+                            ),
+                   'w',
+                   newline=request.session['newlineChar']
+                  ) as f:
             csvfile = File(f)
 
             outFile.write( ' specimen id, hypocode, institute, catalog number, taxon name, mass, sex, fossil or extant, captive or wild-caught, original or cast, protocol, session comments, specimen comments, missing points (indexed by specimen starting at 1)' + retStr )
@@ -277,16 +282,16 @@ def fixQuotes(inStr):
     return inStr
 
 
-def get3D_data(specimen_metadata):
-    # Original SQL:
+def get3D_data(request):
+    ''' Execute query for actual 3D points, i.e. not metadata. '''
 
-    specimen_metadata = [ ('specimen_id',        'Specimen ID'),
-                          ('hypocode',           'Hypocode'),
-                          ('x',                  'x'),
-                          ('y',                  'y'),
-                          ('z',                  'z'),
-                          ('datindex',           'Data index'),
-                          ('variable_id',        'Variable ID'),
+    specimen_metadata = [ ('specimen_id', 'Specimen ID'),
+                          ('hypocode',    'Hypocode'),
+                          ('x',           'x'),
+                          ('y',           'y'),
+                          ('z',           'z'),
+                          ('datindex',    'Data index'),
+                          ('variable_id', 'Variable ID'),
                         ]
 
     base = 'SELECT DISTINCT `session`  .`id` AS session_id, \
@@ -299,18 +304,16 @@ def get3D_data(specimen_metadata):
                             `data_3d`  .`variable_id` \
             FROM \
                 data_3d \
-            INNER JOIN `variable`          ON `data_3d`          .`variable_id`  = `variable`  .`id` \
-            INNER JOIN `session`           ON `data_3d`          .`session_id`   = `session`   .`id` \
-            INNER JOIN `specimen`          ON `session`          .`specimen_id`  = `specimen`  .`id`'
+            INNER JOIN `variable` ON `data_3d`.`variable_id` = `variable`  .`id` \
+            INNER JOIN `session`  ON `data_3d`.`session_id`  = `session`   .`id` \
+            INNER JOIN `specimen` ON `session`.`specimen_id` = `specimen`  .`id`'
 
     where     = ' WHERE `session_id` IN %s'
     ordering  = ' ORDER BY `specimen_id`, `variable_id`, `data_3d`.`datindex` ASC'
     final_sql = (base + where + ordering + ';')
 
     with connection.cursor() as cursor:
-        cursor.execute( final_sql, [
-                           specimen_metadata['session'],
-                        ]
+        cursor.execute( final_sql, [ specimen_metadata['session'] ]
                       )
         # Now return all rows as a dictionary object. Note that each variable name will have its own row,
         # so I'm going to have to jump through some hoops to get the names out correctly for the
@@ -399,27 +402,29 @@ def parameter_selection(request, current_table):
             bodypart_list         = request.session['selected']['bodypart']
             bodypart_variable_ids = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
             variable_ids          = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
-            vals                  = current_model.objects.values('id',
-                                                                 'name',
-                                                                 'label',
+            vals                  = current_model.objects.values( 'id',
+                                                                  'name',
+                                                                  'label',
                                                                 ).filter(pk__in=variable_ids).order_by('id')
         else:
             vals = apps.get_model( app_label  = 'primo',
-                                   model_name = current_table.capitalize() \
-                                 ).objects.values('name',
-                                                  'label',
-                                                  'bodypartvariable__bodypart_id',
+                                   model_name = current_table.capitalize(),
+                                 ).objects.values( 'name',
+                                                   'label',
+                                                   'bodypartvariable__bodypart_id',
                                                  ).all()
 
     elif current_table == 'bodypart' or current_table == 'taxon':
         vals = []
-        # do original query to get root of tree
+        # do original query to get root of tree.
+        # The rest of the tree will be recursively created in `create_tree_javascript()`.
         val = apps.get_model( app_label  = 'primo',
-                              model_name = current_table.capitalize()
-                            ).objects.values('id',
-                                             'name',
-                                             'parent_id',
-                                             'expand_in_tree'
+                              model_name = current_table.capitalize(),
+                            ).objects.values( 'id',
+                                              'name',
+                                              'parent_id',
+                                              'expand_in_tree',
+                                              'tree_root',
                                             ).filter(tree_root = 1)[0]
 
         name       = val['name'].replace('"', '')
@@ -453,12 +458,16 @@ def parameter_selection(request, current_table):
 
 @login_required
 def query_setup(request, scalar_or_3d = 'scalar'):
-    """ Tables will be all of the tables that are available to search on for a particular search type (e.g. scalar or 3D).
-        Some of those tables, like sex, should be pre-filled with all values selected. In that case,
-        do a second query for all possible values and fill those values in. """
-    # if there's a POST, then parameter_selection has been called, and some values have been sent back
+    ''' For scalar queries send parameter_selection to frontend. Once all parameters are set, give option to call results, query_2d().
+
+    Tables will be all of the tables that are available to search on for a particular search type (e.g. scalar or 3D).
+        Of those tables sex and fossil will be pre-filled with all values selected. In that case,
+        do a second query for all possible values and fill those values in. '''
+
+    # if there's a POST, then parameter_selection has been called and some values have been sent back
     if request.method == 'POST':
         current_table = request.POST.get('table')
+
         if request.POST.get('commit') == 'Select Checked Options':
             # otherwise, either cancel select all was chosen
             selected_rows = []
@@ -474,6 +483,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
 
                 if request.POST.get('table') == 'bodypart':
                     request.session['selected']['variable'] = []
+
             else: # Return is *not* from nlstree.js, so can just get id values.
                 for item in request.POST.getlist('id'): # Because .get() returns only last item.
                                                         # Note that getlist() returns an empty list for any missing key.
@@ -486,37 +496,44 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                  ).objects.values('id').all()
             request.session['selected'][current_table] = [val['id'] for val in vals]
 
-    if not request.session['tables']: # if tables isn't set, query for all tables,
-                                          # and set up both tables and selected lists
+    if not request.session['tables']: # if tables isn't set, query for all tables
+                                      # and set up both tables and selected lists
         request.session['scalar_or_3d'] = scalar_or_3d
 
         # note for this query that "tables" is set as the related name in Models.py
-        tables   = QueryWizardQuery.objects.get(data_table=scalar_or_3d.capitalize()).tables.all()
+        tables   = QueryWizardQuery.objects.get(data_table = scalar_or_3d.capitalize()).tables.all()
         selected = dict() # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
         request.session['tables']   = []
         request.session['selected'] = dict()
+
         for table in tables:
             # if len(request.session['selected'][table.filter_table_name]) == 0:
             request.session['tables'].append( {'table_name': table.filter_table_name, 'display_name': table.display_name} )
+
             if table.preselected:
-                model  = apps.get_model(app_label='primo', model_name=table.filter_table_name.capitalize())
+                model  = apps.get_model( app_label  = 'primo',
+                                         model_name = table.filter_table_name.capitalize()
+                                       )
                 values = model.objects.values('id').all()
                 # because vals is a list of dicts in format 'id': value
                 request.session['selected'][table.filter_table_name] = [ value['id'] for value in values ]
             else:
                 request.session['selected'][table.filter_table_name] = [] # so I can use 'if selected[table]' in query_setup.jinja
+
     tables   = request.session['tables']
     selected = request.session['selected']
-    # I coudn't figure out any other way to do this, other than to check each time
+    # I coudn't figure out any way to do this, other than to check each time
     finished = True
+
     for table in tables:
         if len(selected[table['table_name']]) == 0:
             finished = False
+
     request.session.modified = True
-    return render( request, 'primo/query_setup.jinja', {'scalar_or_3d': scalar_or_3d,
-                                                        'tables':       tables,
-                                                        'selected':     selected,
-                                                        'finished':     finished,
+    return render( request, 'primo/query_setup.jinja', { 'scalar_or_3d': scalar_or_3d,
+                                                         'tables':       tables,
+                                                         'selected':     selected,
+                                                         'finished':     finished,
                                                        }
                  )
 
@@ -643,8 +660,9 @@ def query_start(request):
 
 
 def query_3d(request, which_3d_output_type, is_preview):
-    """ Set up the 3D query SQL. Do query. Send results to either Morphologika or
-        GRFND creator and downloader. If is_preview ignore which_output_type. """
+    """ Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
+        Send results to either Morphologika or GRFND creator and downloader.
+        If is_preview ignore which_output_type. """
 
     if request.user.username == 'user':
         is_preview = True
@@ -736,7 +754,7 @@ def query_3d(request, which_3d_output_type, is_preview):
                           ('specimen_comments',  'Specimen Comments'),
                         ]
 
-
+    # Note
     base = 'SELECT DISTINCT `specimen` .`id`             AS specimen_id, \
                             `specimen` .`hypocode`       AS hypocode, \
                             `institute`.`abbr`           AS collection_acronym, \
@@ -751,15 +769,16 @@ def query_3d(request, which_3d_output_type, is_preview):
                             `session`  .`comments`       AS session_comments, \
                             `specimen` .`comments`       AS specimen_comments \
             FROM \
-                `session` \
-            INNER JOIN `specimen`  ON `session` .`specimen_id`  = `specimen`  .`id` \
-            INNER JOIN `taxon`     ON `specimen`.`taxon_id`     = `taxon`     .`id` \
-            INNER JOIN `sex`       ON `specimen`.`sex_id`       = `sex`       .`id` \
-            INNER JOIN `fossil`    ON `specimen`.`fossil_id`    = `fossil`    .`id` \
-            INNER JOIN `institute` ON `specimen`.`institute_id` = `institute` .`id` \
-            INNER JOIN `protocol`  ON `session` .`protocol_id`  = `protocol`  .`id` \
-            INNER JOIN `captive`   ON `specimen`.`captive_id`   = `captive`   .`id` \
-            INNER JOIN `original`  ON `session` .`original_id`  = `original`  .`id`'
+                `data_3d` \
+            INNER JOIN `session`   ON `data_3d` .`session_id`   = `session`  .`id` \
+            INNER JOIN `specimen`  ON `session` .`specimen_id`  = `specimen` .`id` \
+            INNER JOIN `taxon`     ON `specimen`.`taxon_id`     = `taxon`    .`id` \
+            INNER JOIN `sex`       ON `specimen`.`sex_id`       = `sex`      .`id` \
+            INNER JOIN `fossil`    ON `specimen`.`fossil_id`    = `fossil`   .`id` \
+            INNER JOIN `institute` ON `specimen`.`institute_id` = `institute`.`id` \
+            INNER JOIN `protocol`  ON `session` .`protocol_id`  = `protocol` .`id` \
+            INNER JOIN `captive`   ON `specimen`.`captive_id`   = `captive`  .`id` \
+            INNER JOIN `original`  ON `session` .`original_id`  = `original` .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     # variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data_3d")'
@@ -812,10 +831,13 @@ def query_3d(request, which_3d_output_type, is_preview):
         'total_specimens'   : len(query_results),
     }
 
+    # if it's not a preview I need to get actual data and then send to morphologika or grfnd
     if not is_preview:
-        get3D_data(specimen_metadata)
+        request['specimen_metadata'] = specimen_metadata
+        get3D_data(request)
+        return exportMorphologika(request)
 
-    return render(request, 'primo/query_results.jinja', context, )
+    return render(request, 'primo/query_results.jinja', context )
 
 
 def setUpDownload(request):
@@ -823,7 +845,7 @@ def setUpDownload(request):
 
     # Stupid Windows: we need to make sure the newline is set correctly. Abundance of caution.
     retStr = '\n'
-    if find( HttpRequestAgent.HTTP_USER_AGENT.lower(), 'win' ):
+    if request.META['HTTP_USER_AGENT'].lower().find( 'win' ):
         retStr = '\r\n'
     request.session['newlineChar'] = retStr
 
