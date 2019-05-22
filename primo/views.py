@@ -277,6 +277,56 @@ def fixQuotes(inStr):
     return inStr
 
 
+def get3D_data(specimen_metadata):
+    # Original SQL:
+
+    specimen_metadata = [ ('specimen_id',        'Specimen ID'),
+                          ('hypocode',           'Hypocode'),
+                          ('x',                  'x'),
+                          ('y',                  'y'),
+                          ('z',                  'z'),
+                          ('datindex',           'Data index'),
+                          ('variable_id',        'Variable ID'),
+                        ]
+
+    base = 'SELECT DISTINCT `session`  .`id` AS session_id, \
+                            `specimen` .`id` AS specimen_id, \
+                            `specimen` .`hypocode` AS `hypocode`, \
+                            `data_3d`  .`x`, \
+                            `data_3d`  .`y`, \
+                            `data_3d`  .`z`, \
+                            `data_3d`  .`datindex`, \
+                            `data_3d`  .`variable_id` \
+            FROM \
+                data_3d \
+            INNER JOIN `variable`          ON `data_3d`          .`variable_id`  = `variable`  .`id` \
+            INNER JOIN `session`           ON `data_3d`          .`session_id`   = `session`   .`id` \
+            INNER JOIN `specimen`          ON `session`          .`specimen_id`  = `specimen`  .`id`'
+
+    where     = ' WHERE `session_id` IN %s'
+    ordering  = ' ORDER BY `specimen_id`, `variable_id`, `data_3d`.`datindex` ASC'
+    final_sql = (base + where + ordering + ';')
+
+    with connection.cursor() as cursor:
+        cursor.execute( final_sql, [
+                           specimen_metadata['session'],
+                        ]
+                      )
+        # Now return all rows as a dictionary object. Note that each variable name will have its own row,
+        # so I'm going to have to jump through some hoops to get the names out correctly for the
+        # table headers in the view. TODO: There has to be a better way to do that.
+
+        # Note nice list comprehensions from the Django docs here:
+        columns = [col[0] for col in cursor.description]
+        query_results = [
+            dict(zip(columns, row))
+            for row in cursor.fetchall()
+        ]
+
+    return
+
+
+
 def init_query_table(query_result):
     """ Initialize query table (actually a dictionary) that is to be used for data
         that will be pushed out to view. A single query row is received and put into
@@ -340,20 +390,22 @@ def logout_view(request):
 def parameter_selection(request, current_table):
     javascript = ''
 
-    current_model = apps.get_model( app_label = 'primo', model_name = current_table.capitalize() )
+    current_model = apps.get_model( app_label  = 'primo',
+                                    model_name = current_table.capitalize(),
+                                  )
 
     if current_table == 'variable':
-        if len(request.session.get('selected')['bodypart']) > 0:
-            bodypart_list          = request.session.get('selected')['bodypart']
-            bodypart_variable_ids  = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
-            variable_ids           = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
-            vals                   = current_model.objects.values('id',
-                                                                  'name',
-                                                                  'label',
-                                                                 ).filter(pk__in=variable_ids).order_by('id')
+        if len(request.session['selected']['bodypart']) > 0:
+            bodypart_list         = request.session['selected']['bodypart']
+            bodypart_variable_ids = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
+            variable_ids          = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
+            vals                  = current_model.objects.values('id',
+                                                                 'name',
+                                                                 'label',
+                                                                ).filter(pk__in=variable_ids).order_by('id')
         else:
-            vals = apps.get_model( app_label='primo',
-                                   model_name=current_table.capitalize() \
+            vals = apps.get_model( app_label  = 'primo',
+                                   model_name = current_table.capitalize() \
                                  ).objects.values('name',
                                                   'label',
                                                   'bodypartvariable__bodypart_id',
@@ -362,9 +414,13 @@ def parameter_selection(request, current_table):
     elif current_table == 'bodypart' or current_table == 'taxon':
         vals = []
         # do original query to get root of tree
-        val = apps.get_model( app_label='primo',
-                              model_name=current_table.capitalize()
-                            ).objects.values('id', 'name', 'parent_id', 'expand_in_tree').filter(tree_root = 1)[0]
+        val = apps.get_model( app_label  = 'primo',
+                              model_name = current_table.capitalize()
+                            ).objects.values('id',
+                                             'name',
+                                             'parent_id',
+                                             'expand_in_tree'
+                                            ).filter(tree_root = 1)[0]
 
         name       = val['name'].replace('"', '')
         item_id    = val['id']
@@ -430,7 +486,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                  ).objects.values('id').all()
             request.session['selected'][current_table] = [val['id'] for val in vals]
 
-    if not request.session.get('tables'): # if tables isn't set, query for all tables,
+    if not request.session['tables']: # if tables isn't set, query for all tables,
                                           # and set up both tables and selected lists
         request.session['scalar_or_3d'] = scalar_or_3d
 
@@ -449,8 +505,8 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                 request.session['selected'][table.filter_table_name] = [ value['id'] for value in values ]
             else:
                 request.session['selected'][table.filter_table_name] = [] # so I can use 'if selected[table]' in query_setup.jinja
-    tables   = request.session.get('tables')
-    selected = request.session.get('selected')
+    tables   = request.session['tables']
+    selected = request.session['selected']
     # I coudn't figure out any other way to do this, other than to check each time
     finished = True
     for table in tables:
@@ -589,10 +645,82 @@ def query_start(request):
 def query_3d(request, which_3d_output_type, is_preview):
     """ Set up the 3D query SQL. Do query. Send results to either Morphologika or
         GRFND creator and downloader. If is_preview ignore which_output_type. """
+
+    if request.user.username == 'user':
+        is_preview = True
+
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Move all of this, and 3D into db. As it was before, dammit.
 
+
     # This is for cleaner code when composing header row for metadata csv.
+    # First value is field name in DB, second is header name for metadata csv.
+
+
+    # This is okay to include in publicly-available code (i.e. git), because
+    # the database structure diagram is already published on the website anyway.
+    # We'll only do metadata search first.
+
+    # Original SQL:
+
+    # specimen_metadata = [ ('specimen_id',        'Specimen ID'),
+    #                       ('hypocode',           'Hypocode'),
+    #                       ('collection_acronym', 'Collection Acronym'),
+    #                       ('catalog_number',     'Catalog No.'),
+    #                       ('taxon_name',         'Taxon name'),
+    #                       ('sex_type',           'Sex'),
+    #                       ('mass',               'Mass'),
+    #                       ('fossil_or_extant',   'Fossil or Extant'),
+    #                       ('captive_or_wild',    'Captive or Wild'),
+    #                       ('original_or_cast',   'Original or Cast'),
+    #                       ('protocol',           'Protocol'),
+    #                       ('session_comments',   'Session Comments'),
+    #                       ('specimen_comments',  'Specimen Comments'),
+    #                       ('x',                  'x'),
+    #                       ('y',                  'y'),
+    #                       ('z',                  'z'),
+    #                       ('datindex',           'Data index'),
+    #                       ('variable_id',        'Variable ID'),
+    #                     ]
+
+    # base = 'SELECT DISTINCT `specimen` .`id`             AS specimen_id, \
+    #                         `specimen` .`hypocode`       AS hypocode, \
+    #                         `institute`.`abbr`           AS collection_acronym, \
+    #                         `specimen` .`catalog_number` AS catalog_number, \
+    #                         `taxon`    .`name`           AS taxon_name, \
+    #                         `specimen` .`mass`           AS mass, \
+    #                         `sex`      .`name`           AS sex_type, \
+    #                         `fossil`   .`name`           AS fossil_or_extant, \
+    #                         `captive`  .`name`           AS captive_or_wild, \
+    #                         `original` .`name`           AS original_or_cast, \
+    #                         `protocol` .`label`          AS protocol, \
+    #                         `session`  .`comments`       AS session_comments, \
+    #                         `specimen` .`comments`       AS specimen_comments, \
+    #                         `data_3d`  .`x`, \
+    #                         `data_3d`  .`y`, \
+    #                         `data_3d`  .`z`, \
+    #                         `data_3d`  .`datindex`, \
+    #                         `data_3d`  .`variable_id` \
+    #         FROM \
+    #             data_3d \
+    #         INNER JOIN `variable`          ON `data_3d`          .`variable_id`  = `variable`  .`id` \
+    #         INNER JOIN `bodypart_variable` ON `bodypart_variable`.`variable_id`  = `variable`  .`id` \
+    #         INNER JOIN `bodypart`          ON `bodypart_variable`.`bodypart_id`  = `bodypart`  .`id` \
+    #         INNER JOIN `session`           ON `data_3d`          .`session_id`   = `session`   .`id` \
+    #         INNER JOIN `specimen`          ON `session`          .`specimen_id`  = `specimen`  .`id` \
+    #         INNER JOIN `taxon`             ON `specimen`         .`taxon_id`     = `taxon`     .`id` \
+    #         INNER JOIN `sex`               ON `specimen`         .`sex_id`       = `sex`       .`id` \
+    #         INNER JOIN `fossil`            ON `specimen`         .`fossil_id`    = `fossil`    .`id` \
+    #         INNER JOIN `institute`         ON `specimen`         .`institute_id` = `institute` .`id` \
+    #         INNER JOIN `protocol`          ON `session`          .`protocol_id`  = `protocol`  .`id` \
+    #         INNER JOIN `captive`           ON `specimen`         .`captive_id`   = `captive`   .`id` \
+    #         INNER JOIN `original`          ON `session`          .`original_id`  = `original`  .`id`'
+
+    # where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
+    # # variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data_3d")'
+    # ordering  = ' ORDER BY `specimen`.`id`, `variable_id`, `data_3d`.`datindex` ASC'
+    # final_sql = (base + where + ordering + ';')
+
     specimen_metadata = [ ('specimen_id',        'Specimen ID'),
                           ('hypocode',           'Hypocode'),
                           ('collection_acronym', 'Collection Acronym'),
@@ -606,15 +734,9 @@ def query_3d(request, which_3d_output_type, is_preview):
                           ('protocol',           'Protocol'),
                           ('session_comments',   'Session Comments'),
                           ('specimen_comments',  'Specimen Comments'),
-                          ('x',                  'x'),
-                          ('y',                  'y'),
-                          ('z',                  'z'),
-                          ('datindex',           'Data index'),
-                          ('variable_id',        'Variable ID'),
                         ]
 
-    # This is okay to include in publicly-available code (i.e. git), because
-    # the database structure diagram is already published on the website anyway.
+
     base = 'SELECT DISTINCT `specimen` .`id`             AS specimen_id, \
                             `specimen` .`hypocode`       AS hypocode, \
                             `institute`.`abbr`           AS collection_acronym, \
@@ -627,31 +749,25 @@ def query_3d(request, which_3d_output_type, is_preview):
                             `original` .`name`           AS original_or_cast, \
                             `protocol` .`label`          AS protocol, \
                             `session`  .`comments`       AS session_comments, \
-                            `specimen` .`comments`       AS specimen_comments, \
-                            `data_3d`  .`x`, \
-                            `data_3d`  .`y`, \
-                            `data_3d`  .`z`, \
-                            `data_3d`  .`datindex`, \
-                            `data_3d`  .`variable_id` \
+                            `specimen` .`comments`       AS specimen_comments \
             FROM \
-                data_3d \
-            INNER JOIN `variable`          ON `data_3d`          .`variable_id`  = `variable`  .`id` \
-            INNER JOIN `bodypart_variable` ON `bodypart_variable`.`variable_id`  = `variable`  .`id` \
-            INNER JOIN `bodypart`          ON `bodypart_variable`.`bodypart_id`  = `bodypart`  .`id` \
-            INNER JOIN `session`           ON `data_3d`          .`session_id`   = `session`   .`id` \
-            INNER JOIN `specimen`          ON `session`          .`specimen_id`  = `specimen`  .`id` \
-            INNER JOIN `taxon`             ON `specimen`         .`taxon_id`     = `taxon`     .`id` \
-            INNER JOIN `sex`               ON `specimen`         .`sex_id`       = `sex`       .`id` \
-            INNER JOIN `fossil`            ON `specimen`         .`fossil_id`    = `fossil`    .`id` \
-            INNER JOIN `institute`         ON `specimen`         .`institute_id` = `institute` .`id` \
-            INNER JOIN `protocol`          ON `session`          .`protocol_id`  = `protocol`  .`id` \
-            INNER JOIN `captive`           ON `specimen`         .`captive_id`   = `captive`   .`id` \
-            INNER JOIN `original`          ON `session`          .`original_id`  = `original`  .`id`'
+                `session` \
+            INNER JOIN `specimen`  ON `session` .`specimen_id`  = `specimen`  .`id` \
+            INNER JOIN `taxon`     ON `specimen`.`taxon_id`     = `taxon`     .`id` \
+            INNER JOIN `sex`       ON `specimen`.`sex_id`       = `sex`       .`id` \
+            INNER JOIN `fossil`    ON `specimen`.`fossil_id`    = `fossil`    .`id` \
+            INNER JOIN `institute` ON `specimen`.`institute_id` = `institute` .`id` \
+            INNER JOIN `protocol`  ON `session` .`protocol_id`  = `protocol`  .`id` \
+            INNER JOIN `captive`   ON `specimen`.`captive_id`   = `captive`   .`id` \
+            INNER JOIN `original`  ON `session` .`original_id`  = `original`  .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     # variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data_3d")'
-    ordering  = ' ORDER BY `specimen`.`id`, `variable_id`, `data_3d`.`datindex` ASC'
-    final_sql = (base + where + ordering + ';')
+    ordering  = ' ORDER BY `specimen_id` ASC'
+    limit = ''
+    if is_preview:     # TODO: This could be a little more nicer.
+        limit = ' LIMIT 5'
+    final_sql = (base + where + ordering + limit + ';')
 
     # We skip varibles in 3D; we're getting all of them.
 
@@ -673,7 +789,7 @@ def query_3d(request, which_3d_output_type, is_preview):
             for row in cursor.fetchall()
         ]
 
-    are_results = bool(query_results)
+    # are_results = bool(query_results)
 
     # try:
     #     if request.user.username == 'user':     # TODO: This could be a little more nicer.
@@ -693,7 +809,11 @@ def query_3d(request, which_3d_output_type, is_preview):
         'query_results'     : query_results,
         'groups'            : request.user.get_group_permissions(),
         'specimen_metadata' : specimen_metadata,
+        'total_specimens'   : len(query_results),
     }
+
+    if not is_preview:
+        get3D_data(specimen_metadata)
 
     return render(request, 'primo/query_results.jinja', context, )
 

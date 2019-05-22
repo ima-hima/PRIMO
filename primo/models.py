@@ -573,7 +573,7 @@ class Taxon(models.Model):
         managed             = True
         db_table            = 'taxon'
         verbose_name_plural = 'taxa'
-        ordering            =['name']
+        ordering            = ['name']
 
 
 class Variable(models.Model):

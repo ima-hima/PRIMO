@@ -16,3 +16,8 @@ if necessary, make symbolic link (or maybe copy) /usr/local/mysql/lib/libmysqlcl
 possibly add usr/local/mysql/bin to $PATH
 
 mv /usr/local/mysql/lib /usr/local/mysql/lib2
+
+Set locations of ca certs and pems in settings: db
+
+Possibly downgrade openssl to 1.0.2p for mysql certs to work. Check on this; maybe it'll be fixed by the time I depoly?
+
