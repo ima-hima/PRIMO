@@ -71,14 +71,15 @@ $(document).ready(function() {
         <tr><td>
         <div id="heirarchy">
             <script>
-                var tree=new NlsTree("main");
+                var tree = new NlsTree("main");
 
-                tree.opt.icon = true;
-                tree.opt.sort="no";
-                tree.opt.check = true;
+                tree.opt.icon     = true;
+                tree.opt.sort     = "no";
+                tree.opt.check    = true;
+                tree.opt.oneClick = true;
 
                 //maintain state using cookie
-                tree.opt.mntState=true;
+                tree.opt.mntState = true;
 
                 //paste in tree structure
                 {{ javascript|safe }}

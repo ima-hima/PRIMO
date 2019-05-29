@@ -131,12 +131,18 @@ def erd(request):
     return render(request, 'primo/entity_relation_diagram.jinja')
 
 
-def exportCsvFile(request):
+def export_2d(request):
+    request['3d'] = False
+    setUpDownload(request)
+    collateMetadata(request)
+    return download(request)
+
+
+
+def collateMetadata(request):
     """ Collate data returned from SQL query, render into csv, save csv to tmp directory,
         start download.
         This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
-
-    setUpDownload(request)
 
     with open( path.join( settings.DOWNLOAD_ROOT,
                           request.session['file_to_download'],
@@ -146,9 +152,11 @@ def exportCsvFile(request):
              ) as f:
         csvfile = File(f)
         meta_names = [ m[0] for m in request.session['specimen_metadata'] ]
-        var_names  = [ v[0] for v in request.session['variable_labels'] ]
-        #     (request.session['specimen_metadata'], request.session['query_results']))
-        # ]
+        if request['3d']:
+            meta_names.append('missing points (indexed by specimen starting at 1)')
+            variable_names = []
+        else:
+            var_names  = [ v[0] for v in request.session['variable_labels'] ]
 
         writer = DictWriter(csvfile, fieldnames=meta_names + var_names)
 
@@ -156,7 +164,6 @@ def exportCsvFile(request):
         for row in request.session['query_results']:
             inDict = { k : row[k] for k in row.keys() if k != 'scalar_value' and k != 'variable_label' }
             writer.writerow(inDict)
-    return download(request)
 
 
 def exportMorphologika(request):
@@ -165,6 +172,7 @@ def exportMorphologika(request):
         are enumerated below. """
 
     setUpDownload(request)
+    request['3d'] = True
 
     missing_pts = {} # These will be output in metadata csv file.
 
@@ -222,13 +230,13 @@ def exportMorphologika(request):
             outFile.write(metaOutString)
             outFile.close()
 
-            outFile = open('/tmp/' + dirName + '/3d_data.txt', 'w');
-            outFile.write(dataOutString)
-            outFile.close()
-            exec("tar -czf /tmp/$folderName.tar.gz /tmp/$folderName/");
-            unlink("/tmp/$folderName/3d_data.txt");
-            unlink("/tmp/$folderName/specimen_data.csv");
-            rmdir("/tmp/$folderName");
+            # outFile = open('/tmp/' + dirName + '/3d_data.txt', 'w');
+            # outFile.write(dataOutString)
+            # outFile.close()
+            # exec("tar -czf /tmp/$folderName.tar.gz /tmp/$folderName/");
+            # unlink("/tmp/$folderName/3d_data.txt");
+            # unlink("/tmp/$folderName/specimen_data.csv");
+            # rmdir("/tmp/$folderName");
 
 #             $file = file_get_contents ("/tmp/$folderName.tar.gz");
 #             header("Content-type: application/x-compressed");
@@ -252,7 +260,7 @@ def fixQuotes(inStr):
     needQuote = False;
 
     # -----------------------------------------------------------------
-    #  Quotes in the value must be quoted.
+    #  Quotes in the value must be escaped.
     # -----------------------------------------------------------------
     if inStr.find('"') >= 0:
         inStr     = inStr.replace('"', '""')
@@ -271,7 +279,7 @@ def fixQuotes(inStr):
         needQuote = True;
 
     # -----------------------------------------------------------------
-    #  Quotes equal sign (Excel interprets this as a formula).
+    #  Quote equal sign (Excel interprets this as a formula).
     # -----------------------------------------------------------------
     elif inStr.find('=') >= 0:
         needQuote = True
@@ -791,10 +799,10 @@ def query_3d(request, which_3d_output_type, is_preview):
     # We skip varibles in 3D; we're getting all of them.
 
     with connection.cursor() as cursor:
-        cursor.execute( final_sql, [
-                           request.session['selected']['sex'],
-                           request.session['selected']['fossil'],
-                           request.session['selected']['taxon'],
+        cursor.execute( final_sql,
+                        [ request.session['selected']['sex'],
+                          request.session['selected']['fossil'],
+                          request.session['selected']['taxon'],
                         ]
                       )
         # Now return all rows as a dictionary object. Note that each variable name will have its own row,
