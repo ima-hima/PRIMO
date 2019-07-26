@@ -349,6 +349,7 @@ def init_query_table(query_result):
               'mass'               : query_result['mass'],
               'taxon_name'         : query_result['taxon_name'],
               'sex_type'           : query_result['sex_type'],
+              'specimen_type'      : query_result['specimen_type'],
               'fossil_or_extant'   : query_result['fossil_or_extant'],
               'captive_or_wild'    : query_result['captive_or_wild'],
               'original_or_cast'   : query_result['original_or_cast'],
@@ -558,6 +559,7 @@ def query_2d(request, is_preview):
                           ('catalog_number',     'Catalog No.'),
                           ('taxon_name',         'Taxon name'),
                           ('sex_type',           'Sex'),
+                          ('specimen_type'),     'Type Status'
                           ('mass',               'Mass'),
                           ('fossil_or_extant',   'Fossil or Extant'),
                           ('captive_or_wild',    'Captive or Wild'),
@@ -568,32 +570,34 @@ def query_2d(request, is_preview):
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
-    base = 'SELECT `data_scalar`. `id`             AS  scalar_id, \
-                   `specimen`   . `id`             AS  specimen_id, \
-                   `specimen`   . `hypocode`       AS  hypocode, \
-                   `institute`  . `abbr`           AS  collection_acronym, \
-                   `specimen`   . `catalog_number` AS  catalog_number, \
-                   `taxon`      . `name`           AS  taxon_name, \
-                   `specimen`   . `mass`           AS  mass, \
-                   `sex`        . `name`           AS  sex_type, \
-                   `fossil`     . `name`           AS  fossil_or_extant, \
-                   `captive`    . `name`           AS  captive_or_wild, \
-                   `original`   . `name`           AS  original_or_cast, \
-                   `variable`   . `label`          AS  variable_label, \
-                   `data_scalar`. `value`          AS  scalar_value, \
-                   `session`    . `comments`       AS  session_comments, \
-                   `specimen`   . `comments`       AS  specimen_comments '
+    base = 'SELECT `data_scalar`  . `id`             AS  scalar_id, \
+                   `specimen`     . `id`             AS  specimen_id, \
+                   `specimen`     . `hypocode`       AS  hypocode, \
+                   `institute`    . `abbr`           AS  collection_acronym, \
+                   `specimen`     . `catalog_number` AS  catalog_number, \
+                   `taxon`        . `name`           AS  taxon_name, \
+                   `specimen`     . `mass`           AS  mass, \
+                   `sex`          . `name`           AS  sex_type, \
+                   `fossil`       . `name`           AS  fossil_or_extant, \
+                   `captive`      . `name`           AS  captive_or_wild, \
+                   `original`     . `name`           AS  original_or_cast, \
+                   `variable`     . `label`          AS  variable_label, \
+                   `data_scalar`  . `value`          AS  scalar_value, \
+                   `session`      . `comments`       AS  session_comments, \
+                   `specimen`     . `comments`       AS  specimen_comments, \
+                   `specimen_type`. `name`           AS  specimen_type'
 
-    base += 'FROM `data_scalar` \
-             INNER JOIN `variable` ON `data_scalar`.`variable_id`  = `variable` .`id` \
-             INNER JOIN `session`  ON `data_scalar`.`session_id`   = `session`  .`id` \
-             INNER JOIN `specimen` ON `session`    .`specimen_id`  = `specimen` .`id` \
-             INNER JOIN `taxon`    ON `specimen`   .`taxon_id`     = `taxon`    .`id` \
-             INNER JOIN `sex`      ON `specimen`   .`sex_id`       = `sex`      .`id` \
-             INNER JOIN `fossil`   ON `specimen`   .`fossil_id`    = `fossil`   .`id` \
-             INNER JOIN `institute`ON `specimen`   .`institute_id` = `institute`.`id` \
-             INNER JOIN `captive`  ON `specimen`   .`captive_id`   = `captive`  .`id` \
-             INNER JOIN `original` ON `session`    .`original_id`  = `original` .`id`'
+    base += ' FROM `variable` \
+             INNER JOIN `data_scalar`   ON `data_scalar`.`variable_id`     = `variable`     .`id` \
+             INNER JOIN `session`       ON `data_scalar`.`session_id`      = `session`      .`id` \
+             INNER JOIN `specimen`      ON `session`    .`specimen_id`     = `specimen`     .`id` \
+             INNER JOIN `taxon`         ON `specimen`   .`taxon_id`        = `taxon`        .`id` \
+             INNER JOIN `sex`           ON `specimen`   .`sex_id`          = `sex`          .`id` \
+             INNER JOIN `fossil`        ON `specimen`   .`fossil_id`       = `fossil`       .`id` \
+             INNER JOIN `institute`     ON `specimen`   .`institute_id`    = `institute`    .`id` \
+             INNER JOIN `captive`       ON `specimen`   .`captive_id`      = `captive`      .`id` \
+             INNER JOIN `original`      ON `session`    .`original_id`     = `original`     .`id` \
+             INNER JOIN `specimen_type` ON `specimen`   .`specimentype_id` = `specimen_type`.`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
@@ -670,9 +674,10 @@ def query_start(request):
 def query_3d(request, which_3d_output_type, is_preview):
     """ Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
         Send results to either Morphologika or GRFND creator and downloader.
-        If is_preview ignore which_output_type. """
+        If is_preview ignore which_output_type and show metadata preview for top five taxa. """
 
-    if request.user.username == 'user':
+    is_preview = True if is_preview == 'True' else False
+    if not request.user.is_authenticated or request.user.username == 'user':
         is_preview = True
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
@@ -753,6 +758,7 @@ def query_3d(request, which_3d_output_type, is_preview):
                           ('catalog_number',     'Catalog No.'),
                           ('taxon_name',         'Taxon name'),
                           ('sex_type',           'Sex'),
+                          ('specimen_type',      'Specimen Type'),
                           ('mass',               'Mass'),
                           ('fossil_or_extant',   'Fossil or Extant'),
                           ('captive_or_wild',    'Captive or Wild'),
@@ -763,30 +769,32 @@ def query_3d(request, which_3d_output_type, is_preview):
                         ]
 
     # Note
-    base = 'SELECT DISTINCT `specimen` .`id`             AS specimen_id, \
-                            `specimen` .`hypocode`       AS hypocode, \
-                            `institute`.`abbr`           AS collection_acronym, \
-                            `specimen` .`catalog_number` AS catalog_number, \
-                            `taxon`    .`name`           AS taxon_name, \
-                            `specimen` .`mass`           AS mass, \
-                            `sex`      .`name`           AS sex_type, \
-                            `fossil`   .`name`           AS fossil_or_extant, \
-                            `captive`  .`name`           AS captive_or_wild, \
-                            `original` .`name`           AS original_or_cast, \
-                            `protocol` .`label`          AS protocol, \
-                            `session`  .`comments`       AS session_comments, \
-                            `specimen` .`comments`       AS specimen_comments \
+    base = 'SELECT DISTINCT `specimen`     .`id`             AS specimen_id, \
+                            `specimen`     .`hypocode`       AS hypocode, \
+                            `institute`    .`abbr`           AS collection_acronym, \
+                            `specimen`     .`catalog_number` AS catalog_number, \
+                            `taxon`        .`name`           AS taxon_name, \
+                            `specimen`     .`mass`           AS mass, \
+                            `sex`          .`name`           AS sex_type, \
+                            `specimen_type`.`name`           AS specimen_type, \
+                            `fossil`       .`name`           AS fossil_or_extant, \
+                            `captive`      .`name`           AS captive_or_wild, \
+                            `original`     .`name`           AS original_or_cast, \
+                            `protocol`     .`label`          AS protocol, \
+                            `session`      .`comments`       AS session_comments, \
+                            `specimen`     .`comments`       AS specimen_comments \
             FROM \
                 `data_3d` \
-            INNER JOIN `session`   ON `data_3d` .`session_id`   = `session`  .`id` \
-            INNER JOIN `specimen`  ON `session` .`specimen_id`  = `specimen` .`id` \
-            INNER JOIN `taxon`     ON `specimen`.`taxon_id`     = `taxon`    .`id` \
-            INNER JOIN `sex`       ON `specimen`.`sex_id`       = `sex`      .`id` \
-            INNER JOIN `fossil`    ON `specimen`.`fossil_id`    = `fossil`   .`id` \
-            INNER JOIN `institute` ON `specimen`.`institute_id` = `institute`.`id` \
-            INNER JOIN `protocol`  ON `session` .`protocol_id`  = `protocol` .`id` \
-            INNER JOIN `captive`   ON `specimen`.`captive_id`   = `captive`  .`id` \
-            INNER JOIN `original`  ON `session` .`original_id`  = `original` .`id`'
+            INNER JOIN `session`       ON `data_3d` .`session_id`      = `session`      .`id` \
+            INNER JOIN `specimen`      ON `session` .`specimen_id`     = `specimen`     .`id` \
+            INNER JOIN `taxon`         ON `specimen`.`taxon_id`        = `taxon`        .`id` \
+            INNER JOIN `sex`           ON `specimen`.`sex_id`          = `sex`          .`id` \
+            INNER JOIN `specimen_type` ON `specimen`.`specimentype_id` = `specimen_type`.`id` \
+            INNER JOIN `fossil`        ON `specimen`.`fossil_id`       = `fossil`       .`id` \
+            INNER JOIN `institute`     ON `specimen`.`institute_id`    = `institute`    .`id` \
+            INNER JOIN `protocol`      ON `session` .`protocol_id`     = `protocol`     .`id` \
+            INNER JOIN `captive`       ON `specimen`.`captive_id`      = `captive`      .`id` \
+            INNER JOIN `original`      ON `session` .`original_id`     = `original`     .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     # variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data_3d")'
@@ -833,15 +841,17 @@ def query_3d(request, which_3d_output_type, is_preview):
                                                                 request.session['selected']['fossil'],
                                                                 request.session['selected']['taxon'],
                                                               ).replace('[', '(').replace(']',')'),
-        'query_results'     : query_results,
         'groups'            : request.user.get_group_permissions(),
+        'is_preview'        : is_preview,
+        'query_results'     : query_results,
         'specimen_metadata' : specimen_metadata,
         'total_specimens'   : len(query_results),
+        'user'              : request.user.username,
     }
 
     # if it's not a preview I need to get actual data and then send to morphologika or grfnd
     if not is_preview:
-        request['specimen_metadata'] = specimen_metadata
+        request.session['specimen_metadata'] = specimen_metadata
         get3D_data(request)
         return exportMorphologika(request)
 

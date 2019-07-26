@@ -5,17 +5,17 @@
 <script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
 <link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
 
-    {{final_sql}}
-    {# <br /><br /><br /><br />
-    {{query_results}}
-    #}
+    {% if user == 'superadmin' %}
+        {{final_sql}}
+        {{is_preview}}
+    {% endif %}
 
     {% if query_results %}
         {% if is_preview == 'False' %}
-            <p>If these data are what you desired, click on <a href="{{ url('exportCsvFile') }}" class="waitAndRedirect">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}" class="waitAndRedirect">front page</a> for instructions on how to get one.</p>
+            <p>If these data are what you desired, click on <a href="{{ url('export_2d') }}" class="waitAndRedirect">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}" class="waitAndRedirect">front page</a> for instructions on how to get one.</p>
             <p>Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
 
-            <p><a href="{{ url('exportCsvFile') }}">Download CSV file</a></p>
+            <p><a href="{{ url('export_2d') }}">Download CSV file</a></p>
         {% endif %}
 
         <script type="text/javascript" >
@@ -33,8 +33,6 @@
             }
         );
         </script>
-
-        {#{query_results}#}
 
         <br />
         <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
@@ -76,92 +74,13 @@
         </table>
 
         {% if is_preview == 'False' %}
-            <p>If these data are what you desired, click on <a href="{{ url('exportCsvFile') }}">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+            <p>If these data are what you desired, click on <a href="{{ url('export_2d') }}">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
             <p>Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
 
-            <p><a href="{{ url('exportCsvFile') }}">Download CSV file</a></p>
+            <p><a href="{{ url('export_2d') }}">Download CSV file</a></p>
         {% endif %}
     {% else %}
         <h3>No results were returned.</h3>
     {% endif %} {# Are/aren't results #}
 
-<!-- {% for row in request.session['results'] %}
-<tr>
-    {% for column in row %}
-    <td>Smith</td>
-    <td>John</td>
-    <td>jsmith@gmail.com</td>
-    <td>$50.00</td>
-    <td>http://www.jsmith.com</td>
-    {% endfor %}
-</tr>
-{% endfor %}
-
-{{ request.session['query'] }}
- <tr>
-    <td>Smith</td>
-    <td>John</td>
-    <td>jsmith@gmail.com</td>
-    <td>$50.00</td>
-    <td>http://www.jsmith.com</td>
-</tr>
-<tr>
-    <td>Bach</td>
-    <td>Frank</td>
-    <td>fbach@yahoo.com</td>
-    <td>$50.00</td>
-    <td>http://www.frank.com</td>
-</tr>
-<tr>
-    <td>Doe</td>
-    <td>Jason</td>
-    <td>jdoe@hotmail.com</td>
-    <td>$100.00</td>
-    <td>http://www.jdoe.com</td>
-</tr>
-<tr>
-    <td>Conway</td>
-    <td>Tim</td>
-    <td>tconway@earthlink.net</td>
-    <td>$50.00</td>
-    <td>http://www.timconway.com</td>
-</tr>
-</tbody>
-</table>
-{{ request.session['final_result'] }}
-<div id="query-wizard-filter-tables">
-    <table width="30%" border="0" cellspacing="0" id="resultsTable" class="tablesorter">
-        <tr><th>Table</th><th>Attributes Selected</th></tr>
-{% for table in tables %}
-
-        <tr>
-            <td><a href="{{ url('parameter_selection', table['table_name']) }}">{{ table['display_name']|safe() }} &raquo;</a></td>
-            {% if selected[table['table_name']] %}
-            <td><img alt="selected" align="middle" src="{{ static('primo/images/tick.gif') }}" /></td>
-            {% else %}
-            <td><img alt="selected" align="middle" src="{{ static('primo/images/tick2_blank.gif') }}" /></td>
-            {% endif %}
-    {% endfor %}
-    </table>
-</div>
-    <br />
-
-    <a href="{{ url('query_start') }}">Reset Query </a>
-
-    {% if finished %}
-        &nbsp;&nbsp; :: &nbsp;&nbsp;
-        <a href="{{ url('query'), isScalar, '', True }}">Preview format  &raquo;</a>
-        &nbsp;&nbsp; :: &nbsp;&nbsp;
-        {% if scalar_or_3d == "scalar" %}
-            <a href="{{ url('query'), isScalar, '', False }}">See results  &raquo;</a>
-        {% else %}
-            <a href="{{ url('query'), isScalar, 'Morphologika', False }}">Download Morphologika file  &raquo;</a>
-            &nbsp;&nbsp; :: &nbsp;&nbsp;
-            <a href="{{ url('query'), isScalar, 'GRFND', False }}">Download GRFND file  &raquo;</a>
-        {% endif %}
-
-    {% endif %}
-    <br />
-</div>
-
---> {% endblock %}
+{% endblock %}

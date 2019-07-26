@@ -18,10 +18,10 @@ urlpatterns = [
         views.downloadSuccess,
         name="downloadSuccess"),
 
-    url(r'^exportCsvFile/',
+    url(r'^export_2d/',
     # url(r'^exportCsvFile/(?P<current_table>\w+)/(?P<is_preview>\w+)',
-        views.exportCsvFile,
-        name="exportCsvFile"),
+        views.export_2d,
+        name="export_2d"),
 
     url(r'^parameter_selection/(?P<current_table>\w+)',
         views.parameter_selection,
