@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AgeClass, Bodypart, BodypartVariable, Captive, Continent, Country, Data3D, Datatype, Fossil, Institute, IslandRegion, Laterality, Locality, Observer, Original, Paired, ProtocolVariable, Protocol, Rank, Scalar, Session, Sex, Specimen, SpecimenType, StateProvince, Taxon, Variable
+from .models import Ageclass, Bodypart, BodypartVariable, Captive, Continent, Country, Data3D, Datatype, Fossil, Institute, IslandRegion, Laterality, Locality, Observer, Original, Paired, ProtocolVariable, Protocol, Rank, Scalar, Session, Sex, Specimen, SpecimenType, StateProvince, Taxon, Variable
 
 # because filters.py is at top level, import from .filters
 from .filters import DropdownFilter
@@ -16,10 +16,10 @@ class ScalarAdmin(admin.ModelAdmin):
     actions_on_bottom = True
 
 
-@admin.register(AgeClass)
-class AgeClassAdmin(admin.ModelAdmin):
+@admin.register(Ageclass)
+class AgeclassAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'abbr', 'comments', ]
-    fields = ['age_class', 'abbr', 'comments', ]
+    fields = ['ageclass', 'abbr', 'comments', ]
     search_fields = ['id', ]
 
 
@@ -184,9 +184,9 @@ class SexAdmin(admin.ModelAdmin):
 
 @admin.register(Specimen)
 class SpecimenAdmin(admin.ModelAdmin):
-    list_display = ['id', 'hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'age_class', 'fossil', 'captive', 'comments', ]
-    fields = ('hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'age_class', 'fossil', 'captive', 'comments', )
-    list_filter = (('taxon__name', DropdownFilter), ('institute__name', DropdownFilter), ('sex__name', DropdownFilter), ('specimen_type__name', DropdownFilter), ('age_class__age_class', DropdownFilter), ('captive__name', DropdownFilter), ('fossil__name', DropdownFilter), )
+    list_display = ['id', 'hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'ageclass', 'fossil', 'captive', 'comments', ]
+    fields = ('hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'ageclass', 'fossil', 'captive', 'comments', )
+    list_filter = (('taxon__name', DropdownFilter), ('institute__name', DropdownFilter), ('sex__name', DropdownFilter), ('specimen_type__name', DropdownFilter), ('ageclass__name', DropdownFilter), ('captive__name', DropdownFilter), ('fossil__name', DropdownFilter), )
     search_fields = ['id']
     actions_on_top = True
     actions_on_bottom = True
@@ -220,7 +220,7 @@ class TaxonAdmin(admin.ModelAdmin):
 @admin.register(Variable)
 class VariableAdmin(admin.ModelAdmin):
     list_display = ['id', 'label', 'name', 'laterality', 'datatype', 'paired_with', 'comments', ]
-    fields = ['label', 'name', 'laterality', 'datatype', 'pairing', 'comments', ]
+    fields = ['label', 'name', 'laterality', 'datatype', 'paired_with', 'comments', ]
     list_filter = (('name', DropdownFilter), ('label', DropdownFilter), ('laterality__laterality', DropdownFilter), ('datatype__data_table', DropdownFilter), )
     search_fields = ['id']
     actions_on_top = True
