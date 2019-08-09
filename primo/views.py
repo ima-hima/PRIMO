@@ -132,7 +132,7 @@ def erd(request):
 
 
 def export_2d(request):
-    request['3d'] = False
+    request.session['3d'] = False
     setUpDownload(request)
     collateMetadata(request)
     return download(request)
@@ -152,7 +152,7 @@ def collateMetadata(request):
              ) as f:
         csvfile = File(f)
         meta_names = [ m[0] for m in request.session['specimen_metadata'] ]
-        if request['3d']:
+        if request.session['3d']:
             meta_names.append('missing points (indexed by specimen starting at 1)')
             variable_names = []
         else:
@@ -357,6 +357,7 @@ def init_query_table(query_result):
               'scalar_value'       : query_result['scalar_value'],
               'session_comments'   : query_result['session_comments'],
               'specimen_comments'  : query_result['specimen_comments'],
+              'age_class'          : query_result['age_class'],
              }
     return output
 
@@ -559,47 +560,51 @@ def query_2d(request, is_preview):
                           ('catalog_number',     'Catalog No.'),
                           ('taxon_name',         'Taxon name'),
                           ('sex_type',           'Sex'),
-                          ('specimen_type'),     'Type Status'
+                          ('specimen_type',      'Type Status'),
                           ('mass',               'Mass'),
                           ('fossil_or_extant',   'Fossil or Extant'),
                           ('captive_or_wild',    'Captive or Wild'),
                           ('original_or_cast',   'Original or Cast'),
                           ('session_comments',   'Session Comments'),
                           ('specimen_comments',  'Specimen Comments'),
+                          ('age_class',          'Age Class')
                         ]
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
-    base = 'SELECT `data_scalar`  . `id`             AS  scalar_id, \
-                   `specimen`     . `id`             AS  specimen_id, \
-                   `specimen`     . `hypocode`       AS  hypocode, \
-                   `institute`    . `abbr`           AS  collection_acronym, \
-                   `specimen`     . `catalog_number` AS  catalog_number, \
-                   `taxon`        . `name`           AS  taxon_name, \
-                   `specimen`     . `mass`           AS  mass, \
-                   `sex`          . `name`           AS  sex_type, \
-                   `fossil`       . `name`           AS  fossil_or_extant, \
-                   `captive`      . `name`           AS  captive_or_wild, \
-                   `original`     . `name`           AS  original_or_cast, \
-                   `variable`     . `label`          AS  variable_label, \
-                   `data_scalar`  . `value`          AS  scalar_value, \
-                   `session`      . `comments`       AS  session_comments, \
-                   `specimen`     . `comments`       AS  specimen_comments, \
-                   `specimen_type`. `name`           AS  specimen_type'
+    base = 'SELECT `data_scalar`  . `id`             AS scalar_id, \
+                   `specimen`     . `id`             AS specimen_id, \
+                   `specimen`     . `hypocode`       AS hypocode, \
+                   `institute`    . `abbr`           AS collection_acronym, \
+                   `specimen`     . `catalog_number` AS catalog_number, \
+                   `taxon`        . `name`           AS taxon_name, \
+                   `specimen`     . `mass`           AS mass, \
+                   `sex`          . `name`           AS sex_type, \
+                   `fossil`       . `name`           AS fossil_or_extant, \
+                   `captive`      . `name`           AS captive_or_wild, \
+                   `original`     . `name`           AS original_or_cast, \
+                   `variable`     . `label`          AS variable_label, \
+                   `data_scalar`  . `value`          AS scalar_value, \
+                   `age_class`    . `name`           AS age_class, \
+                   `specimen_type`. `name`           AS specimen_type, \
+                   `specimen`     . `comments`       AS specimen_comments, \
+                   `session`      . `comments`       AS session_comments'
+
 
     base += ' FROM `variable` \
-             INNER JOIN `data_scalar`   ON `data_scalar`.`variable_id`     = `variable`     .`id` \
-             INNER JOIN `session`       ON `data_scalar`.`session_id`      = `session`      .`id` \
-             INNER JOIN `specimen`      ON `session`    .`specimen_id`     = `specimen`     .`id` \
-             INNER JOIN `taxon`         ON `specimen`   .`taxon_id`        = `taxon`        .`id` \
-             INNER JOIN `sex`           ON `specimen`   .`sex_id`          = `sex`          .`id` \
-             INNER JOIN `fossil`        ON `specimen`   .`fossil_id`       = `fossil`       .`id` \
-             INNER JOIN `institute`     ON `specimen`   .`institute_id`    = `institute`    .`id` \
-             INNER JOIN `captive`       ON `specimen`   .`captive_id`      = `captive`      .`id` \
-             INNER JOIN `original`      ON `session`    .`original_id`     = `original`     .`id` \
-             INNER JOIN `specimen_type` ON `specimen`   .`specimentype_id` = `specimen_type`.`id`'
+              INNER JOIN `data_scalar`   ON `data_scalar`.`variable_id`      = `variable`     .`id` \
+              INNER JOIN `session`       ON `data_scalar`.`session_id`       = `session`      .`id` \
+              INNER JOIN `specimen`      ON `session`    .`specimen_id`      = `specimen`     .`id` \
+              INNER JOIN `original`      ON `session`    .`original_id`      = `original`     .`id` \
+              INNER JOIN `taxon`         ON `specimen`   .`taxon_id`         = `taxon`        .`id` \
+              INNER JOIN `sex`           ON `specimen`   .`sex_id`           = `sex`          .`id` \
+              INNER JOIN `fossil`        ON `specimen`   .`fossil_id`        = `fossil`       .`id` \
+              INNER JOIN `institute`     ON `specimen`   .`institute_id`     = `institute`    .`id` \
+              INNER JOIN `captive`       ON `specimen`   .`captive_id`       = `captive`      .`id` \
+              INNER JOIN `specimen_type` ON `specimen`   .`specimen_type_id` = `specimen_type`.`id` \
+              INNER JOIN `age_class`     ON `specimen`   .`age_class_id`     = `age_class`    .`id`'
 
-    where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
+    where     = ' WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
     final_sql = (base + where +  ordering + ';') # .format( concatVariableList(request.session['selected']['sex']) )
 
@@ -651,7 +656,7 @@ def query_2d(request, is_preview):
                                                           ),
         'query_results'     : query_results,
         'are_results'       : are_results,
-        'total'             : len(query_results),
+        'total_specimens'   : len(query_results),
         'variable_labels'   : variable_labels,
         'variable_ids'      : request.session['selected']['variable'],
         'is_preview'        : is_preview,
@@ -766,6 +771,7 @@ def query_3d(request, which_3d_output_type, is_preview):
                           ('protocol',           'Protocol'),
                           ('session_comments',   'Session Comments'),
                           ('specimen_comments',  'Specimen Comments'),
+                          ('age_class',          'Age Class'),
                         ]
 
     # Note
@@ -782,19 +788,21 @@ def query_3d(request, which_3d_output_type, is_preview):
                             `original`     .`name`           AS original_or_cast, \
                             `protocol`     .`label`          AS protocol, \
                             `session`      .`comments`       AS session_comments, \
-                            `specimen`     .`comments`       AS specimen_comments \
+                            `specimen`     .`comments`       AS specimen_comments, \
+                            `age_class`    .`name`           AS age_class \
             FROM \
                 `data_3d` \
-            INNER JOIN `session`       ON `data_3d` .`session_id`      = `session`      .`id` \
-            INNER JOIN `specimen`      ON `session` .`specimen_id`     = `specimen`     .`id` \
-            INNER JOIN `taxon`         ON `specimen`.`taxon_id`        = `taxon`        .`id` \
-            INNER JOIN `sex`           ON `specimen`.`sex_id`          = `sex`          .`id` \
-            INNER JOIN `specimen_type` ON `specimen`.`specimentype_id` = `specimen_type`.`id` \
-            INNER JOIN `fossil`        ON `specimen`.`fossil_id`       = `fossil`       .`id` \
-            INNER JOIN `institute`     ON `specimen`.`institute_id`    = `institute`    .`id` \
-            INNER JOIN `protocol`      ON `session` .`protocol_id`     = `protocol`     .`id` \
-            INNER JOIN `captive`       ON `specimen`.`captive_id`      = `captive`      .`id` \
-            INNER JOIN `original`      ON `session` .`original_id`     = `original`     .`id`'
+            INNER JOIN `session`       ON `data_3d` .`session_id`       = `session`      .`id` \
+            INNER JOIN `specimen`      ON `session` .`specimen_id`      = `specimen`     .`id` \
+            INNER JOIN `taxon`         ON `specimen`.`taxon_id`         = `taxon`        .`id` \
+            INNER JOIN `sex`           ON `specimen`.`sex_id`           = `sex`          .`id` \
+            INNER JOIN `specimen_type` ON `specimen`.`specimen_type_id` = `specimen_type`.`id` \
+            INNER JOIN `fossil`        ON `specimen`.`fossil_id`        = `fossil`       .`id` \
+            INNER JOIN `institute`     ON `specimen`.`institute_id`     = `institute`    .`id` \
+            INNER JOIN `protocol`      ON `session` .`protocol_id`      = `protocol`     .`id` \
+            INNER JOIN `captive`       ON `specimen`.`captive_id`       = `captive`      .`id` \
+            INNER JOIN `original`      ON `session` .`original_id`      = `original`     .`id` \
+            INNER JOIN `age_class`     ON `session` .`age_class_id`     = `age_class`    .`id`'
 
     where     = ' WHERE `sex`.`id` IN %s  AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s'
     # variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data_3d")'

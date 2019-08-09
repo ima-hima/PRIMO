@@ -1,13 +1,13 @@
 from django.contrib import admin
-from .models import Ageclass, Bodypart, BodypartVariable, Captive, Continent, Country, Data3D, Datatype, Fossil, Institute, IslandRegion, Laterality, Locality, Observer, Original, Paired, ProtocolVariable, Protocol, Rank, Scalar, Session, Sex, Specimen, SpecimenType, StateProvince, Taxon, Variable
+from .models import Ageclass, Bodypart, BodypartVariable, Captive, Continent, Country, Data3D, Datatype, Fossil, Institute, IslandRegion, Laterality, Locality, Observer, Original, Paired, ProtocolVariable, Protocol, Rank, DataScalar, Session, Sex, Specimen, SpecimenType, StateProvince, Taxon, Variable
 
 # because filters.py is at top level, import from .filters
 from .filters import DropdownFilter
 
 # Register your models here.
 
-@admin.register(Scalar)
-class ScalarAdmin(admin.ModelAdmin):
+@admin.register(DataScalar)
+class DataScalarAdmin(admin.ModelAdmin):
     list_display = ('id', 'session', 'variable', 'value', )
     fields = ('session', 'variable', 'name', )
     list_filter = (('variable__name', DropdownFilter), ('session__id', DropdownFilter))
@@ -184,9 +184,9 @@ class SexAdmin(admin.ModelAdmin):
 
 @admin.register(Specimen)
 class SpecimenAdmin(admin.ModelAdmin):
-    list_display = ['id', 'hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'ageclass', 'fossil', 'captive', 'comments', ]
-    fields = ('hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'ageclass', 'fossil', 'captive', 'comments', )
-    list_filter = (('taxon__name', DropdownFilter), ('institute__name', DropdownFilter), ('sex__name', DropdownFilter), ('specimen_type__name', DropdownFilter), ('ageclass__name', DropdownFilter), ('captive__name', DropdownFilter), ('fossil__name', DropdownFilter), )
+    list_display = ['id', 'hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'age_class', 'fossil', 'captive', 'comments', ]
+    fields = ('hypocode', 'taxon', 'institute', 'catalog_number', 'mass', 'specimen_type', 'locality', 'sex', 'age_class', 'fossil', 'captive', 'comments', )
+    list_filter = (('taxon__name', DropdownFilter), ('institute__name', DropdownFilter), ('sex__name', DropdownFilter), ('specimen_type__name', DropdownFilter), ('age_class__name', DropdownFilter), ('captive__name', DropdownFilter), ('fossil__name', DropdownFilter), )
     search_fields = ['id']
     actions_on_top = True
     actions_on_bottom = True

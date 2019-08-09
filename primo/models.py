@@ -22,7 +22,7 @@ class Ageclass(models.Model):
 
     class Meta:
         managed             = True
-        db_table            = 'ageclass'
+        db_table            = 'age_class'
         verbose_name_plural = 'age classes'
 
 
@@ -176,9 +176,22 @@ class Data3D(models.Model):
 
     class Meta:
         managed             = True
-        db_table            = 'data3d'
-        verbose_name_plural = '3D data'
+        db_table            = 'data_3d'
         verbose_name        = '3D data'
+        verbose_name_plural = '3D data'
+
+
+class DataScalar(models.Model):
+    session  = models.ForeignKey('Session',  on_delete=models.PROTECT)
+    variable = models.ForeignKey('Variable', on_delete=models.PROTECT)
+    value    = models.CharField (max_length=10, blank=True, null=True)
+
+    class Meta:
+        managed             = True
+        db_table            = 'data_scalar'
+        verbose_name        = 'scalar data'
+        verbose_name_plural = 'scalar data'
+        ordering            = ['id']
 
 
 class Datatype(models.Model):
@@ -455,18 +468,6 @@ class Rank(models.Model):
         ordering = ['id']
 
 
-class Scalar(models.Model):
-    session  = models.ForeignKey('Session',  on_delete=models.PROTECT)
-    variable = models.ForeignKey('Variable', on_delete=models.PROTECT)
-    value    = models.CharField (max_length=10, blank=True, null=True)
-
-    class Meta:
-        managed             = True
-        db_table            = 'scalar'
-        verbose_name_plural = 'scalar'
-        ordering            = ['id']
-
-
 class Session(models.Model):
     observer  = models.ForeignKey  ('Observer', on_delete=models.PROTECT)
     specimen  = models.ForeignKey  ('Specimen', on_delete=models.PROTECT)
@@ -568,7 +569,7 @@ class SpecimenType(models.Model): # wanted to use 'Type', but table already exis
 
 
 class Variable(models.Model):
-    label       = models.CharField (              max_length=32,  blank=True, null=True)
+    label       = models.CharField (              max_length=32,  blank=True, null=True)  # this is the id, set by biologists
     name        = models.CharField (              max_length=255, blank=True, null=True)
     laterality  = models.ForeignKey(Laterality,                               null=True, on_delete=models.PROTECT)
     datatype    = models.ForeignKey(Datatype,                                            on_delete=models.PROTECT)
@@ -591,7 +592,7 @@ class Specimen(models.Model):
     mass            = models.IntegerField(                                        blank=False, null=False, default=0)
     locality        = models.ForeignKey  (Locality,     on_delete=models.PROTECT, blank=False, null=False, default=10000)
     sex             = models.ForeignKey  (Sex,          on_delete=models.PROTECT, blank=False, null=False, default=9)
-    ageclass        = models.ForeignKey  (Ageclass,     on_delete=models.PROTECT, blank=False, null=False, default=9)
+    age_class       = models.ForeignKey  (Ageclass,     on_delete=models.PROTECT, blank=False, null=False, default=9)
     fossil          = models.ForeignKey  (Fossil,       on_delete=models.PROTECT, blank=False, null=False, default=9)
     captive         = models.ForeignKey  (Captive,      on_delete=models.PROTECT, blank=False, null=False, default=9)
     specimen_type   = models.ForeignKey  (SpecimenType, on_delete=models.PROTECT, blank=False, null=False, default=7)
