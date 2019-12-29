@@ -7,7 +7,8 @@
 
     {% if user == 'superadmin' %}
         {{final_sql}}
-        {{is_preview}}
+        <br /><br />
+        Is preview: {{is_preview}}
     {% endif %}
 
     {% if query_results %}
@@ -21,7 +22,7 @@
         <script type="text/javascript" >
         $(document).ready(function()
             {
-                // delay three seconds then redrict to success page
+                // delay three seconds then redirect to success page
                 $(".waitAndRedirect").click(function(){
                     setTimeout(function() {
                         //redirect to success page
@@ -34,6 +35,10 @@
         );
         </script>
 
+        {# {{final_sql}}
+        <br />
+        <br />
+        {{query_results[0]}} #}
         <br />
         <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
         <p><strong>{{total_specimens}} specimens found.</strong></p>
@@ -69,7 +74,6 @@
             {% endfor %} {# loop over labels (columns) #}
         </tr>
         {% endfor %} {# loop over rows #}
-        {{query_results[0]}}
         </tbody>
         </table>
 
