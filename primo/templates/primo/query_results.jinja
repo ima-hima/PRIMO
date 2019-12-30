@@ -6,9 +6,10 @@
 <link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
 
     {% if user == 'superadmin' %}
-        {{final_sql}}
+        {{ final_sql }}
         <br /><br />
-        Is preview: {{is_preview}}
+        {{ query_results[0] }}<br /><br />
+        Is preview: {{ is_preview }}
     {% endif %}
 
     {% if query_results %}
