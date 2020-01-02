@@ -32,7 +32,41 @@ class IndexView(TemplateView):
     template_name = 'primo/index.jinja'
 
 
-def concatVariableList(myList):
+def collate_metadata(request):
+    """ Collate data returned from SQL query, render into csv, save csv to tmp directory,
+        start download.
+        This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
+
+    with open( path.join( settings.DOWNLOAD_ROOT,
+                          request.session['file_to_download'],
+                        ),
+               'w',
+               newline=request.session['newlineChar'],
+             ) as f:
+        csvfile = File(f)
+        meta_names = [ m[0] for m in get_specimen_metadata() ]
+        if request.session['3d']:
+            meta_names.append('missing points (indexed by specimen starting at 1)')
+            variable_names = []
+        else:
+            var_names  = [ v[0] for v in request.session['variable_labels'] ]
+
+        writer = DictWriter(csvfile, fieldnames=meta_names + var_names)
+
+        # writer.writeheader()
+        # This so I can replace default header, i.e. fieldnames, with custom header.
+        # Note to self: since I'm using DictWriter I don't have to worry about
+        # the ordering of the header being different from the order of the subsequent
+        # rows; it takes care of that.
+        row = { m[0]: m[1] for m in get_specimen_metadata() }
+        row.update( { v[0]: v[0] for v in request.session['variable_labels'] } )
+        writer.writerow(row)
+        for row in request.session['query_results']:
+            inDict = { k : row[k] for k in row.keys() if k != 'scalar_value' and k != 'variable_label' }
+            writer.writerow(inDict)
+
+
+def concat_variable_list(myList):
     """ Return myList as comma-seperated string of values enclosed in parens. """
     return '(' + reduce((lambda b,c : b + str(c) + ','), myList, '' )[:-1] + ')'
 
@@ -66,8 +100,10 @@ def create_tree_javascript(request, parent_id, current_table):
         parent_id = val['parent_id']
         expand    = 'true' if val['expand_in_tree'] else 'false'
         #print(name)
-        if name != 'Eocatarrhini': # I'm not clear why I don't need to recurse up Eucatarrhini heirarchy.
-                                   # Note that there's an extra blank entry for icon after the second item_id.
+        if name != 'Eocatarrhini': # I'm not clear why I don't need to recurse up
+                                   # Eucatarrhini heirarchy.
+                                   # Note that there's an extra blank entry for
+                                   # icon after the second item_id.
             javascript += 'tree.add("' \
                         + str(item_id)   + js_item_delimiter \
                         + str(parent_id) + js_item_delimiter \
@@ -82,7 +118,8 @@ def create_tree_javascript(request, parent_id, current_table):
 
 
 def download(request):
-    """ Download one of csv, morphologika, grfnd. File has been written to path before this is called. """
+    """ Download one of csv, morphologika, grfnd. File has been written to path
+    before this is called. """
     filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
     if path.exists(filepath):
         with open(filepath, 'rb') as fh:
@@ -93,7 +130,7 @@ def download(request):
     raise Http404
 
 
-def downloadSuccess(request):
+def download_success(request):
     return render(request, 'primo/download_success.jinja', {})
 
 
@@ -134,57 +171,23 @@ def erd(request):
 def export_2d(request):
     request.session['3d'] = False
     setUpDownload(request)
-    collateMetadata(request)
+    collate_metadata(request)
     return download(request)
 
 
-
-def collateMetadata(request):
-    """ Collate data returned from SQL query, render into csv, save csv to tmp directory,
-        start download.
-        This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
-
-    with open( path.join( settings.DOWNLOAD_ROOT,
-                          request.session['file_to_download'],
-                        ),
-               'w',
-               newline=request.session['newlineChar'],
-             ) as f:
-        csvfile = File(f)
-        meta_names = [ m[0] for m in get_specimen_metadata() ]
-        if request.session['3d']:
-            meta_names.append('missing points (indexed by specimen starting at 1)')
-            variable_names = []
-        else:
-            var_names  = [ v[0] for v in request.session['variable_labels'] ]
-
-        writer = DictWriter(csvfile, fieldnames=meta_names + var_names)
-
-        # writer.writeheader()
-        # This so I can replace default header, i.e. fieldnames, with custom header.
-        # Note to self: since I'm using DictWriter I don't have to worry about the ordering of the header
-        # being different from the order of the subsequent rows; it takes care of that.
-        row = { m[0]: m[1] for m in get_specimen_metadata() }
-        row.update( { v[0]: v[0] for v in request.session['variable_labels'] } )
-        writer.writerow(row)
-        for row in request.session['query_results']:
-            inDict = { k : row[k] for k in row.keys() if k != 'scalar_value' and k != 'variable_label' }
-            writer.writerow(inDict)
-
-
-def exportMorphologika(request):
+def export_morphologika(request):
     """ Collate data returned from 3D SQL query.
-        Print out two files: a csv of metadata and a Morphologika file. Fields included in metadata
-        are enumerated below. """
+        Print out two files: a csv of metadata and a Morphologika file. Fields
+        included in metadata are enumerated below. """
 
     setUpDownload(request)
     request.session['3d'] = True
-    retStr = request.session['newlineChar']
+    return_str = request.session['newlineChar']
 
     missing_pts = {} # These will be output in metadata csv file.
                      # key is specimen id, value is list of missing points for specimen
 
-    metaDataLen = len(get_specimen_metadata())
+    metadata_len = len(get_specimen_metadata())
 
     # Morphologika file format:
     # [individuals]
@@ -196,37 +199,37 @@ def exportMorphologika(request):
     # [names]
     # specimen ids
     # [rawpoints]
-    # datapoints as x \t y \t z (TODO: are these ordered)
-    output_str =  (retStr * 2).join([ '[individuals]'
-                                    , str(metaDataLen)
+    # datapoints as x \t y \t z (TODO: are these ordered?)
+    output_str =  (return_str * 2).join([ '[individuals]'
+                                    , str(metadata_len)
                                     , '[landmarks]'
-                                    , str(request.session['total_specimens'] / metaDataLen)
+                                    , str(request.session['total_specimens'] / metadata_len)
                                     , '[dimensions]'
                                     , '3'
                                     , '[names]'
                                     ])
     # specimen ids
     for key, value in get_specimen_metadata():
-        output_str += value['specimen_id'] + retStr
+        output_str += value['specimen_id'] + return_str
 
     # data points
-    output_str += retStr + '[rawpoints]' + retStr
+    output_str += return_str + '[rawpoints]' + return_str
     cur_specimen = ''   # Keeps track of when new specimen data starts
     point_ctr = 1
     for key, value in values:
         if value['specimen_id'] != new_specimen:
             cur_specimen = value['specimen_id']
-            output_str += retStr + "'" + value['hypocode'].replace('/ /', '_') + retStr
+            output_str += return_str + "'" + value['hypocode'].replace('/ /', '_') + return_str
             point_ctr = 1
         if value['x'] == '9999.0000' and value['y'] == '9999.0000' and value['z'] == '9999.0000':
-            output_str += '9999\t9999\t9999' + retStr
+            output_str += '9999\t9999\t9999' + return_str
             if value['specimen_id'] not in missing_pts:
                 missing_pts[ value['specimen_id'] ] = point_ctr;
             else:
                 missing_pts[ value['specimen_id'] ] += ' ' + point_ctr;
 
         else:
-            output_str += value['x'] + "\t" + value['y'] + "\t" + value['z'] + retStr
+            output_str += value['x'] + "\t" + value['y'] + "\t" + value['z'] + return_str
 
         point_ctr += 1
 
@@ -240,7 +243,7 @@ def exportMorphologika(request):
                   ) as f:
             csvfile = File(f)
 
-            outFile.write( ' specimen id, hypocode, institute, catalog number, taxon name, mass, sex, fossil or extant, captive or wild-caught, original or cast, protocol, session comments, specimen comments, missing points (indexed by specimen starting at 1)' + retStr )
+            outFile.write( ' specimen id, hypocode, institute, catalog number, taxon name, mass, sex, fossil or extant, captive or wild-caught, original or cast, protocol, session comments, specimen comments, missing points (indexed by specimen starting at 1)' + return_str )
             outFile.write( ', '.join(fieldNamesArray) )
             for key, value in metaData:
                 for metaKey, metaValue in value: ## was    metaData[key]:
@@ -251,7 +254,7 @@ def exportMorphologika(request):
                 except:
                     pass
 
-                metadata_output_str += retStr;
+                metadata_output_str += return_str;
 
             outFile.write(metadata_output_str)
             outFile.close()
@@ -316,7 +319,7 @@ def fixQuotes(inStr):
     return inStr
 
 
-def get3D_data(request):
+def get_3D_data(request):
     ''' Execute query for actual 3D points, i.e. not metadata. '''
 
     base = 'SELECT DISTINCT `session`  .`id` AS session_id, \
@@ -338,21 +341,39 @@ def get3D_data(request):
     final_sql = (base + where + ordering + ';')
 
     with connection.cursor() as cursor:
-        cursor.execute( final_sql, [ request.session['sessions'] ]
-                      )
-        # Now return all rows as a dictionary object. Note that each variable name will have its own row,
-        # so I'm going to have to jump through some hoops to get the names out correctly for the
-        # table headers in the view. TODO: There has to be a better way to do that.
+        cursor.execute( final_sql, [request.session['sessions']] )
+        # Now return all rows as a dictionary object. Note that each variable
+        # name will have its own row, so I'm going to have to jump through some
+        # hoops to get the names out correctly for the table headers in the view.
+        # TODO: There has to be a better way to do that.
 
         # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
         query_results = [
-            dict(zip(columns, row))
-            for row in cursor.fetchall()
+            dict(zip(columns, row)) for row in cursor.fetchall()
         ]
 
-    return
+    return query_results
 
+
+def get_specimen_metadata():
+    return [ ('specimen_id',        'Specimen ID'),
+              ('hypocode',           'Hypocode'),
+              ('collection_acronym', 'Collection Acronym'),
+              ('catalog_number',     'Catalog No.'),
+              ('taxon_name',         'Taxon name'),
+              ('sex_type',           'Sex'),
+              ('specimen_type',      'Type Status'),
+              ('mass',               'Mass'),
+              ('fossil_or_extant',   'Fossil or Extant'),
+              ('captive_or_wild',    'Captive or Wild'),
+              ('original_or_cast',   'Original or Cast'),
+              ('session_comments',   'Session Comments'),
+              ('specimen_comments',  'Specimen Comments'),
+              ('age_class',          'Age Class'),
+              ('locality_name',      'Locality'),
+              ('country_name',       'Country'),
+            ]
 
 
 def init_query_table(query_result):
@@ -547,28 +568,8 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                                          'tables':       tables,
                                                          'selected':     selected,
                                                          'finished':     finished,
-                                                       }
-                 )
+                                                       } )
 
-
-def get_specimen_metadata():
-    return [ ('specimen_id',        'Specimen ID'),
-              ('hypocode',           'Hypocode'),
-              ('collection_acronym', 'Collection Acronym'),
-              ('catalog_number',     'Catalog No.'),
-              ('taxon_name',         'Taxon name'),
-              ('sex_type',           'Sex'),
-              ('specimen_type',      'Type Status'),
-              ('mass',               'Mass'),
-              ('fossil_or_extant',   'Fossil or Extant'),
-              ('captive_or_wild',    'Captive or Wild'),
-              ('original_or_cast',   'Original or Cast'),
-              ('session_comments',   'Session Comments'),
-              ('specimen_comments',  'Specimen Comments'),
-              ('age_class',          'Age Class'),
-              ('locality_name',      'Locality'),
-              ('country_name',       'Country'),
-            ]
 
 def query_2d(request, is_preview):
     """ Set up the 2D query SQL. Do query. Call result table display. """
@@ -620,7 +621,7 @@ def query_2d(request, is_preview):
 
     where     = ' WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s AND `variable`.`id` IN %s '
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
-    final_sql = (base + where +  ordering + ';') # .format( concatVariableList(request.session['selected']['sex']) )
+    final_sql = (base + where +  ordering + ';') # .format( concat_variable_list(request.session['selected']['sex']) )
 
     # We have to query for the variable names separately.
     with connection.cursor() as variable_query:
@@ -633,13 +634,14 @@ def query_2d(request, is_preview):
                         [ request.session['selected']['sex'],
                           request.session['selected']['fossil'],
                           request.session['selected']['taxon'],
-                          # concatVariableList(request.session['selected']['bodypart']),
+                          # concat_variable_list(request.session['selected']['bodypart']),
                           request.session['selected']['variable'],
                         ]
                       )
-        # Now return all rows as a dictionary object. Note that each variable name will have its own row,
-        # so I'm going to have to jump through some hoops to get the names out correctly for the
-        # table headers in the view. TODO: There has to be a better way to do this.
+        # Now return all rows as a dictionary object. Note that each variable
+        # name will have its own row, so I'm going to have to jump through some
+        # hoops to get the names out correctly for the table headers in the view.
+        # TODO: There has to be a better way to do this.
 
         # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
@@ -664,7 +666,7 @@ def query_2d(request, is_preview):
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
                                                             request.session['selected']['fossil'],
                                                             request.session['selected']['taxon'],
-                                                            # concatVariableList(request.session['selected']['bodypart']),
+                                                            # concat_variable_list(request.session['selected']['bodypart']),
                                                             request.session['selected']['variable'],
                                                           ),
         'query_results'     : query_results,
@@ -757,8 +759,8 @@ def query_3d(request, which_3d_output_type, is_preview):
 
     # We skip varibles in 3D; we're getting all of them.
 
-    # This is a list of all the session that will be returned from the query so I can send it to `get_3d()`
-    # for a second query to get the actual data.
+    # This is a list of all the session that will be returned from the query
+    # so I can send it to `get_3D_data()` for a second query to get the actual data.
     sessions = set()
 
     with connection.cursor() as cursor:
@@ -802,10 +804,10 @@ def query_3d(request, which_3d_output_type, is_preview):
 
     # if it's not a preview I need to get actual data and then send to morphologika or grfnd
     if not is_preview:
-        request.session['total_specimens']   = context['total_specimens']
+        request.session['total_specimens'] = context['total_specimens']
 
-        get3D_data(request)
-        return exportMorphologika(request)
+        get_3D_data(request)
+        return export_morphologika(request)
 
     return render(request, 'primo/query_results.jinja', context )
 
@@ -814,10 +816,10 @@ def setUpDownload(request):
     """ Set the newline character, set name of file based on current time. Put both in session variable. """
 
     # Stupid Windows: we need to make sure the newline is set correctly. Abundance of caution.
-    retStr = '\n'
+    return_str = '\n'
     if request.META['HTTP_USER_AGENT'].lower().find( 'win' ):
-        retStr = '\r\n'
-    request.session['newlineChar'] = retStr
+        return_str = '\r\n'
+    request.session['newlineChar'] = return_str
 
     # reminder: The format of the file name will be yy_mm_dd_hh_mm_ss_msmsms
     filename = datetime.now().strftime('%y_%m_%d_%H_%M_%S_%f') + '.csv'

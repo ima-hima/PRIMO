@@ -14,9 +14,9 @@ urlpatterns = [
     url(r'login/',                        views.log_in,              name="login"),
     url(r'^logout/',                      views.logout_view,         name="logout"),
 
-    url(r'^downloadSuccess/',
-        views.downloadSuccess,
-        name="downloadSuccess"),
+    url(r'^download_success/',
+        views.download_success,
+        name="download_success"),
 
     url(r'^export_2d/',
     # url(r'^exportCsvFile/(?P<current_table>\w+)/(?P<is_preview>\w+)',
