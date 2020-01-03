@@ -170,9 +170,21 @@ class Data3D(models.Model):
     session  = models.ForeignKey  ('Session',  on_delete=models.PROTECT)
     variable = models.ForeignKey  ('Variable', on_delete=models.PROTECT)
     datindex = models.IntegerField(            blank=True, null=True)
-    x        = models.FloatField  (            blank=True, null=True)
-    y        = models.FloatField  (            blank=True, null=True)
-    z        = models.FloatField  (            blank=True, null=True)
+    x        = models.DecimalField( blank=True,         # Decimals because we're checking
+                                    null=True,          # against strings with four
+                                    decimal_places=4,   # digits: "9999.0000".
+                                    max_digits=8,       # Actually less important,
+                                    default=9999.0000 ) # we're storing to four
+    y        = models.DecimalField( blank=True,         # decimal places.
+                                    null=True,
+                                    decimal_places=4,
+                                    max_digits=8,
+                                    default=9999.0000)
+    z        = models.DecimalField( blank=True,
+                                    null=True,
+                                    decimal_places=4,
+                                    max_digits=8,
+                                    default=9999.0000)
 
     class Meta:
         managed             = True
