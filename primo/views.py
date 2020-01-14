@@ -36,30 +36,36 @@ def collate_metadata(request):
     """ Collate data returned from SQL query, render into csv, save csv to tmp
         directory, start download.
         This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
-
-    with open( path.join( settings.DOWNLOAD_ROOT,
-                          request.session['file_to_download'],
-                        ),
+    if request.session['3d']:
+        output_file_name = path.join( settings.DOWNLOAD_ROOT,
+                          request.session['file_to_download'] )
+    else:
+        output_file_name = path.join( settings.DOWNLOAD_ROOT,
+                          request.session['file_to_download'] )
+    with open( output_file_name,
                'w',
-               newline=request.session['newline_char'],
+               newline='', # For some reason request.session['newline_char']
+                           # added a newline on each row
              ) as f:
-        csvfile = File(f)
-        meta_names = [ m[0] for m in get_specimen_metadata() ]
+        csv_file = File(f)
+        meta_names = [ m[0] for m in get_specimen_metadata(request) ]
         if request.session['3d']:
             meta_names.append('missing points (indexed by specimen starting at 1)')
             variable_names = []
         else:
-            variable_names  = [ v[0] for v in request.session['variable_labels'] ]
+            # variable_names = [ v[0] for v in request.session.keys() ]
+            variable_names = request.session['variable_labels']
 
-        writer = DictWriter(csvfile, fieldnames=meta_names + variable_names)
+        writer = DictWriter(csv_file, fieldnames=meta_names + variable_names)
 
         # writer.writeheader()
         # This so I can replace default header, i.e. fieldnames, with custom header.
         # Note to self: since I'm using DictWriter I don't have to worry about
         # the ordering of the header being different from the order of the subsequent
         # rows; it takes care of that.
-        row = { m[0]: m[1] for m in get_specimen_metadata() }
-        row.update( { v[0]: v[0] for v in request.session['variable_labels'] } )
+        row = { m[0]: m[1] for m in get_specimen_metadata(request) }
+        # row.update( { v: v for v in request.session.keys() } )
+        row.update( { v: v for v in variable_names } )
         writer.writerow(row)
         for row in request.session['query_results']:
             inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
@@ -93,14 +99,12 @@ def create_tree_javascript(request, parent_id, current_table):
                                            'parent_id',
                                            'expand_in_tree',
                                          ).filter(parent_id = parent_id)
-    #print(vals)
     for val in vals:
         # remove quote marks from `name`, as they'll screw up Javascript
         name      = val['name'].replace('"', '')
         item_id   = val['id']
         parent_id = val['parent_id']
         expand    = 'true' if val['expand_in_tree'] else 'false'
-        #print(name)
         if name != 'Eocatarrhini': # I'm not clear why I don't need to recurse up
                                    # Eucatarrhini heirarchy.
                                    # Note that there's an extra blank entry for
@@ -161,13 +165,13 @@ def email(request):
             #                     ['ericford@mac.com'], fail_silently=False)
             # success = True
             return render(request, 'primo/email.jinja', {'success': True, 'error': error})
-        # form is not valid, so errors should print
+        # Form is not valid, so errors should print.
         return render(request, 'primo/email.jinja', {'form': form})
     # There is no POST data, page hasn't loaded previously,
     return render(request, 'primo/email.jinja', {'form': form})
 
 
-def erd(request):
+def entity_relation_diagram(request):
     """ Retrieve relational database table pdf. """
     return render(request, 'primo/entity_relation_diagram.jinja')
 
@@ -203,105 +207,83 @@ def export_morphologika(request):
     # specimen ids
     # [rawpoints]
     # datapoints as x \t y \t z (TODO: are these ordered?)
-    output_str =  (newline_char * 2).join([ '[individuals]'
-                                    , str(len([request.session['query_results']]))
-                                    , '[landmarks]'
-                                    , str(len(request.session['query_results'])
-                                          / len([request.session['sessions']]))
-                                    , '[dimensions]'
-                                    , '3'
-                                    , '[names]'
-                                    ])
-    # TODO: this needs to be taken from request.session['query_results']
+    data_output_str =  (newline_char * 2).join([ '[individuals]'
+                                         , str(len([request.session['query_results']]))
+                                         , '[landmarks]'
+                                         , str(len(request.session['query_results'])
+                                               / len([request.session['sessions']]))
+                                         , '[dimensions]'
+                                         , '3'
+                                         , '[names]'
+                                         ])
+
     for row in request.session['query_results']:
-        output_str += str(row['specimen_id']) + newline_char
+        data_output_str += str(row['specimen_id']) + newline_char
 
     # data points
-    output_str += newline_char + '[rawpoints]' + newline_char
+    data_output_str += newline_char + '[rawpoints]' + newline_char
     current_specimen = ''   # Keeps track of when new specimen data starts
     point_ctr = 1  # this will be used to track which points are missing for
                    # a given sessiom/specimen
     for row in request.session['query_results']:
         if row['specimen_id'] != current_specimen:
+            missing_pts[row['specimen_id']] = ''
             current_specimen = row['specimen_id']
-            output_str += (newline_char
-                           + "'"
-                           + row['hypocode'].replace('/ /', '_')
-                           + newline_char)
+            data_output_str += (newline_char
+                                + "'"
+                                + row['hypocode'].replace('/ /', '_')
+                                + newline_char)
             point_ctr = 1
-        if str(row['x']) == '9999.0000' \
-           and str(row['y']) == '9999.0000' \
-           and str(row['z']) == '9999.0000':
-               output_str += '9999\t9999\t9999' + newline_char
+        if str(row['x']) == '9999' \
+           and str(row['y']) == '9999' \
+           and str(row['z']) == '9999':
+               data_output_str += '9999\t9999\t9999' + newline_char
                if row['specimen_id'] not in missing_pts:
                    missing_pts[ row['specimen_id'] ] = point_ctr;
                else:
                    missing_pts[ row['specimen_id'] ] += ' ' + point_ctr;
 
         else:
-            output_str += (str(row['x'])
-                           + "\t"
-                           + str(row['y'])
-                           + "\t"
-                           + str(row['z'])
-                           + newline_char)
+            data_output_str += (str(row['x'])
+                                + "\t"
+                                + str(row['y'])
+                                + "\t"
+                                + str(row['z'])
+                                + newline_char)
 
         point_ctr += 1
 
-        directory_name = 'PRIMO_3D_' + str(uuid1())  # uuid1() creates UUID string
-        metadata_output_str = ''
-        with open( path.join( settings.DOWNLOAD_ROOT,
-                              request.session['file_to_download']
-                            ),
-                   'w',
-                   newline=request.session['newline_char']
-                  ) as f:
-            csvfile = File(f)
+        directory_name = 'PRIMO_3D_' + datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
+    print(missing_pts)
 
-            # TODO: start here and use csv, not PHP
-            outFile.write( ' specimen id, hypocode, institute, catalog number, \
-                             taxon name, mass, sex, fossil or extant, captive \
-                             or wild-caught, original or cast, protocol, session \
-                             comments, specimen comments, missing points (indexed \
-                             by specimen starting at 1)' + newline_char )
-            outFile.write( ', '.join(fieldNamesArray) )
-            for key, value in metaData:
-                for metaKey, metaValue in value: ## was    metaData[key]:
-                    if metaKey != 'datindex' and metaKey != 'variable_id':
-                        metadata_output_str += fixQuotes(metaVal) + ','
-                try:
-                    metadata_output_str += missing_pts[ value['specimen_id'] ]
-                except:
-                    pass
+    with open( path.join( settings.DOWNLOAD_ROOT,
+                          request.session['file_to_download']
+                        ),
+               'w',
+               newline='', # request.session['newline_char'] adds extra newlines.
+              ) as f:
+        csv_file = File(f)
+        meta_names = [ m[0] for m in get_specimen_metadata(request) ]
+        writer = DictWriter(csv_file, fieldnames=meta_names)
+        row = { m[0]: m[1] for m in get_specimen_metadata(request) }
+        meta_names.append('missing points (indexed by specimen starting at 1)')
+        writer.writerow(row)
+        for row in request.session['3d_metadata']:
+            inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
+                                                         and k != 'variable_label' }
+            inDict.update( { 'missing_pts': missing_pts[row['specimen_id']]} )
+            writer.writerow(inDict)
 
-                metadata_output_str += newline_char;
+    filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
+    if path.exists(filepath):
+        with open(filepath, 'rb') as fh:
+            response = HttpResponse(fh.read(), content_type="text/csv")
+            response['Content-Disposition'] = 'inline; filename=%s' \
+                                              % smart_str(path.basename(request.session['file_to_download']))
+            response['X-Sendfile'] = smart_str(filepath)
+            return response
+    raise Http404
 
-            outFile.write(metadata_output_str)
-            outFile.close()
-
-            # outFile = open('/tmp/' + directory_name + '/3d_data.txt', 'w');
-            # outFile.write(output_str)
-            # outFile.close()
-            # exec("tar -czf /tmp/$folderName.tar.gz /tmp/$folderName/");
-            # unlink("/tmp/$folderName/3d_data.txt");
-            # unlink("/tmp/$folderName/specimen_data.csv");
-            # rmdir("/tmp/$folderName");
-
-#             $file = file_get_contents ("/tmp/$folderName.tar.gz");
-#             header("Content-type: application/x-compressed");
-#             header('Content-disposition: gz; filename=PRIMO_3D_output_'
-#                    + date("Y-m-d-H-i-s") + "_$which.tar.gz; size=".strlen($file));
-#             echo $file;
-
-#             unlink("/tmp/$folderName.tar.gz");
-#         }
-
-
-#         exit;
-#     }
-        # TODO: What did this use to do?
-        # except:
-        #     pass
 
 
 def fixQuotes(inStr):
@@ -352,9 +334,9 @@ def get_3D_data(request):
                             "`data_3d`  .`datindex`, "
                             "`data_3d`  .`variable_id` "
                 "FROM data_3d "
-                     "INNER JOIN `variable` ON `data_3d`.`variable_id` = `variable` .`id`"
-                     "INNER JOIN `session`  ON `data_3d`.`session_id`  = `session`  .`id`"
-                     "INNER JOIN `specimen` ON `session`.`specimen_id` = `specimen` .`id`")
+                     "JOIN `variable` ON `data_3d`.`variable_id` = `variable` .`id`"
+                     "JOIN `session`  ON `data_3d`.`session_id`  = `session`  .`id`"
+                     "JOIN `specimen` ON `session`.`specimen_id` = `specimen` .`id`")
 
     where     = ' WHERE `session_id` IN %s'
     group_by  = ' GROUP BY `session_id`'
@@ -377,31 +359,38 @@ def get_3D_data(request):
     request.session['query_results'] = query_results
 
 
-def get_specimen_metadata():
+def get_specimen_metadata(request):
+    """ Return a list of tuples with SQL column name:csv column name as key:value.
+        Created a fn because this was called all over the place. """
+
+    three_d_list = [ ('protocol', 'Protocol'),
+                     ('session_id', 'Session ID'),
+                     ('missing_pts', 'Missing points'),
+                   ] if request.session['3d'] else []
     return [ ('specimen_id',        'Specimen ID'),
-              ('hypocode',           'Hypocode'),
-              ('collection_acronym', 'Collection Acronym'),
-              ('catalog_number',     'Catalog No.'),
-              ('taxon_name',         'Taxon name'),
-              ('sex_type',           'Sex'),
-              ('specimen_type',      'Type Status'),
-              ('mass',               'Mass'),
-              ('fossil_or_extant',   'Fossil or Extant'),
-              ('captive_or_wild',    'Captive or Wild'),
-              ('original_or_cast',   'Original or Cast'),
-              ('session_comments',   'Session Comments'),
-              ('specimen_comments',  'Specimen Comments'),
-              ('age_class',          'Age Class'),
-              ('locality_name',      'Locality'),
-              ('country_name',       'Country'),
-            ]
+             ('hypocode',           'Hypocode'),
+             ('collection_acronym', 'Collection Acronym'),
+             ('catalog_number',     'Catalog No.'),
+             ('taxon_name',         'Taxon name'),
+             ('sex_type',           'Sex'),
+             ('specimen_type',      'Type Status'),
+             ('mass',               'Mass'),
+             ('fossil_or_extant',   'Fossil or Extant'),
+             ('captive_or_wild',    'Captive or Wild'),
+             ('original_or_cast',   'Original or Cast'),
+             ('session_comments',   'Session Comments'),
+             ('specimen_comments',  'Specimen Comments'),
+             ('age_class',          'Age Class'),
+             ('locality_name',      'Locality'),
+             ('country_name',       'Country'),
+           ] + three_d_list
 
 
 def init_query_table(query_result):
     """ Initialize query table (actually a dictionary) that is to be used for data
         that will be pushed out to view. A single query row is received and put into
         dictionary. """
-    output = { key[0]: query_result[key[0]] for key in get_specimen_metadata() }
+    output = { key[0]: query_result[key[0]] for key in get_specimen_metadata(request) }
     output['variable_label'] = query_result['variable_label']
     output['scalar_value']   = query_result['scalar_value']
     return output
@@ -455,15 +444,36 @@ def parameter_selection(request, current_table):
 
     if current_table == 'variable':
         if len(request.session['selected']['bodypart']) > 0:
-            bodypart_list         = request.session['selected']['bodypart']
-            bodypart_variable_ids = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
-            variable_ids          = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
-            vals                  = current_model.objects.values( 'id',
-                                                                  'name',
-                                                                  'label',
-                                                                ).filter(pk__in=variable_ids).order_by('id')
+            with connection.cursor() as variable_query:
+                sql = ("SELECT variable.name AS var_name, "
+                              "variable.label AS var_label, "
+                              "variable.id AS var_id, "
+                              "bps.id AS bodypart_id, "
+                              "bps.name AS bodypart_name "
+                         "FROM variable "
+                              "JOIN bodypart_variable ON variable.id = bodypart_variable.variable_id "
+                                   "JOIN (SELECT bodypart.id, bodypart.name "
+                                           "FROM bodypart "
+                                          "WHERE parent_id IN %s) AS bps "
+                                   "  ON bps.id = bodypart_variable.bodypart_id "
+                       "ORDER BY variable.id")
+
+                variable_query.execute( sql, [request.session['selected']['bodypart']] )
+                columns = [col[0] for col in variable_query.description]
+                values = [
+                    dict(zip(columns, row)) for row in variable_query.fetchall()
+                ]
+
+                # values = {label[0]: label[1] for label in variable_query.fetchall()}
+        #     bodypart_list         = request.session['selected']['bodypart']
+        #     bodypart_variable_ids = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
+        #     variable_ids          = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
+        #     vals                  = current_model.objects.values( 'id',
+        #                                                           'name',
+        #                                                           'label',
+        #                                                         ).filter(pk__in=variable_ids).order_by('id')
         else:
-            vals = apps.get_model( app_label  = 'primo',
+            values = apps.get_model( app_label  = 'primo',
                                    model_name = current_table.capitalize(),
                                  ).objects.values( 'name',
                                                    'label',
@@ -471,22 +481,22 @@ def parameter_selection(request, current_table):
                                                  ).all()
 
     elif current_table == 'bodypart' or current_table == 'taxon':
-        vals = []
+        values = []
         # do original query to get root of tree.
         # The rest of the tree will be recursively created in `create_tree_javascript()`.
-        val = apps.get_model( app_label  = 'primo',
-                              model_name = current_table.capitalize(),
-                            ).objects.values( 'id',
-                                              'name',
-                                              'parent_id',
-                                              'expand_in_tree',
-                                              'tree_root',
-                                            ).filter(tree_root = 1)[0]
+        value = apps.get_model( app_label  = 'primo',
+                                model_name = current_table.capitalize(),
+                              ).objects.values( 'id',
+                                                'name',
+                                                'parent_id',
+                                                'expand_in_tree',
+                                                'tree_root',
+                                              ).filter(tree_root = 1)[0]
 
-        name       = val['name'].replace('"', '')
-        item_id    = val['id']
-        parent_id  = val['parent_id']
-        expand     = 'true' if val['expand_in_tree'] else 'false'
+        name       = value['name'].replace('"', '')
+        item_id    = value['id']
+        parent_id  = value['parent_id']
+        expand     = 'true' if value['expand_in_tree'] else 'false'
         javascript = ('tree.add("'
                       + str(item_id)
                       + '", "'
@@ -505,11 +515,11 @@ def parameter_selection(request, current_table):
 
     else:
         # for fossil, sex
-        vals = current_model.objects.values('id', 'name').all()
+        values = current_model.objects.values('id', 'name').all()
 
 
     return render(request, 'primo/parameter_selection.jinja', {'current_table': current_table,
-                                                               'vals': vals,
+                                                               'values': values,
                                                                'javascript': javascript,
                                                               } )
 
@@ -529,7 +539,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
     if request.method == 'POST':
         current_table = request.POST.get('table')
 
-        if request.POST.get('commit') == 'Select Checked Options':
+        if request.POST.get('commit') == 'Submit':
             # otherwise, either cancel select all was chosen
             selected_rows = []
 
@@ -635,33 +645,33 @@ def query_2d(request, is_preview):
                    "`specimen`     . `comments`       AS specimen_comments, "
                    "`session`      . `comments`       AS session_comments "
                 "FROM `variable` "
-                      "INNER JOIN `data_scalar`"
+                      "JOIN `data_scalar`"
                               "ON `data_scalar`.`variable_id` = `variable`.`id` "
-                      "INNER JOIN `session` "
+                      "JOIN `session` "
                               "ON `data_scalar`.`session_id` = `session`.`id` "
-                      "INNER JOIN `specimen` "
+                      "JOIN `specimen` "
                               "ON `session`.`specimen_id` = `specimen`.`id` "
-                      "INNER JOIN `original` "
+                      "JOIN `original` "
                               "ON `session`.`original_id` = `original`.`id` "
-                      "INNER JOIN `taxon` "
+                      "JOIN `taxon` "
                               "ON `specimen`.`taxon_id` = `taxon`.`id` "
-                      "INNER JOIN `sex` "
+                      "JOIN `sex` "
                               "ON `specimen`.`sex_id` = `sex`.`id` "
-                      "INNER JOIN `fossil` "
+                      "JOIN `fossil` "
                               "ON `specimen`.`fossil_id` = `fossil`.`id` "
-                      "INNER JOIN `institute` "
+                      "JOIN `institute` "
                               "ON `specimen`.`institute_id` = `institute`.`id` "
-                      "INNER JOIN `captive` "
+                      "JOIN `captive` "
                               "ON `specimen`.`captive_id` = `captive`.`id` "
-                      "INNER JOIN `specimen_type` "
+                      "JOIN `specimen_type` "
                               "ON `specimen`.`specimen_type_id` = `specimen_type`.`id` "
-                      "INNER JOIN `age_class` "
+                      "JOIN `age_class` "
                               "ON `specimen`.`age_class_id` = `age_class`.`id` "
-                      "INNER JOIN `locality` "
+                      "JOIN `locality` "
                               "ON `specimen`.`locality_id` = `locality`.`id` "
-                      "INNER JOIN `state_province` "
+                      "JOIN `state_province` "
                               "ON `locality`.`state_province_id` = `state_province`.`id` "
-                      "INNER JOIN `country` "
+                      "JOIN `country` "
                               "ON `state_province`.`country_id` = `country`.`id`")
 
     where     = (" WHERE `sex`.`id` IN %s "
@@ -679,7 +689,7 @@ def query_2d(request, is_preview):
                                      IN %s \
                                   ORDER BY `label` ASC;",
                                 [request.session['selected']['variable']] )
-        variable_labels = [label for label in variable_query.fetchall()]
+        variable_labels = [label[0] for label in variable_query.fetchall()]
 
     # use cursor here?
     with connection.cursor() as cursor:
@@ -699,8 +709,7 @@ def query_2d(request, is_preview):
         # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
         query_results = [
-            dict(zip(columns, row))
-            for row in cursor.fetchall()
+            dict(zip(columns, row)) for row in cursor.fetchall()
         ]
 
     are_results = True
@@ -712,9 +721,8 @@ def query_2d(request, is_preview):
     except:
         are_results = False
 
-    # This is for use in exportCsvFile().
-    request.session['variable_labels']   = variable_labels
-
+    # This is for use in export_csv_file().
+    request.session['variable_labels'] = variable_labels
     context = {
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
                                                             request.session['selected']['fossil'],
@@ -728,7 +736,7 @@ def query_2d(request, is_preview):
         'variable_labels'   : variable_labels,
         'variable_ids'      : request.session['selected']['variable'],
         'is_preview'        : is_preview,
-        'specimen_metadata' : get_specimen_metadata(),
+        'specimen_metadata' : get_specimen_metadata(request),
         'user'              : request.user.username,
     }
 
@@ -786,33 +794,33 @@ def query_3d(request, which_3d_output_type, is_preview):
                             "`session`      .`id`             AS session_id, "
                             "`specimen`     .`comments`       AS specimen_comments "
             "FROM data_3d "
-            "INNER JOIN `session` "
+            "JOIN `session` "
                     "ON `data_3d`.`session_id` = `session`.`id` "
-            "INNER JOIN `specimen` "
+            "JOIN `specimen` "
                     "ON `session`.`specimen_id` = `specimen`.`id` "
-            "INNER JOIN `taxon` "
+            "JOIN `taxon` "
                     "ON `specimen`.`taxon_id` = `taxon`.`id` "
-            "INNER JOIN `sex` "
+            "JOIN `sex` "
                     "ON `specimen`.`sex_id` = `sex`.`id` "
-            "INNER JOIN `specimen_type` "
+            "JOIN `specimen_type` "
                     "ON `specimen`.`specimen_type_id` = `specimen_type`.`id` "
-            "INNER JOIN `fossil` "
+            "JOIN `fossil` "
                     "ON `specimen`.`fossil_id` = `fossil`.`id` "
-            "INNER JOIN `institute` "
+            "JOIN `institute` "
                     "ON `specimen`.`institute_id` = `institute`.`id` "
-            "INNER JOIN `protocol` "
+            "JOIN `protocol` "
                     "ON `session`.`protocol_id` = `protocol`.`id` "
-            "INNER JOIN `captive` "
+            "JOIN `captive` "
                     "ON `specimen`.`captive_id` = `captive`.`id` "
-            "INNER JOIN `original` "
+            "JOIN `original` "
                     "ON `session`.`original_id` = `original`.`id` "
-            "INNER JOIN `age_class` "
+            "JOIN `age_class` "
                     "ON `specimen`.`age_class_id` = `age_class`.`id` "
-            "INNER JOIN `locality` "
+            "JOIN `locality` "
                     "ON `specimen`.`locality_id` = `locality`.`id` "
-            "INNER JOIN `state_province "
-                    "ON `locality`.`state_province_id = `state_province`.`id` "
-            "INNER JOIN `country` "
+            "JOIN `state_province` "
+                    "ON `locality`.`state_province_id` = `state_province`.`id` "
+            "JOIN `country` "
                     "ON `state_province`.`country_id` = `country`.`id` ")
 
     where     = (' WHERE `sex`.`id` IN %s'
@@ -858,8 +866,9 @@ def query_3d(request, which_3d_output_type, is_preview):
         for item in query_results:
             sessions.add(item['session_id'])
 
-    request.session['query']    = final_sql
-    request.session['sessions'] = list(sessions)
+    request.session['query']       = final_sql
+    request.session['sessions']    = list(sessions)
+    request.session['3d_metadata'] = query_results
 
     context = {
         'final_sql'     : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
@@ -869,7 +878,7 @@ def query_3d(request, which_3d_output_type, is_preview):
         'groups'            : request.user.get_group_permissions(),
         'is_preview'        : is_preview,
         'query_results'     : query_results,
-        'specimen_metadata' : get_specimen_metadata(),
+        'specimen_metadata' : get_specimen_metadata(request),
         'total_specimens'   : len(query_results), # This should be the same as len(request.session['sessions'])
         'user'              : request.user.username,
     }
@@ -895,9 +904,12 @@ def set_up_download(request):
     # this for use in download()
     # reminder: The format of the file name will be yy_mm_dd_hh_mm_ss_msmsms
     prefix = "PRIMO_metadata_" if request.session['3d'] else "PRIMO_results_"
-    request.session['file_to_download'] = (prefix + \
-                                           datetime.now().strftime('%Y_%m_%d_%H:%M:%S:%f') + \
-                                           ".csv")
+    if request.session['3d']:
+        request.session['file_to_download'] = "specimen_metadata.csv"
+    else:
+        request.session['file_to_download'] = ("PRIMO_results_" + \
+                                               datetime.now().strftime('%Y-%m-%d_%H.%M.%S') + \
+                                               ".csv")
 
 
 def tabulate_2d(query_results, is_preview):

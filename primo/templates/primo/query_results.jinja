@@ -6,10 +6,22 @@
 <link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
 
     {% if user == 'superadmin' %}
-        {{ final_sql }}
-        <br /><br />
-        {{ query_results[0] }}<br /><br />
-        Is preview: {{ is_preview }}
+        <button class="submit" onclick="
+              var x = document.getElementById('sql');
+              if (x.style.display === 'none') {
+                x.style.display = 'block';
+              } else {
+                x.style.display = 'none';
+              }
+            ">Hide/show query and results</button>
+
+        <div id="sql">
+            <br /><br />
+            {{ final_sql }}
+            <br /><br />
+            {{ query_results[0] }}<br /><br />
+            Is preview: {{ is_preview }}
+        </div>
     {% endif %}
 
     {% if query_results %}
@@ -51,7 +63,7 @@
                 <th>{{metadata[1]}}</th>
             {% endfor %}
             {% for var_id in variable_labels %}
-                <th>{{var_id[0]}}</th>
+                <th>{{var_id}}</th>
             {% endfor %}
         </tr>
         </thead>
@@ -66,9 +78,9 @@
                 <td>{{variable}}</td>
             {% endfor %} #}
             {% for label in variable_labels %}
-                {% if row[label[0]] %}           {# The last element in the tuple
+                {% if row[label] %}              {# The last element in the tuple
                                                     is the dictionary {variable id : variable label}. #}
-                    <td>{{ row[label[0]] }}</td> {# So print value at that location. #}
+                    <td>{{ row[label] }}</td> {# So print value at that location. #}
                 {% else %}
                     <td></td>
                 {% endif %}

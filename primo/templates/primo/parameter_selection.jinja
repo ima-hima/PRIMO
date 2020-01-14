@@ -6,59 +6,79 @@
 <script>
 $(document).ready(function() {
     // set up box at top to select or deselect all
-    var isAllChecked = true;
+    function checkForChecked() {
+        var isSomethingChecked = false;
+        $(".checkSingle").each(function() {
+            if($(this).is(":checked")) {
+                isSomethingChecked = true;
+            }
+        })
+        return isSomethingChecked
+    }
+
+    var isSomethingChecked = false;
     $(".checkSingle").each(function() {
-        if(!this.checked) {
-            isAllChecked = false;
+        if($(this).is(":checked")) {
+            isSomethingChecked = true;
         }
     })
-    if(isAllChecked){ $("#checkAll").prop("checked", true); }
+    isSomethingChecked = checkForChecked();
+    if(isSomethingChecked){ $("#selectAll").prop("value", "Deselect all"); }
 
-
-    $("#checkAll").click(function(){
-        $('input:checkbox').prop('checked', this.checked);
+    $("#selectAll").click(function(){
+        var isSomethingChecked = checkForChecked();
+        if (isSomethingChecked) {
+            $('input:checkbox').prop('checked', false);
+            isSomethingChecked = false;
+            $("#selectAll").prop("value", "Select all");
+        } else {
+            $('input:checkbox').prop('checked', true);
+            isSomethingChecked = true;
+            $("#selectAll").prop("value", "Deselect all");
+        }
     });
 
   $('.checkSingle').click(function() {
-    if ($(this).is(":checked")) {
-        var isAllChecked = true;
-        $(".checkSingle").each(function() {
-            if(!this.checked) {
-                isAllChecked = false;
-            }
-      })
-      if(isAllChecked){ $("#checkAll").prop("checked", true); }
-    } else {
-      $("#checkAll").prop("checked", false);
-    }
+      var isSomethingChecked = checkForChecked();
+      if(isSomethingChecked){
+          $("#selectAll").prop("value", "Deselect all");
+      } else {
+          $("#selectAll").prop("value", "Select all");
+      }
+    // } //else {
+    //   $("#selectAll").prop("checked", false);
+    // }
   });
 });
 </script>
 <div id="query-wizard-filter-table-options">
     <form action="{{ url('query_setup', request.session['scalar_or_3d']) }}" method="post" />
     {% csrf_token %}
-    <input type="hidden" value="{{ current_table }}"    name="table"  />
-    <input type="submit" value="Cancel"                 name="commit" />
-    <input type="submit" value="Select Checked Options" name="commit" />
-    <input type="submit" value="Select All"             name="commit" />
-    <table width="100%">
+    <div class="submit-buttons">
+        <input type="hidden" value="{{ current_table }}" name="table" />
+        <input class="submit" type="submit" value="Cancel" name="commit" />
+        <input class="submit" type="submit" value="Submit" name="commit" />
+    </div>
+    <table class="selection-table">
     <thead>
     {% if current_table == 'variable' %}
     <tr>
+        <th>Bodypart</th>
+        <th>Variable ID</th>
         <th>Variable name</th>
         <th>Variable label</th>
-        <th>ID</th>
-        <th style="padding-left:4px;"><input id="checkAll" type="checkbox"></th>
+        <th><input id="selectAll" type="button" value="Select all"></th>
     </tr>
     </thead>
     <tbody>
-        {% for val in vals: %}
+        {% for value in values: %}
         <tr>
-            <td>{{ val['name'] }}</td>
-            <td>{{ val['label']}}</td>
-            <td>{{ val['id']}}</td>
-            <td><input type="checkbox" class="checkSingle" name='id' value="{{ val['id'] }}"
-                    {% if val['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
+            <td>{{ value['bodypart_name'] }}</td>
+            <td>{{ value['var_id']}}</td>
+            <td>{{ value['var_name'] }}</td>
+            <td>{{ value['var_label']}}</td>
+            <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['var_id'] }}"
+                    {% if value["id"] in request.session["selected"][current_table] %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% elif current_table == 'bodypart' or current_table == 'taxon' %}
@@ -92,23 +112,25 @@ $(document).ready(function() {
     {% else %} {# sex or fossil #}
     <tr>
         <th width="80%">{{ current_table.capitalize()}}</th>
-        <th style="padding-left:4px;"><input id="checkAll" type="checkbox"></th>
+        <th><input id="selectAll" type="button" value="Select all"></th>
     </tr>
     </thead>
     <tbody>
-        {% for val in vals: %}
+        {% for value in values: %}
         <tr>
-            <td width="80%">{{ val['name'] }}</td>
-            <td width="20%"><input type="checkbox" class="checkSingle" name='id' value="{{ val['id'] }}"
-                {% if val['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
+            <td>{{ value['name'] }}</td>
+            <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['id'] }}"
+                {% if value['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% endif %}
     </tbody>
     </table>
-    <input type="submit" value="Cancel"                 name="commit" />
-    <input type="submit" value="Select Checked Options" name="commit" />
-    <input type="submit" value="Select All"             name="commit" />
+    <div class="submit-buttons">
+        <input type="hidden" value="{{ current_table }}" name="table"  />
+        <input class="submit" type="submit" value="Cancel" name="commit"/>
+        <input class="submit" type="submit" value="Submit" name="commit"/>
+    </div>
     </form>
 </div>
 {% endblock %}
