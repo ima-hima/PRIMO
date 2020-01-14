@@ -33,12 +33,12 @@ class IndexView(TemplateView):
 
 
 def collate_metadata(request):
-    """ Collate data returned from SQL query, render into csv, save csv to tmp
-        directory, start download.
-        This is for 2D data. For 3D data we write either or Morphologika or GRFND file. """
+    """ Collate data returned from SQL query, render into csv, save csv to tmp directory.
+        For 2D this write all data. For 3D write only metadata. """
     if request.session['3d']:
         output_file_name = path.join( settings.DOWNLOAD_ROOT,
-                          request.session['file_to_download'] )
+                                      directory_name,
+                                      request.session['file_to_download'] )
     else:
         output_file_name = path.join( settings.DOWNLOAD_ROOT,
                           request.session['file_to_download'] )
@@ -58,7 +58,6 @@ def collate_metadata(request):
 
         writer = DictWriter(csv_file, fieldnames=meta_names + variable_names)
 
-        # writer.writeheader()
         # This so I can replace default header, i.e. fieldnames, with custom header.
         # Note to self: since I'm using DictWriter I don't have to worry about
         # the ordering of the header being different from the order of the subsequent
@@ -67,9 +66,17 @@ def collate_metadata(request):
         # row.update( { v: v for v in request.session.keys() } )
         row.update( { v: v for v in variable_names } )
         writer.writerow(row)
-        for row in request.session['query_results']:
+
+        if request.session['3d']:
+            meta_names.append('missing points (indexed by specimen starting at 1)')
+            rows = request.session['3d_metadata']
+        else:
+            rows = request.session['query_results']
+        for row in rows:
             inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
                                                          and k != 'variable_label' }
+            if request.session['3d']:
+                inDict.update( { 'missing_pts': request.session['missing_pts'][row['specimen_id']]} )
             writer.writerow(inDict)
 
 
@@ -183,17 +190,26 @@ def export_2d(request):
     return download(request)
 
 
-def export_morphologika(request):
+def export_3d(request, file_type):
+    request.session['3d'] = True
+    set_up_download(request)
+    if file_type == 'Morphologika':
+        create_morphologica_string(reqeust)
+    else:
+        create_GRFND_string(request)
+    collate_metadata(request)
+    return download(request)
+
+
+def create_morphologica_string(request):
     """ Collate data returned from 3D SQL query.
         Print out two files: a csv of metadata and a Morphologika file. Fields
         included in metadata are enumerated below. """
 
-    request.session['3d'] = True
-    set_up_download(request)
     newline_char = request.session['newline_char']
 
     missing_pts = {} # These will be output in metadata csv file.
-                     # key is specimen id, value is list of missing points for specimen
+                     # key is specimen id, value is string of missing points for specimen
 
     # Morphologika file format:
     # [individuals]
@@ -207,21 +223,21 @@ def export_morphologika(request):
     # specimen ids
     # [rawpoints]
     # datapoints as x \t y \t z (TODO: are these ordered?)
-    data_output_str =  (newline_char * 2).join([ '[individuals]'
-                                         , str(len([request.session['query_results']]))
-                                         , '[landmarks]'
-                                         , str(len(request.session['query_results'])
-                                               / len([request.session['sessions']]))
-                                         , '[dimensions]'
-                                         , '3'
-                                         , '[names]'
-                                         ])
+    output_str =  (newline_char * 2).join([ '[individuals]'
+                                           , str(len([request.session['query_results']]))
+                                           , '[landmarks]'
+                                           , str(len(request.session['query_results'])
+                                                 / len([request.session['sessions']]))
+                                           , '[dimensions]'
+                                           , '3'
+                                           , '[names]'
+                                          ])
 
     for row in request.session['query_results']:
-        data_output_str += str(row['specimen_id']) + newline_char
+        output_str += str(row['specimen_id']) + newline_char
 
     # data points
-    data_output_str += newline_char + '[rawpoints]' + newline_char
+    output_str += newline_char + '[rawpoints]' + newline_char
     current_specimen = ''   # Keeps track of when new specimen data starts
     point_ctr = 1  # this will be used to track which points are missing for
                    # a given sessiom/specimen
@@ -229,60 +245,56 @@ def export_morphologika(request):
         if row['specimen_id'] != current_specimen:
             missing_pts[row['specimen_id']] = ''
             current_specimen = row['specimen_id']
-            data_output_str += (newline_char
-                                + "'"
-                                + row['hypocode'].replace('/ /', '_')
-                                + newline_char)
+            output_str += (newline_char
+                           + "'"
+                           + row['hypocode'].replace('/ /', '_')
+                           + newline_char)
             point_ctr = 1
-        if str(row['x']) == '9999' \
-           and str(row['y']) == '9999' \
-           and str(row['z']) == '9999':
-               data_output_str += '9999\t9999\t9999' + newline_char
-               if row['specimen_id'] not in missing_pts:
-                   missing_pts[ row['specimen_id'] ] = point_ctr;
-               else:
-                   missing_pts[ row['specimen_id'] ] += ' ' + point_ctr;
+        if str(row['x']) == '9999.0' \
+           and str(row['y']) == '9999.0' \
+           and str(row['z']) == '9999.0':
+               output_str += '9999\t9999\t9999' + newline_char
+               missing_pts[ row['specimen_id'] ] += ' ' + str(point_ctr)
 
         else:
-            data_output_str += (str(row['x'])
-                                + "\t"
-                                + str(row['y'])
-                                + "\t"
-                                + str(row['z'])
-                                + newline_char)
+            output_str += (str(row['x'])
+                           + "\t"
+                           + str(row['y'])
+                           + "\t"
+                           + str(row['z'])
+                           + newline_char)
 
         point_ctr += 1
+    request.session['missing_pts'] = missing_pts
+    # collate_metadata(request)
 
-        directory_name = 'PRIMO_3D_' + datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
-    print(missing_pts)
+    # # with open( path.join( settings.DOWNLOAD_ROOT,
+    # #                       request.session['file_to_download']
+    # #                     ),
+    # #            'w',
+    # #            newline='', # request.session['newline_char'] adds extra newlines.
+    # #           ) as f:
+    # #     csv_file = File(f)
+    # #     meta_names = [ m[0] for m in get_specimen_metadata(request) ]
+    # #     writer = DictWriter(csv_file, fieldnames=meta_names)
+    # #     row = { m[0]: m[1] for m in get_specimen_metadata(request) }
+    # #     meta_names.append('missing points (indexed by specimen starting at 1)')
+    # #     writer.writerow(row)
+    # #     for row in request.session['3d_metadata']:
+    # #         inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
+    # #                                                      and k != 'variable_label' }
+    # #         inDict.update( { 'missing_pts': missing_pts[row['specimen_id']]} )
+    # #         writer.writerow(inDict)
 
-    with open( path.join( settings.DOWNLOAD_ROOT,
-                          request.session['file_to_download']
-                        ),
-               'w',
-               newline='', # request.session['newline_char'] adds extra newlines.
-              ) as f:
-        csv_file = File(f)
-        meta_names = [ m[0] for m in get_specimen_metadata(request) ]
-        writer = DictWriter(csv_file, fieldnames=meta_names)
-        row = { m[0]: m[1] for m in get_specimen_metadata(request) }
-        meta_names.append('missing points (indexed by specimen starting at 1)')
-        writer.writerow(row)
-        for row in request.session['3d_metadata']:
-            inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
-                                                         and k != 'variable_label' }
-            inDict.update( { 'missing_pts': missing_pts[row['specimen_id']]} )
-            writer.writerow(inDict)
-
-    filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
-    if path.exists(filepath):
-        with open(filepath, 'rb') as fh:
-            response = HttpResponse(fh.read(), content_type="text/csv")
-            response['Content-Disposition'] = 'inline; filename=%s' \
-                                              % smart_str(path.basename(request.session['file_to_download']))
-            response['X-Sendfile'] = smart_str(filepath)
-            return response
-    raise Http404
+    # filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
+    # if path.exists(filepath):
+    #     with open(filepath, 'rb') as fh:
+    #         response = HttpResponse(fh.read(), content_type="text/csv")
+    #         response['Content-Disposition'] = 'inline; filename=%s' \
+    #                                           % smart_str(path.basename(request.session['file_to_download']))
+    #         response['X-Sendfile'] = smart_str(filepath)
+    #         return response
+    # raise Http404
 
 
 
@@ -365,7 +377,7 @@ def get_specimen_metadata(request):
 
     three_d_list = [ ('protocol', 'Protocol'),
                      ('session_id', 'Session ID'),
-                     ('missing_pts', 'Missing points'),
+                     ('missing_pts', 'Missing points (indexed by specimen starting at 1)'),
                    ] if request.session['3d'] else []
     return [ ('specimen_id',        'Specimen ID'),
              ('hypocode',           'Hypocode'),
@@ -886,7 +898,7 @@ def query_3d(request, which_3d_output_type, is_preview):
     # if it's not a preview I need to get actual data and then send to morphologika or grfnd
     if not is_preview:
         get_3D_data(request)
-        return export_morphologika(request)
+        export_3d(request, which_3d_output_type)
 
     return render(request, 'primo/query_results.jinja', context )
 
