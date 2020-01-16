@@ -31,9 +31,25 @@
         {% else %}
             <a href="{{ url('query_3d', 'Preview', True) }}">Preview format  &raquo;</a>
             &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{{ url('query_3d', 'Morphologika', False) }}">Download Morphologika file  &raquo;</a>
+            <a href="{{ url('query_3d', 'Morphologika', False) }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
             &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{{ url('query_3d', 'GRFND', False) }}">Download GRFND file  &raquo;</a>
+            <a href="{{ url('query_3d', 'GRFND', False) }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
+
+             <script type="text/javascript" >
+            $(document).ready(function()
+                {
+                    // delay three seconds then redirect to success page
+                    $(".waitAndRedirect").click(function(){
+                        setTimeout(function() {
+                            //redirect to success page
+                            window.location = "/download_success/";
+                        }, 3000);
+                    });
+
+                    $("#resultsTable").tablesorter();
+                }
+            );
+            </script>
         {% endif %}
     </p>
     {% endif %}

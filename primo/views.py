@@ -19,6 +19,7 @@ from csv                            import DictWriter
 from datetime                       import datetime
 from functools                      import reduce
 from os                             import mkdir, path, remove
+import subprocess
 from uuid                           import uuid1
 
 
@@ -35,13 +36,9 @@ class IndexView(TemplateView):
 def collate_metadata(request):
     """ Collate data returned from SQL query, render into csv, save csv to tmp directory.
         For 2D this write all data. For 3D write only metadata. """
-    if request.session['3d']:
-        output_file_name = path.join( settings.DOWNLOAD_ROOT,
-                                      directory_name,
-                                      request.session['file_to_download'] )
-    else:
-        output_file_name = path.join( settings.DOWNLOAD_ROOT,
-                          request.session['file_to_download'] )
+    output_file_name = path.join( settings.DOWNLOAD_ROOT,
+                                  request.session['directory_name'],
+                                  request.session['file_to_download'] )
     with open( output_file_name,
                'w',
                newline='', # For some reason request.session['newline_char']
@@ -131,10 +128,30 @@ def create_tree_javascript(request, parent_id, current_table):
 
 
 def download(request):
-    """ Download one of csv, morphologika, grfnd. File has been written to path
+    """ Download one of csv, Morphologika, GRFND. File has been written to path
         before this is called. """
-    filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
+    if request.session['3d']:
+        filepath = path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'])
+    else:
+        filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
+
     if path.exists(filepath):
+        if request.session['3d']:
+            # Just a s a reminer, c is create a new file; z is gzip it; f is filename;
+            # -C is move to the following directory first; name at end is the directory to compress.
+            # Using -C here to get rid of prefix of absolute file path.
+            # So: tar -czf DOWNLOAD_ROOT/filename.tar.gz -C DOWNLOAD_ROOT directory_name
+            # Files should be in request.session['directory_name'], so that directory is what needs
+            # to be compressed, meaning tar needs to operate from DOWNLOAD_ROOT.
+            subprocess.run([ 'tar',
+                             '-czf',
+                             path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'] + '.tar.gz'),
+                             '-C',
+                             settings.DOWNLOAD_ROOT,
+                             request.session['directory_name']
+                           ])
+            # We have to reset filepath here because now we've tarred it.
+            filepath = path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'] + '.tar.gz')
         with open(filepath, 'rb') as fh:
             response = HttpResponse(fh.read(), content_type="text/csv")
             response['Content-Disposition'] = 'inline; filename=%s' \
@@ -190,112 +207,95 @@ def export_2d(request):
     return download(request)
 
 
-def export_3d(request, file_type):
+def export_3d(request):
     request.session['3d'] = True
     set_up_download(request)
-    if file_type == 'Morphologika':
-        create_morphologica_string(reqeust)
-    else:
-        create_GRFND_string(request)
+    create_3d_output_string(request)
     collate_metadata(request)
     return download(request)
 
 
-def create_morphologica_string(request):
+def create_3d_output_string(request):
     """ Collate data returned from 3D SQL query.
-        Print out two files: a csv of metadata and a Morphologika file. Fields
+        Print out two files: a csv of metadata and a GRFND file. Fields
         included in metadata are enumerated below. """
 
     newline_char = request.session['newline_char']
-
     missing_pts = {} # These will be output in metadata csv file.
                      # key is specimen id, value is string of missing points for specimen
 
-    # Morphologika file format:
-    # [individuals]
-    # number of individuals
-    # [landmarks]
-    # number of landmarks (total specimens/total number of sampled points)
-    #    where each sampled point has x, y, and z components
-    # [dimensions]
-    # 3
-    # [names]
-    # specimen ids
-    # [rawpoints]
-    # datapoints as x \t y \t z (TODO: are these ordered?)
-    output_str =  (newline_char * 2).join([ '[individuals]'
-                                           , str(len([request.session['query_results']]))
-                                           , '[landmarks]'
-                                           , str(len(request.session['query_results'])
-                                                 / len([request.session['sessions']]))
-                                           , '[dimensions]'
-                                           , '3'
-                                           , '[names]'
-                                          ])
+    # Header is different, otherwise files are nearly identical.
+
+    if request.session['which_3d_output_type'] == 'Morphologika':
+        # Morphologika file format:
+        # [individuals]
+        # number of individuals
+        # [landmarks]
+        # number of landmarks (total specimens/total number of sampled points)
+        #    where each sampled point has x, y, and z components
+        # [dimensions]
+        # 3
+        # [names]
+        # specimen ids
+        # [rawpoints]
+        # datapoints as x \t y \t z (TODO: are these ordered?)
+        output_str =  (newline_char * 2).join([ '[individuals]',
+                                                str(len(request.session['query_results'])),
+                                                '[landmarks]',
+                                                str(len(request.session['query_results']) \
+                                                    / len(request.session['sessions'])),
+                                                '[dimensions]',
+                                                '3',
+                                                '[names]',
+                                              ])
+    else: # GRFND file
+        # GRFND file format:
+        # 1 number of individuals L 3*number of landmarks 1 9999 DIM-3
+        # datapoints as x \t y \t z (TODO: are these ordered?)
+        output_str = '1 ' \
+                    + str(len(request.session['query_results'])) \
+                    + 'L ' \
+                    + str( 3
+                          * len(request.session['query_results']) \
+                          / len(request.session['sessions'])) \
+                    + " 1 9999 DIM=3" \
+                    + newline_char
 
     for row in request.session['query_results']:
         output_str += str(row['specimen_id']) + newline_char
 
-    # data points
-    output_str += newline_char + '[rawpoints]' + newline_char
-    current_specimen = ''   # Keeps track of when new specimen data starts
-    point_ctr = 1  # this will be used to track which points are missing for
-                   # a given sessiom/specimen
+    current_specimen = -1;
     for row in request.session['query_results']:
         if row['specimen_id'] != current_specimen:
-            missing_pts[row['specimen_id']] = ''
             current_specimen = row['specimen_id']
-            output_str += (newline_char
-                           + "'"
-                           + row['hypocode'].replace('/ /', '_')
-                           + newline_char)
-            point_ctr = 1
+            if request.session['which_3d_output_type'] == "Morphologika":
+                output_str += newline_char \
+                             + "'" \
+                             + row['hypocode'].replace('/ /', '_') \
+                             + newline_char
+            else:
+                output_str += newline_char
+            missing_pts[row['specimen_id']] = ''
+            missing_pt_ctr = 1
         if str(row['x']) == '9999.0' \
            and str(row['y']) == '9999.0' \
            and str(row['z']) == '9999.0':
                output_str += '9999\t9999\t9999' + newline_char
-               missing_pts[ row['specimen_id'] ] += ' ' + str(point_ctr)
+               missing_pts[row['specimen_id']] += ' ' + str(missing_pt_ctr)
 
         else:
-            output_str += (str(row['x'])
-                           + "\t"
-                           + str(row['y'])
-                           + "\t"
-                           + str(row['z'])
-                           + newline_char)
+            output_str += str(row['x']) \
+                        + "\t" \
+                        + str(row['y']) \
+                        + "\t" \
+                        + str(row['z']) \
+                        + str(newline_char)
 
-        point_ctr += 1
+        missing_pt_ctr += 1
     request.session['missing_pts'] = missing_pts
-    # collate_metadata(request)
 
-    # # with open( path.join( settings.DOWNLOAD_ROOT,
-    # #                       request.session['file_to_download']
-    # #                     ),
-    # #            'w',
-    # #            newline='', # request.session['newline_char'] adds extra newlines.
-    # #           ) as f:
-    # #     csv_file = File(f)
-    # #     meta_names = [ m[0] for m in get_specimen_metadata(request) ]
-    # #     writer = DictWriter(csv_file, fieldnames=meta_names)
-    # #     row = { m[0]: m[1] for m in get_specimen_metadata(request) }
-    # #     meta_names.append('missing points (indexed by specimen starting at 1)')
-    # #     writer.writerow(row)
-    # #     for row in request.session['3d_metadata']:
-    # #         inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
-    # #                                                      and k != 'variable_label' }
-    # #         inDict.update( { 'missing_pts': missing_pts[row['specimen_id']]} )
-    # #         writer.writerow(inDict)
-
-    # filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
-    # if path.exists(filepath):
-    #     with open(filepath, 'rb') as fh:
-    #         response = HttpResponse(fh.read(), content_type="text/csv")
-    #         response['Content-Disposition'] = 'inline; filename=%s' \
-    #                                           % smart_str(path.basename(request.session['file_to_download']))
-    #         response['X-Sendfile'] = smart_str(filepath)
-    #         return response
-    # raise Http404
-
+    with open(path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'], '3d_data.txt'), 'w') as outfile:
+        outfile.write(output_str)
 
 
 def fixQuotes(inStr):
@@ -774,6 +774,7 @@ def query_3d(request, which_3d_output_type, is_preview):
     if not request.user.is_authenticated or request.user.username == 'user':
         is_preview = True
 
+    request.session['which_3d_output_type'] = which_3d_output_type
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Move all of this and 3D into db. As it was before, dammit.
 
@@ -895,33 +896,38 @@ def query_3d(request, which_3d_output_type, is_preview):
         'user'              : request.user.username,
     }
 
-    # if it's not a preview I need to get actual data and then send to morphologika or grfnd
+    # If it's not a preview I need to get actual data and then send to Morphologika or GRFND.
     if not is_preview:
         get_3D_data(request)
-        export_3d(request, which_3d_output_type)
+        export_3d(request)
+        # return render(request, 'primo/download_success.jinja')
 
-    return render(request, 'primo/query_results.jinja', context )
+    return render(request, 'primo/query_results.jinja', context)
 
 
 def set_up_download(request):
     """ Set the newline character, set name of file based on current time.
-        Put both in session variable. """
+        Put both in session variable. If it's 3D make 3D output directory. """
 
     # Stupid Windows: we need to make sure the newline is set correctly. Abundance of caution.
     newline_char = '\n'
-    if request.META['HTTP_USER_AGENT'].lower().find( 'win' ):
+    if request.META['HTTP_USER_AGENT'].lower().find('win'):
         newline_char = '\r\n'
     request.session['newline_char'] = newline_char
 
     # this for use in download()
-    # reminder: The format of the file name will be yy_mm_dd_hh_mm_ss_msmsms
+    # reminder: The format of the file name will be yy-mm-dd-hh.mm.ss
     prefix = "PRIMO_metadata_" if request.session['3d'] else "PRIMO_results_"
+    request.session['file_to_download'] = ( "PRIMO_results_" \
+                                            + datetime.now().strftime('%Y-%m-%d_%H.%M.%S') \
+                                            + ".csv")
+    directory_name = ''
     if request.session['3d']:
+        directory_name = 'PRIMO_3D_' + datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
         request.session['file_to_download'] = "specimen_metadata.csv"
-    else:
-        request.session['file_to_download'] = ("PRIMO_results_" + \
-                                               datetime.now().strftime('%Y-%m-%d_%H.%M.%S') + \
-                                               ".csv")
+        mkdir(path.join(settings.DOWNLOAD_ROOT, directory_name))
+
+    request.session['directory_name'] = directory_name
 
 
 def tabulate_2d(query_results, is_preview):
