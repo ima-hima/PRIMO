@@ -3,14 +3,15 @@
 {% block content %}
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
-<link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
 <div id="main-content">
 
     {% if query_results %}
         {% if not is_preview %}
             <p>If these data are what you desired, click on <a href="{{ url('export_2d') }}" class="waitAndRedirect">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}" class="waitAndRedirect">front page</a> for instructions on how to get one.</p>
             <p>Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
-
+            <a href="{{ url('query_3d', 'Morphologika', False) }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+            &nbsp;&nbsp; | &nbsp;&nbsp;
+            <a href="{{ url('query_3d', 'GRFND', False) }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
             <p><a href="{{ url('export_2d') }}" class="waitAndRedirect">Download CSV file</a></p>
         {% endif %}
 
@@ -31,7 +32,7 @@
         </script>
 
         <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
-        <p id="specimen-count"><strong>{{total_specimens}} specimens found.</strong></p>
+        <p id="specimen-count"><strong>{{total_specimens}} specimens found{% if total_specimens > 5 %}, first five are displayed.{% else %}.{% endif %}</strong></p>
         <div id="table-scroll">
         <table id="resultsTable" class="tablesorter">
         <thead>
@@ -46,23 +47,22 @@
         </thead>
         <tbody>
         {% for row in query_results %}
-        <tr>
-            {% for metadata in specimen_metadata %}
-                <td>{{row[metadata[0]]}}</td>
-            {% endfor %}
+            {% if loop.index0 < 5 %}
+                <tr>
+                    {% for metadata in specimen_metadata %}
+                        <td>{{row[metadata[0]]}}</td>
+                    {% endfor %}
 
-            {# {% for variable in variable_labels: %}
-                <td>{{variable}}</td>
-            {% endfor %} #}
-            {% for label in variable_labels %}
-                {% if row[label] %}           {# The last element in the tuple
-                                                    is the dictionary {variable id : variable label}. #}
-                    <td>{{ row[label] }}</td> {# So print value at that location. #}
-                {% else %}
-                    <td></td>
-                {% endif %}
-            {% endfor %} {# loop over labels (columns) #}
-        </tr>
+                    {% for label in variable_labels %}
+                        {% if row[label] %}           {# The last element in the tuple
+                                                            is the dictionary {variable id : variable label}. #}
+                            <td>{{ row[label] }}</td> {# So print value at that location. #}
+                        {% else %}
+                            <td></td>
+                        {% endif %}
+                    {% endfor %} {# loop over labels (columns) #}
+                </tr>
+            {% endif %}
         {% endfor %} {# loop over rows #}
         </tbody>
         </table>

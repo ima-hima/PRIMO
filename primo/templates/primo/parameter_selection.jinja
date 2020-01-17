@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 
-{% block subtitle %} {{ current_table.capitalize() }} Selection {% endblock %}
+{% block subtitle %} 
+    {% if current_table == "bodypart" %}
+        Body Part
+    {% else %}
+        {{ current_table.capitalize() }} 
+    {% endif %}
+    Selection {% endblock %}
 {% block content %}
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script>

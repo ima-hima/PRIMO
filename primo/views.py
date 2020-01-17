@@ -20,6 +20,7 @@ from datetime                       import datetime
 from functools                      import reduce
 from os                             import mkdir, path, remove
 import subprocess
+import sys
 from uuid                           import uuid1
 
 
@@ -46,7 +47,7 @@ def collate_metadata(request):
              ) as f:
         csv_file = File(f)
         meta_names = [ m[0] for m in get_specimen_metadata(request) ]
-        if request.session['3d']:
+        if request.session['scalar_or_3d'] == '3D':
             meta_names.append('missing points (indexed by specimen starting at 1)')
             variable_names = []
         else:
@@ -64,7 +65,7 @@ def collate_metadata(request):
         row.update( { v: v for v in variable_names } )
         writer.writerow(row)
 
-        if request.session['3d']:
+        if request.session['scalar_or_3d'] == '3D':
             meta_names.append('missing points (indexed by specimen starting at 1)')
             rows = request.session['3d_metadata']
         else:
@@ -72,7 +73,7 @@ def collate_metadata(request):
         for row in rows:
             inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
                                                          and k != 'variable_label' }
-            if request.session['3d']:
+            if request.session['scalar_or_3d'] == '3D':
                 inDict.update( { 'missing_pts': request.session['missing_pts'][row['specimen_id']]} )
             writer.writerow(inDict)
 
@@ -95,9 +96,8 @@ def create_tree_javascript(request, parent_id, current_table):
         Okay, so *eventually* unnecessary? """
     javascript = ''
     js_item_delimiter = '", "'
-
     vals = apps.get_model( app_label  = 'primo',
-                           model_name = current_table.capitalize()
+                           model_name = current_table.capitalize(),
                          ).objects.values( 'id',
                                            'name',
                                            'parent_id',
@@ -130,13 +130,13 @@ def create_tree_javascript(request, parent_id, current_table):
 def download(request):
     """ Download one of csv, Morphologika, GRFND. File has been written to path
         before this is called. """
-    if request.session['3d']:
+    if request.session['scalar_or_3d'] == '3D':
         filepath = path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'])
     else:
         filepath = path.join(settings.DOWNLOAD_ROOT, request.session['file_to_download'])
 
     if path.exists(filepath):
-        if request.session['3d']:
+        if request.session['scalar_or_3d'] == '3D':
             # Just a s a reminer, c is create a new file; z is gzip it; f is filename;
             # -C is move to the following directory first; name at end is the directory to compress.
             # Using -C here to get rid of prefix of absolute file path.
@@ -153,7 +153,7 @@ def download(request):
             # We have to reset filepath here because now we've tarred it.
             filepath = path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'] + '.tar.gz')
         with open(filepath, 'rb') as fh:
-            response = HttpResponse(fh.read(), content_type="text/csv")
+            response = HttpResponse(fh.read(), content_type='text/csv')
             response['Content-Disposition'] = 'inline; filename=%s' \
                                               % smart_str(path.basename(request.session['file_to_download']))
             response['X-Sendfile'] = smart_str(filepath)
@@ -201,14 +201,14 @@ def entity_relation_diagram(request):
 
 
 def export_2d(request):
-    request.session['3d'] = False
+    request.session['scalar_or_3d'] = 'scalar'
     set_up_download(request)
     collate_metadata(request)
     return download(request)
 
 
 def export_3d(request):
-    request.session['3d'] = True
+    request.session['scalar_or_3d'] = '3D'
     set_up_download(request)
     create_3d_output_string(request)
     collate_metadata(request)
@@ -258,13 +258,13 @@ def create_3d_output_string(request):
                     + str( 3
                           * len(request.session['query_results']) \
                           / len(request.session['sessions'])) \
-                    + " 1 9999 DIM=3" \
+                    + ' 1 9999 DIM=3' \
                     + newline_char
 
     for row in request.session['query_results']:
         output_str += str(row['specimen_id']) + newline_char
     # data points
-    if request.session['which_3d_output_type'] == "Morphologika":
+    if request.session['which_3d_output_type'] == 'Morphologika':
         output_str += newline_char + '[rawpoints]' + newline_char
     current_specimen = ''   # Keeps track of when new specimen data starts
     point_ctr = 1  # this will be used to track which points are missing for
@@ -273,7 +273,7 @@ def create_3d_output_string(request):
     for row in request.session['query_results']:
         if row['specimen_id'] != current_specimen:
             current_specimen = row['specimen_id']
-            if request.session['which_3d_output_type'] == "Morphologika":
+            if request.session['which_3d_output_type'] == 'Morphologika':
                 output_str += newline_char \
                              + "'" \
                              + row['hypocode'].replace('/ /', '_') \
@@ -290,9 +290,9 @@ def create_3d_output_string(request):
 
         else:
             output_str += str(row['x']) \
-                        + "\t" \
+                        + '\t' \
                         + str(row['y']) \
-                        + "\t" \
+                        + '\t' \
                         + str(row['z']) \
                         + str(newline_char)
 
@@ -342,18 +342,18 @@ def fixQuotes(inStr):
 def get_3D_data(request):
     ''' Execute query for actual 3D points, i.e. not metadata. '''
 
-    base = ("SELECT DISTINCT `session`  .`id` AS session_id, "
-                            "`specimen` .`id` AS specimen_id, "
-                            "`specimen` .`hypocode` AS `hypocode`, "
-                            "`data_3d`  .`x`, "
-                            "`data_3d`  .`y`, "
-                            "`data_3d`  .`z`, "
-                            "`data_3d`  .`datindex`, "
-                            "`data_3d`  .`variable_id` "
-                "FROM data_3d "
-                     "JOIN `variable` ON `data_3d`.`variable_id` = `variable` .`id`"
-                     "JOIN `session`  ON `data_3d`.`session_id`  = `session`  .`id`"
-                     "JOIN `specimen` ON `session`.`specimen_id` = `specimen` .`id`")
+    base = ('SELECT DISTINCT `session`  .`id` AS session_id, '
+                            '`specimen` .`id` AS specimen_id, '
+                            '`specimen` .`hypocode` AS `hypocode`, '
+                            '`data_3d`  .`x`, '
+                            '`data_3d`  .`y`, '
+                            '`data_3d`  .`z`, '
+                            '`data_3d`  .`datindex`, '
+                            '`data_3d`  .`variable_id` '
+                'FROM data_3d '
+                     'JOIN `variable` ON `data_3d`.`variable_id` = `variable` .`id`'
+                     'JOIN `session`  ON `data_3d`.`session_id`  = `session`  .`id`'
+                     'JOIN `specimen` ON `session`.`specimen_id` = `specimen` .`id`')
 
     where     = ' WHERE `session_id` IN %s'
     group_by  = ' GROUP BY `session_id`'
@@ -383,7 +383,7 @@ def get_specimen_metadata(request):
     three_d_list = [ ('protocol', 'Protocol'),
                      ('session_id', 'Session ID'),
                      ('missing_pts', 'Missing points (indexed by specimen starting at 1)'),
-                   ] if request.session['3d'] else []
+                   ] if request.session['scalar_or_3d'] == '3D' else []
     return [ ('specimen_id',        'Specimen ID'),
               ('hypocode',           'Hypocode'),
               ('collection_acronym', 'Collection Acronym'),
@@ -433,8 +433,8 @@ def log_in(request):
             return render( request,
                           'primo/login.jinja',
                               { 'form': form,
-                                'error': "Your username/password combination \
-                                          didn’t match. Please try again.",
+                                'error': 'Your username/password combination \
+                                          didn’t match. Please try again.',
                                 'next': next_page
                               }
                          )
@@ -452,28 +452,24 @@ def logout_view(request):
 
 
 @login_required
-def parameter_selection(request, current_table):
+def parameter_selection(request, current_table): 
     javascript = ''
-
-    current_model = apps.get_model( app_label  = 'primo',
-                                    model_name = current_table.capitalize(),
-                                  )
-
+    
     if current_table == 'variable':
         if len(request.session['selected']['bodypart']) > 0:
             with connection.cursor() as variable_query:
-                sql = ("SELECT variable.name AS var_name, "
-                              "variable.label AS var_label, "
-                              "variable.id AS var_id, "
-                              "bps.id AS bodypart_id, "
-                              "bps.name AS bodypart_name "
-                         "FROM variable "
-                              "JOIN bodypart_variable ON variable.id = bodypart_variable.variable_id "
-                                   "JOIN (SELECT bodypart.id, bodypart.name "
-                                           "FROM bodypart "
-                                          "WHERE parent_id IN %s) AS bps "
-                                   "  ON bps.id = bodypart_variable.bodypart_id "
-                       "ORDER BY variable.id")
+                sql = ('SELECT variable.name AS var_name, '
+                              'variable.label AS var_label, '
+                              'variable.id AS var_id, '
+                              'bps.id AS bodypart_id, '
+                              'bps.name AS bodypart_name '
+                         'FROM variable '
+                              'JOIN bodypart_variable ON variable.id = bodypart_variable.variable_id '
+                                   'JOIN (SELECT bodypart.id, bodypart.name '
+                                           'FROM bodypart '
+                                          'WHERE parent_id IN %s) AS bps '
+                                   '  ON bps.id = bodypart_variable.bodypart_id '
+                       'ORDER BY variable.id')
 
                 variable_query.execute( sql, [request.session['selected']['bodypart']] )
                 columns = [col[0] for col in variable_query.description]
@@ -481,14 +477,6 @@ def parameter_selection(request, current_table):
                     dict(zip(columns, row)) for row in variable_query.fetchall()
                 ]
 
-                # values = {label[0]: label[1] for label in variable_query.fetchall()}
-        #     bodypart_list         = request.session['selected']['bodypart']
-        #     bodypart_variable_ids = current_model.objects.values('id').filter(bodypartvariable__bodypart_id__in=bodypart_list)
-        #     variable_ids          = BodypartVariable.objects.values('variable_id').filter(pk__in=bodypart_variable_ids)
-        #     vals                  = current_model.objects.values( 'id',
-        #                                                           'name',
-        #                                                           'label',
-        #                                                         ).filter(pk__in=variable_ids).order_by('id')
         else:
             values = apps.get_model( app_label  = 'primo',
                                    model_name = current_table.capitalize(),
@@ -502,13 +490,13 @@ def parameter_selection(request, current_table):
         # do original query to get root of tree.
         # The rest of the tree will be recursively created in `create_tree_javascript()`.
         value = apps.get_model( app_label  = 'primo',
-                              model_name = current_table.capitalize(),
-                            ).objects.values( 'id',
-                                              'name',
-                                              'parent_id',
-                                              'expand_in_tree',
-                                              'tree_root',
-                                            ).filter(tree_root = 1)[0]
+                                model_name = current_table.capitalize(),
+                              ).objects.values( 'id',
+                                                'name',
+                                                'parent_id',
+                                                'expand_in_tree',
+                                                'tree_root',
+                                              ).filter(tree_root = 1)[0]
 
         name       = value['name'].replace('"', '')
         item_id    = value['id']
@@ -531,7 +519,19 @@ def parameter_selection(request, current_table):
         javascript += create_tree_javascript(request, item_id, current_table)
 
     else:
-        # for fossil, sex
+        # For fossil, sex.
+        try:
+            current_table
+            current_model = apps.get_model( app_label  = 'primo',
+                                            model_name = current_table.capitalize(),
+                                          )
+        except: # I have to do the set because nlsTree seems to be forcing a 
+                # refresh with current_table set to "undefined". The actual
+                # value is unimportant, so I've just chosen one that has a model.
+            current_model = apps.get_model( app_label  = 'primo',
+                                            model_name = 'Taxon',
+                                          )
+        
         values = current_model.objects.values('id', 'name').all()
 
 
@@ -630,81 +630,81 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                                        } )
 
 
-def query_2d(request, is_preview):
+def query_2d(request, preview_only):
     """ Set up the 2D query SQL. Do query. Call result table display. """
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
-
-    is_preview = True if is_preview == 'True' else False # convert from String
+    request.session['scalar_or_3d'] = 'scalar'
+    preview_only = True if preview_only == 'True' else False # convert from String
     if not request.user.is_authenticated or request.user.username == 'user':
-        is_preview = True
+        preview_only = True
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
-    base = ("SELECT `data_scalar`  . `id`             AS scalar_id, "
-                   "`specimen`     . `id`             AS specimen_id, "
-                   "`specimen`     . `hypocode`       AS hypocode, "
-                   "`institute`    . `abbr`           AS collection_acronym, "
-                   "`specimen`     . `catalog_number` AS catalog_number, "
-                   "`taxon`        . `name`           AS taxon_name, "
-                   "`specimen`     . `mass`           AS mass, "
-                   "`sex`          . `name`           AS sex_type, "
-                   "`specimen_type`. `name`           AS specimen_type, "
-                   "`fossil`       . `name`           AS fossil_or_extant, "
-                   "`captive`      . `name`           AS captive_or_wild, "
-                   "`original`     . `name`           AS original_or_cast, "
-                   "`variable`     . `label`          AS variable_label, "
-                   "`data_scalar`  . `value`          AS scalar_value, "
-                   "`age_class`    . `name`           AS age_class, "
-                   "`locality`     . `name`           AS locality_name, "
-                   "`country`      . `name`           AS country_name, "
-                   "`specimen`     . `comments`       AS specimen_comments, "
-                   "`session`      . `comments`       AS session_comments "
-                "FROM `variable` "
-                      "JOIN `data_scalar`"
-                              "ON `data_scalar`.`variable_id` = `variable`.`id` "
-                      "JOIN `session` "
-                              "ON `data_scalar`.`session_id` = `session`.`id` "
-                      "JOIN `specimen` "
-                              "ON `session`.`specimen_id` = `specimen`.`id` "
-                      "JOIN `original` "
-                              "ON `session`.`original_id` = `original`.`id` "
-                      "JOIN `taxon` "
-                              "ON `specimen`.`taxon_id` = `taxon`.`id` "
-                      "JOIN `sex` "
-                              "ON `specimen`.`sex_id` = `sex`.`id` "
-                      "JOIN `fossil` "
-                              "ON `specimen`.`fossil_id` = `fossil`.`id` "
-                      "JOIN `institute` "
-                              "ON `specimen`.`institute_id` = `institute`.`id` "
-                      "JOIN `captive` "
-                              "ON `specimen`.`captive_id` = `captive`.`id` "
-                      "JOIN `specimen_type` "
-                              "ON `specimen`.`specimen_type_id` = `specimen_type`.`id` "
-                      "JOIN `age_class` "
-                              "ON `specimen`.`age_class_id` = `age_class`.`id` "
-                      "JOIN `locality` "
-                              "ON `specimen`.`locality_id` = `locality`.`id` "
-                      "JOIN `state_province` "
-                              "ON `locality`.`state_province_id` = `state_province`.`id` "
-                      "JOIN `country` "
-                              "ON `state_province`.`country_id` = `country`.`id`")
+    base = ('SELECT `data_scalar`  . `id`             AS scalar_id, '
+                   '`specimen`     . `id`             AS specimen_id, '
+                   '`specimen`     . `hypocode`       AS hypocode, '
+                   '`institute`    . `abbr`           AS collection_acronym, '
+                   '`specimen`     . `catalog_number` AS catalog_number, '
+                   '`taxon`        . `name`           AS taxon_name, '
+                   '`specimen`     . `mass`           AS mass, '
+                   '`sex`          . `name`           AS sex_type, '
+                   '`specimen_type`. `name`           AS specimen_type, '
+                   '`fossil`       . `name`           AS fossil_or_extant, '
+                   '`captive`      . `name`           AS captive_or_wild, '
+                   '`original`     . `name`           AS original_or_cast, '
+                   '`variable`     . `label`          AS variable_label, '
+                   '`data_scalar`  . `value`          AS scalar_value, '
+                   '`age_class`    . `name`           AS age_class, '
+                   '`locality`     . `name`           AS locality_name, '
+                   '`country`      . `name`           AS country_name, '
+                   '`specimen`     . `comments`       AS specimen_comments, '
+                   '`session`      . `comments`       AS session_comments '
+                'FROM `variable` '
+                      'JOIN `data_scalar`'
+                              'ON `data_scalar`.`variable_id` = `variable`.`id` '
+                      'JOIN `session` '
+                              'ON `data_scalar`.`session_id` = `session`.`id` '
+                      'JOIN `specimen` '
+                              'ON `session`.`specimen_id` = `specimen`.`id` '
+                      'JOIN `original` '
+                              'ON `session`.`original_id` = `original`.`id` '
+                      'JOIN `taxon` '
+                              'ON `specimen`.`taxon_id` = `taxon`.`id` '
+                      'JOIN `sex` '
+                              'ON `specimen`.`sex_id` = `sex`.`id` '
+                      'JOIN `fossil` '
+                              'ON `specimen`.`fossil_id` = `fossil`.`id` '
+                      'JOIN `institute` '
+                              'ON `specimen`.`institute_id` = `institute`.`id` '
+                      'JOIN `captive` '
+                              'ON `specimen`.`captive_id` = `captive`.`id` '
+                      'JOIN `specimen_type` '
+                              'ON `specimen`.`specimen_type_id` = `specimen_type`.`id` '
+                      'JOIN `age_class` '
+                              'ON `specimen`.`age_class_id` = `age_class`.`id` '
+                      'JOIN `locality` '
+                              'ON `specimen`.`locality_id` = `locality`.`id` '
+                      'JOIN `state_province` '
+                              'ON `locality`.`state_province_id` = `state_province`.`id` '
+                      'JOIN `country` '
+                              'ON `state_province`.`country_id` = `country`.`id`')
 
-    where     = (" WHERE `sex`.`id` IN %s "
-                    "AND `fossil`.`id` IN %s "
-                    "AND `taxon`.`id` IN %s "
-                    "AND `variable`.`id` IN %s ")
+    where     = (' WHERE `sex`.`id` IN %s '
+                    'AND `fossil`.`id` IN %s '
+                    'AND `taxon`.`id` IN %s '
+                    'AND `variable`.`id` IN %s ')
     ordering  = ' ORDER BY `specimen`.`id`, `variable`.`label` ASC'
     final_sql = (base + where +  ordering + ';') # .format( concat_variable_list(request.session['selected']['sex']) )
 
     # We have to query for the variable names separately.
     with connection.cursor() as variable_query:
-        variable_query.execute( "SELECT `label` \
+        variable_query.execute( 'SELECT `label` \
                                    FROM `variable` \
                                   WHERE `variable`.`id` \
                                      IN %s \
-                                  ORDER BY `label` ASC;",
+                                  ORDER BY `label` ASC;',
                                 [request.session['selected']['variable']] )
         variable_labels = [label[0] for label in variable_query.fetchall()]
 
@@ -732,11 +732,11 @@ def query_2d(request, is_preview):
 
     are_results = True
     try:
-        # if request.user.username == 'user':     # TODO: This could be a little more nicer.
-        #     is_preview = True                   # It's already True if a preview was requested by the user.
-        new_query_results = tabulate_2d(request, query_results, is_preview)
+        new_query_results = tabulate_2d(request, query_results, preview_only)
         request.session['query_results'] = new_query_results
-    except Exception as e:
+    except:
+        print(sys.exc_info()[0])
+        raise
         are_results = False
 
     # This is for use in export_csv_file().
@@ -753,7 +753,7 @@ def query_2d(request, is_preview):
         'total_specimens'   : len(new_query_results),
         'variable_labels'   : variable_labels,
         'variable_ids'      : request.session['selected']['variable'],
-        'is_preview'        : is_preview,
+        'preview_only'        : preview_only,
         'specimen_metadata' : get_specimen_metadata(request),
         'user'              : request.user.username,
     }
@@ -771,15 +771,16 @@ def query_start(request):
     return render(request, 'primo/query_start.jinja')
 
 
-def query_3d(request, which_3d_output_type, is_preview):
+def query_3d(request, which_3d_output_type, preview_only):
     """ Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
         Send results to either Morphologika or GRFND creator and downloader.
-        If is_preview ignore which_output_type and show metadata preview for top five taxa. """
+        If preview_only ignore which_output_type and show metadata preview for top five taxa. """
 
-    is_preview = True if is_preview == 'True' else False # convert from String
+    preview_only = True if preview_only == 'True' else False # convert from String
     if not request.user.is_authenticated or request.user.username == 'user':
-        is_preview = True
+        preview_only = True
 
+    request.session['scalar_or_3d'] = '3D'
     request.session['which_3d_output_type'] = which_3d_output_type
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Move all of this and 3D into db. As it was before, dammit.
@@ -794,61 +795,60 @@ def query_3d(request, which_3d_output_type, is_preview):
     # We'll only do metadata search first.
 
     # Note
-    base = ("SELECT DISTINCT `specimen`     .`id`             AS specimen_id, "
-                            "`specimen`     .`hypocode`       AS hypocode, "
-                            "`institute`    .`abbr`           AS collection_acronym, "
-                            "`specimen`     .`catalog_number` AS catalog_number, "
-                            "`taxon`        .`name`           AS taxon_name, "
-                            "`specimen`     .`mass`           AS mass, "
-                            "`sex`          .`name`           AS sex_type, "
-                            "`specimen_type`.`name`           AS specimen_type, "
-                            "`fossil`       .`name`           AS fossil_or_extant, "
-                            "`captive`      .`name`           AS captive_or_wild, "
-                            "`original`     .`name`           AS original_or_cast, "
-                            "`protocol`     .`label`          AS protocol, "
-                            "`age_class`    .`name`           AS age_class, "
-                            "`locality`     .`name`           AS locality_name, "
-                            "`country`      .`name`           AS country_name, "
-                            "`session`      .`comments`       AS session_comments, "
-                            "`session`      .`id`             AS session_id, "
-                            "`specimen`     .`comments`       AS specimen_comments "
-            "FROM data_3d "
-            "JOIN `session` "
-                    "ON `data_3d`.`session_id` = `session`.`id` "
-            "JOIN `specimen` "
-                    "ON `session`.`specimen_id` = `specimen`.`id` "
-            "JOIN `taxon` "
-                    "ON `specimen`.`taxon_id` = `taxon`.`id` "
-            "JOIN `sex` "
-                    "ON `specimen`.`sex_id` = `sex`.`id` "
-            "JOIN `specimen_type` "
-                    "ON `specimen`.`specimen_type_id` = `specimen_type`.`id` "
-            "JOIN `fossil` "
-                    "ON `specimen`.`fossil_id` = `fossil`.`id` "
-            "JOIN `institute` "
-                    "ON `specimen`.`institute_id` = `institute`.`id` "
-            "JOIN `protocol` "
-                    "ON `session`.`protocol_id` = `protocol`.`id` "
-            "JOIN `captive` "
-                    "ON `specimen`.`captive_id` = `captive`.`id` "
-            "JOIN `original` "
-                    "ON `session`.`original_id` = `original`.`id` "
-            "JOIN `age_class` "
-                    "ON `specimen`.`age_class_id` = `age_class`.`id` "
-            "JOIN `locality` "
-                    "ON `specimen`.`locality_id` = `locality`.`id` "
-            "JOIN `state_province` "
-                    "ON `locality`.`state_province_id` = `state_province`.`id` "
-            "JOIN `country` "
-                    "ON `state_province`.`country_id` = `country`.`id` ")
+    base = ('SELECT DISTINCT `specimen`     .`id`             AS specimen_id, '
+                            '`specimen`     .`hypocode`       AS hypocode, '
+                            '`institute`    .`abbr`           AS collection_acronym, '
+                            '`specimen`     .`catalog_number` AS catalog_number, '
+                            '`taxon`        .`name`           AS taxon_name, '
+                            '`specimen`     .`mass`           AS mass, '
+                            '`sex`          .`name`           AS sex_type, '
+                            '`specimen_type`.`name`           AS specimen_type, '
+                            '`fossil`       .`name`           AS fossil_or_extant, '
+                            '`captive`      .`name`           AS captive_or_wild, '
+                            '`original`     .`name`           AS original_or_cast, '
+                            '`protocol`     .`label`          AS protocol, '
+                            '`age_class`    .`name`           AS age_class, '
+                            '`locality`     .`name`           AS locality_name, '
+                            '`country`      .`name`           AS country_name, '
+                            '`session`      .`comments`       AS session_comments, '
+                            '`session`      .`id`             AS session_id, '
+                            '`specimen`     .`comments`       AS specimen_comments '
+            'FROM data_3d '
+            'JOIN `session` '
+                    'ON `data_3d`.`session_id` = `session`.`id` '
+            'JOIN `specimen` '
+                    'ON `session`.`specimen_id` = `specimen`.`id` '
+            'JOIN `taxon` '
+                    'ON `specimen`.`taxon_id` = `taxon`.`id` '
+            'JOIN `sex` '
+                    'ON `specimen`.`sex_id` = `sex`.`id` '
+            'JOIN `specimen_type` '
+                    'ON `specimen`.`specimen_type_id` = `specimen_type`.`id` '
+            'JOIN `fossil` '
+                    'ON `specimen`.`fossil_id` = `fossil`.`id` '
+            'JOIN `institute` '
+                    'ON `specimen`.`institute_id` = `institute`.`id` '
+            'JOIN `protocol` '
+                    'ON `session`.`protocol_id` = `protocol`.`id` '
+            'JOIN `captive` '
+                    'ON `specimen`.`captive_id` = `captive`.`id` '
+            'JOIN `original` '
+                    'ON `session`.`original_id` = `original`.`id` '
+            'JOIN `age_class` '
+                    'ON `specimen`.`age_class_id` = `age_class`.`id` '
+            'JOIN `locality` '
+                    'ON `specimen`.`locality_id` = `locality`.`id` '
+            'JOIN `state_province` '
+                    'ON `locality`.`state_province_id` = `state_province`.`id` '
+            'JOIN `country` '
+                    'ON `state_province`.`country_id` = `country`.`id` ')
 
     where     = (' WHERE `sex`.`id` IN %s'
                  ' AND `fossil`.`id` IN %s'
                  ' AND `taxon`.`id` IN %s')
-    # variables = ' AND `variable`.`id` IN (SELECT `id` FROM `datatype` WHERE `data_table` LIKE "data_3d")'
     ordering  = ' ORDER BY `specimen_id` ASC'
     limit = ''
-    if is_preview:     # TODO: This could be a little more nicer.
+    if preview_only:     # TODO: This could be a little more nicer.
         limit = ' LIMIT 5'
     final_sql = (base + where + ordering + limit + ';')
 
@@ -894,7 +894,7 @@ def query_3d(request, which_3d_output_type, is_preview):
                                                                 request.session['selected']['taxon'],
                                                               ).replace('[', '(').replace(']',')'),
         'groups'            : request.user.get_group_permissions(),
-        'is_preview'        : is_preview,
+        'preview_only'        : preview_only,
         'query_results'     : query_results,
         'specimen_metadata' : get_specimen_metadata(request),
         'total_specimens'   : len(query_results), # This should be the same as len(request.session['sessions'])
@@ -902,7 +902,7 @@ def query_3d(request, which_3d_output_type, is_preview):
     }
 
     # If it's not a preview I need to get actual data and then send to Morphologika or GRFND.
-    if not is_preview:
+    if not preview_only:
         get_3D_data(request)
         export_3d(request)
         # return render(request, 'primo/download_success.jinja')
@@ -922,20 +922,20 @@ def set_up_download(request):
 
     # this for use in download()
     # reminder: The format of the file name will be yy-mm-dd_hh.mm.ss
-    prefix = "PRIMO_metadata_" if request.session['3d'] else "PRIMO_results_"
-    request.session['file_to_download'] = ( "PRIMO_results_" \
+    prefix = 'PRIMO_metadata_' if request.session['scalar_or_3d'] == '3D' else 'PRIMO_results_'
+    request.session['file_to_download'] = ( 'PRIMO_results_' \
                                             + datetime.now().strftime('%Y-%m-%d_%H.%M.%S') \
-                                            + ".csv")
+                                            + '.csv')
     directory_name = ''
-    if request.session['3d']:
+    if request.session['scalar_or_3d'] == '3D':
         directory_name = 'PRIMO_3D_' + datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
-        request.session['file_to_download'] = "specimen_metadata.csv"
+        request.session['file_to_download'] = 'specimen_metadata.csv'
         mkdir(path.join(settings.DOWNLOAD_ROOT, directory_name))
 
     request.session['directory_name'] = directory_name
 
 
-def tabulate_2d(request, query_results, is_preview):
+def tabulate_2d(request, query_results, preview_only):
     """ Return a list of dictionaries where each dictionary has the keys
         Specimen ID
         Hypocode
@@ -971,7 +971,7 @@ def tabulate_2d(request, query_results, is_preview):
             current_dict[row['variable_label']] = row['scalar_value']
             current_specimen = row['hypocode']
         # TODO: Figure out SQL so we don't have to do entire query and cull it here.
-        if is_preview == True and num_specimens >= 15:
+        if preview_only == True and num_specimens >= 15:
             break
     output.append(current_dict)
     return output
