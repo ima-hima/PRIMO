@@ -38,7 +38,7 @@ ol {
 p {
     color: #000000;
     font-size: 14px;
-    margin: 1em 20px;
+    margin: 1em 0;
 }
 .attributes-selected {
   margin: auto;
@@ -59,10 +59,16 @@ p {
 }
 #content {
     background-color: #ffffff;
-    margin: 10px auto;
+    margin: 40px auto;
+    min-width: 700px;
+    overflow-x: scroll;
+    overflow-y: hidden;
     padding: 10px;
     text-align: left;
     width: 95%;
+}
+#main-content {
+  margin-left: 20px;
 }
 .dataListTable {
     background-color: #ffcc03;
@@ -127,6 +133,9 @@ a.body_text:hover {
     font-size: 12px;
     font-style: normal;
     text-decoration: none;
+}
+#navigation {
+  margin-left: 45px;
 }
 #navigation ul {
     list-style: outside none none;
@@ -278,9 +287,10 @@ th {
     padding: 5px;
     width: min-content;
 }
-.sql-display {
+#sql {
     background-color: #f8faf0;
     border: 1px solid #d1e1a5;
+    margin: 0 50px;
     padding: 15px 8px;
 }
 .subheading {
@@ -294,7 +304,10 @@ th {
 #topMenuBar {
     background-color: #333333;
     color: #ffffff;
-    padding: 7px 40px 5px 45px;
+    min-width: 700px;
+    padding: 7px 0 5px 0;
+    position: absolute;
+    width: 100%;
 }
 .submit {
   font-size: 15px;
@@ -322,4 +335,13 @@ th {
     background-color: #94FFA9;
     font-size: 15px;
     padding: 5px;
+}
+#specimen-count {
+  margin-bottom: .5em;
+  padding-left: 20px;
+}
+#table-scroll {
+  width: 100%;
+  overflow-x: scroll;
+  overflow-y: hidden;
 }

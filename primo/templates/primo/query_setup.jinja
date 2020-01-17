@@ -2,6 +2,7 @@
 <script type="text/javascript" src="{{ static('primo/js/nlstree') }}"></script>
 {% block subtitle %} {{scalar_or_3d.title()}} Query Wizard {% endblock %}
 {% block content %}
+<div id="main-content">
 <p style="font-size: 20px;">The query generates data using the following criteria.</p>
 <div id="query-wizard-filter-table-options">
     <table class="selection-table">
@@ -55,6 +56,6 @@
     {% endif %}
     <br />
 </div>
-
+</div>
 
 {% endblock %}

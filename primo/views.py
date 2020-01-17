@@ -247,7 +247,7 @@ def create_3d_output_string(request):
                                                 '[dimensions]',
                                                 '3',
                                                 '[names]',
-                                              ])
+                                    ])
     else: # GRFND file
         # GRFND file format:
         # 1 number of individuals L 3*number of landmarks 1 9999 DIM-3
@@ -263,8 +263,13 @@ def create_3d_output_string(request):
 
     for row in request.session['query_results']:
         output_str += str(row['specimen_id']) + newline_char
-
-    current_specimen = -1;
+    # data points
+    if request.session['which_3d_output_type'] == "Morphologika":
+        output_str += newline_char + '[rawpoints]' + newline_char
+    current_specimen = ''   # Keeps track of when new specimen data starts
+    point_ctr = 1  # this will be used to track which points are missing for
+                   # a given sessiom/specimen
+    current_specimen = -1
     for row in request.session['query_results']:
         if row['specimen_id'] != current_specimen:
             current_specimen = row['specimen_id']
@@ -380,25 +385,25 @@ def get_specimen_metadata(request):
                      ('missing_pts', 'Missing points (indexed by specimen starting at 1)'),
                    ] if request.session['3d'] else []
     return [ ('specimen_id',        'Specimen ID'),
-             ('hypocode',           'Hypocode'),
-             ('collection_acronym', 'Collection Acronym'),
-             ('catalog_number',     'Catalog No.'),
-             ('taxon_name',         'Taxon name'),
-             ('sex_type',           'Sex'),
-             ('specimen_type',      'Type Status'),
-             ('mass',               'Mass'),
-             ('fossil_or_extant',   'Fossil or Extant'),
-             ('captive_or_wild',    'Captive or Wild'),
-             ('original_or_cast',   'Original or Cast'),
-             ('session_comments',   'Session Comments'),
-             ('specimen_comments',  'Specimen Comments'),
-             ('age_class',          'Age Class'),
-             ('locality_name',      'Locality'),
-             ('country_name',       'Country'),
+              ('hypocode',           'Hypocode'),
+              ('collection_acronym', 'Collection Acronym'),
+              ('catalog_number',     'Catalog No.'),
+              ('taxon_name',         'Taxon name'),
+              ('sex_type',           'Sex'),
+              ('specimen_type',      'Type Status'),
+              ('mass',               'Mass'),
+              ('fossil_or_extant',   'Fossil or Extant'),
+              ('captive_or_wild',    'Captive or Wild'),
+              ('original_or_cast',   'Original or Cast'),
+              ('session_comments',   'Session Comments'),
+              ('specimen_comments',  'Specimen Comments'),
+              ('age_class',          'Age Class'),
+              ('locality_name',      'Locality'),
+              ('country_name',       'Country'),
            ] + three_d_list
 
 
-def init_query_table(query_result):
+def init_query_table(request, query_result):
     """ Initialize query table (actually a dictionary) that is to be used for data
         that will be pushed out to view. A single query row is received and put into
         dictionary. """
@@ -497,13 +502,13 @@ def parameter_selection(request, current_table):
         # do original query to get root of tree.
         # The rest of the tree will be recursively created in `create_tree_javascript()`.
         value = apps.get_model( app_label  = 'primo',
-                                model_name = current_table.capitalize(),
-                              ).objects.values( 'id',
-                                                'name',
-                                                'parent_id',
-                                                'expand_in_tree',
-                                                'tree_root',
-                                              ).filter(tree_root = 1)[0]
+                              model_name = current_table.capitalize(),
+                            ).objects.values( 'id',
+                                              'name',
+                                              'parent_id',
+                                              'expand_in_tree',
+                                              'tree_root',
+                                            ).filter(tree_root = 1)[0]
 
         name       = value['name'].replace('"', '')
         item_id    = value['id']
@@ -721,20 +726,21 @@ def query_2d(request, is_preview):
         # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
         query_results = [
-            dict(zip(columns, row)) for row in cursor.fetchall()
+            dict(zip(columns, row))
+            for row in cursor.fetchall()
         ]
 
     are_results = True
     try:
         # if request.user.username == 'user':     # TODO: This could be a little more nicer.
         #     is_preview = True                   # It's already True if a preview was requested by the user.
-        query_results = tabulate_2d(query_results, is_preview)
-        request.session['query_results'] = query_results
-    except:
+        new_query_results = tabulate_2d(request, query_results, is_preview)
+        request.session['query_results'] = new_query_results
+    except Exception as e:
         are_results = False
 
     # This is for use in export_csv_file().
-    request.session['variable_labels'] = variable_labels
+    request.session['variable_labels']   = variable_labels
     context = {
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
                                                             request.session['selected']['fossil'],
@@ -742,9 +748,9 @@ def query_2d(request, is_preview):
                                                             # concat_variable_list(request.session['selected']['bodypart']),
                                                             request.session['selected']['variable'],
                                                           ),
-        'query_results'     : query_results,
+        'query_results'     : new_query_results,
         'are_results'       : are_results,
-        'total_specimens'   : len(query_results),
+        'total_specimens'   : len(new_query_results),
         'variable_labels'   : variable_labels,
         'variable_ids'      : request.session['selected']['variable'],
         'is_preview'        : is_preview,
@@ -752,7 +758,7 @@ def query_2d(request, is_preview):
         'user'              : request.user.username,
     }
 
-    return render(request, 'primo/query_results.jinja', context, )
+    return render(request, 'primo/query_results.jinja', context)
 
 
 @login_required
@@ -870,8 +876,7 @@ def query_3d(request, which_3d_output_type, is_preview):
         # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
         query_results = [
-            dict(zip(columns, row))
-            for row in cursor.fetchall()
+            dict(zip(columns, row)) for row in cursor.fetchall()
         ]
         # Need to get session ids in case file will be downloaded.
         # Single specimen per session is enforced at DB level.
@@ -879,8 +884,8 @@ def query_3d(request, which_3d_output_type, is_preview):
         for item in query_results:
             sessions.add(item['session_id'])
 
-    request.session['query']       = final_sql
-    request.session['sessions']    = list(sessions)
+    request.session['query']    = final_sql
+    request.session['sessions'] = list(sessions)
     request.session['3d_metadata'] = query_results
 
     context = {
@@ -916,7 +921,7 @@ def set_up_download(request):
     request.session['newline_char'] = newline_char
 
     # this for use in download()
-    # reminder: The format of the file name will be yy-mm-dd-hh.mm.ss
+    # reminder: The format of the file name will be yy-mm-dd_hh.mm.ss
     prefix = "PRIMO_metadata_" if request.session['3d'] else "PRIMO_results_"
     request.session['file_to_download'] = ( "PRIMO_results_" \
                                             + datetime.now().strftime('%Y-%m-%d_%H.%M.%S') \
@@ -930,7 +935,7 @@ def set_up_download(request):
     request.session['directory_name'] = directory_name
 
 
-def tabulate_2d(query_results, is_preview):
+def tabulate_2d(request, query_results, is_preview):
     """ Return a list of dictionaries where each dictionary has the keys
         Specimen ID
         Hypocode
@@ -949,7 +954,7 @@ def tabulate_2d(query_results, is_preview):
 
     current_specimen = query_results[0]['hypocode']
     output = []
-    current_dict = init_query_table(query_results[0])
+    current_dict = init_query_table(request, query_results[0])
     num_specimens = 1
     for row in query_results:
         # Is this a new specimen? If so need to set up new empty dictionary and
@@ -960,7 +965,7 @@ def tabulate_2d(query_results, is_preview):
             num_specimens += 1
             output.append(current_dict)
             del(current_dict)
-            current_dict = init_query_table(row)
+            current_dict = init_query_table(request, row)
             # This next so we can look up values quickly in view rather than having
             # to do constant conditionals.
             current_dict[row['variable_label']] = row['scalar_value']

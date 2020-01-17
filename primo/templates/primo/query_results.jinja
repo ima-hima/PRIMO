@@ -4,25 +4,7 @@
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
 <link rel="stylesheet" type="text/css" href="{{ static('primo/blue/style.css') }}" />
-
-    {% if user == 'superadmin' %}
-        <button class="submit" onclick="
-              var x = document.getElementById('sql');
-              if (x.style.display === 'none') {
-                x.style.display = 'block';
-              } else {
-                x.style.display = 'none';
-              }
-            ">Hide/show query and results</button>
-
-        <div id="sql">
-            <br /><br />
-            {{ final_sql }}
-            <br /><br />
-            {{ query_results[0] }}<br /><br />
-            Is preview: {{ is_preview }}
-        </div>
-    {% endif %}
+<div id="main-content">
 
     {% if query_results %}
         {% if not is_preview %}
@@ -48,22 +30,17 @@
         );
         </script>
 
-        {# {{final_sql}}
-        <br />
-        <br />
-        {{query_results[0]}} #}
-        <br />
         <p>Click on column headers to sort results by column. Columns can be deleted or reordered in your spreadsheet after download.</p>
-        <p><strong>{{total_specimens}} specimens found.</strong></p>
-
+        <p id="specimen-count"><strong>{{total_specimens}} specimens found.</strong></p>
+        <div id="table-scroll">
         <table id="resultsTable" class="tablesorter">
         <thead>
         <tr>
             {% for metadata in specimen_metadata %}
                 <th>{{metadata[1]}}</th>
             {% endfor %}
-            {% for var_id in variable_labels %}
-                <th>{{var_id}}</th>
+            {% for label in variable_labels %}
+                <th>{{label}}</th>
             {% endfor %}
         </tr>
         </thead>
@@ -78,7 +55,7 @@
                 <td>{{variable}}</td>
             {% endfor %} #}
             {% for label in variable_labels %}
-                {% if row[label] %}              {# The last element in the tuple
+                {% if row[label] %}           {# The last element in the tuple
                                                     is the dictionary {variable id : variable label}. #}
                     <td>{{ row[label] }}</td> {# So print value at that location. #}
                 {% else %}
@@ -89,7 +66,7 @@
         {% endfor %} {# loop over rows #}
         </tbody>
         </table>
-
+        </div>
         {% if is_preview == 'False' %}
             <p>If these data are what you desired, click on <a href="{{ url('export_2d') }}">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
             <p>Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
@@ -99,5 +76,25 @@
     {% else %}
         <h3>No results were returned.</h3>
     {% endif %} {# Are/aren't results #}
-
+    {% if user == 'superadmin' %}
+        <div id="sql">
+            <button class="submit" onclick="
+              var x = document.getElementById('sql');
+              if (x.style.display === 'none') {
+                x.style.display = 'block';
+              } else {
+                x.style.display = 'none';
+              }
+            ">Hide query and results</button>
+        
+            <br /><br />
+            {{ final_sql }}
+            <br /><br />
+            {{ query_results[0] }}<br /><br />
+            {{ query_results[1] }}<br /><br />
+            {{ query_results[2] }}<br /><br />
+            Is preview: {{ is_preview }}
+        </div>
+    {% endif %}
+</div>
 {% endblock %}
