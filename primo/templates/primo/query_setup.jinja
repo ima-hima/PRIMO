@@ -26,31 +26,9 @@
     {% if finished %}
         &nbsp;&nbsp; | &nbsp;&nbsp;
         {% if scalar_or_3d == "scalar" %}
-            <a href="{{ url('query_2d', True) }}">Preview format  &raquo;</a>
-            &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{{ url('query_2d', False) }}">See results  &raquo;</a>
+            <a href="{{ url('query_2d') }}">Preview and download results  &raquo;</a>
         {% else %}
-            <a href="{{ url('query_3d', 'Preview', True) }}">Preview format  &raquo;</a>
-            &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{{ url('query_3d', 'Morphologika', False) }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
-            &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{{ url('query_3d', 'GRFND', False) }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
-
-             <script type="text/javascript" >
-            $(document).ready(function()
-                {
-                    // delay three seconds then redirect to success page
-                    $(".waitAndRedirect").click(function(){
-                        setTimeout(function() {
-                            //redirect to success page
-                            window.location = "/download_success/";
-                        }, 3000);
-                    });
-
-                    $("#resultsTable").tablesorter();
-                }
-            );
-            </script>
+            <a href="{{ url('query_3d') }}">Preview and download results  &raquo;</a>
         {% endif %}
     </p>
     {% endif %}

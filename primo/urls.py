@@ -16,32 +16,45 @@ urlpatterns = [
 
     url(r'^download_success/',
         views.download_success,
-        name="download_success"),
+        name='download_success'),
 
     url(r'^export_2d/',
-    # url(r'^exportCsvFile/(?P<current_table>\w+)/(?P<is_preview>\w+)',
         views.export_2d,
-        name="export_2d"),
+        name='export_2d'),
+
+    url(r'^export_3d/(?P<which_3d_output_type>\w+)',
+        views.export_3d,
+        name='export_3d'),
+
+    # If none given, defaults to Morphologika.
+    url(r'^export_3d/',
+        views.export_3d,
+        name='export_3d'),
 
     url(r'^parameter_selection/(?P<current_table>\w+)',
         views.parameter_selection,
-        name="parameter_selection"),
+        name='parameter_selection'),
 
-    url(r'^query_3d/(?P<which_3d_output_type>\w+)/(?P<is_preview>\w+)',
+    url(r'^query_3d/',
         views.query_3d,
-        name="query_3d"),
+        name='query_3d'),
 
-    url(r'^query_2d/(?P<is_preview>\w+)',
+    url(r'^query_2d/',
         views.query_2d,
-        name="query_2d"),
+        name='query_2d'),
 
     url(r'^query_setup/(?P<scalar_or_3d>\w+)',
         views.query_setup,
         name='query_setup'),
 
-    url(r'^query_setup/', views.query_setup, name="query_setup"),
+    # If there's no GET, it defaults to scalar.
+    url(r'^query_setup/', 
+        views.query_setup, 
+        name='query_setup'),
 
-    url(r'^query_start/', views.query_start, name="query_start"),
+    url(r'^query_start/', 
+        views.query_start, 
+        name='query_start'),
 ]
 
 if settings.DEBUG:

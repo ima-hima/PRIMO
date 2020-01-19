@@ -8,6 +8,7 @@
     {% endif %}
     Selection {% endblock %}
 {% block content %}
+<div id="main-content">
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script>
 $(document).ready(function() {
@@ -57,6 +58,7 @@ $(document).ready(function() {
   });
 });
 </script>
+<div id="table-scroll">
 <div id="query-wizard-filter-table-options">
     <form action="{{ url('query_setup', request.session['scalar_or_3d']) }}" method="post" />
     {% csrf_token %}
@@ -66,71 +68,74 @@ $(document).ready(function() {
         <input class="submit" type="submit" value="Submit" name="commit" />
     </div>
     <table class="selection-table">
-    <thead>
-    {% if current_table == 'variable' %}
-    <tr>
-        <th>Bodypart</th>
-        <th>Variable ID</th>
-        <th>Variable name</th>
-        <th>Variable label</th>
-        <th><input id="selectAll" type="button" value="Select all"></th>
-    </tr>
-    </thead>
-    <tbody>
-        {% for value in values: %}
-        <tr>
-            <td>{{ value['bodypart_name'] }}</td>
-            <td>{{ value['var_id']}}</td>
-            <td>{{ value['var_name'] }}</td>
-            <td>{{ value['var_label']}}</td>
-            <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['var_id'] }}"
-                    {% if value["id"] in request.session["selected"][current_table] %} CHECKED {% endif %}></td>
-        </tr>
-        {% endfor %}
+        {% if current_table == 'variable' %}
+        <thead>
+            <tr>
+                <th>Bodypart</th>
+                <th>Variable ID</th>
+                <th>Variable name</th>
+                <th>Variable label</th>
+                <th style="min-width: 90px;"><input id="selectAll" type="button" value="Select all"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for value in values: %}
+                <tr>
+                    <td>{{ value['bodypart_name'] }}</td>
+                    <td>{{ value['var_id']}}</td>
+                    <td>{{ value['var_name'] }}</td>
+                    <td>{{ value['var_label']}}</td>
+                    <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['var_id'] }}"
+                            {% if value["id"] in request.session["selected"][current_table] %} CHECKED {% endif %}></td>
+                </tr>
+            {% endfor %}
+        </tbody>
     {% elif current_table == 'bodypart' or current_table == 'taxon' %}
-        <link href="{{ static('primo/js/nlstree/nlstree.css') }}" media="screen" type="text/css" rel="stylesheet">
-        <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstree.js') }}"></script>
-        <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstreeext_state.js') }}"></script>
+        <thead>
+            <link href="{{ static('primo/js/nlstree/nlstree.css') }}" media="screen" type="text/css" rel="stylesheet">
+            <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstree.js') }}"></script>
+            <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstreeext_state.js') }}"></script>
+        </thead>
+        <tbody>
+            <tr><td>
+            <div id="heirarchy">
+                <script>
+                    var tree = new NlsTree("main");
 
-    </thead>
-    <tbody>
-        <tr><td>
-        <div id="heirarchy">
-            <script>
-                var tree = new NlsTree("main");
+                    tree.opt.icon     = true;
+                    tree.opt.sort     = "no";
+                    tree.opt.check    = true;
+                    tree.opt.oneClick = true;
 
-                tree.opt.icon     = true;
-                tree.opt.sort     = "no";
-                tree.opt.check    = true;
-                tree.opt.oneClick = true;
+                    //maintain state using cookie
+                    tree.opt.mntState = true;
 
-                //maintain state using cookie
-                tree.opt.mntState = true;
-
-                //paste in tree structure
-                {{ javascript|safe }}
-                //render the tree
-                tree.renderAttributes();
-                tree.render();
-            </script>
-        </div>
-        </td></tr>
+                    //paste in tree structure
+                    {{ javascript|safe }}
+                    //render the tree
+                    tree.renderAttributes();
+                    tree.render();
+                </script>
+            </div>
+            </td></tr>
+        </tbody>
     {% else %} {# sex or fossil #}
-    <tr>
-        <th width="80%">{{ current_table.capitalize()}}</th>
-        <th><input id="selectAll" type="button" value="Select all"></th>
-    </tr>
-    </thead>
-    <tbody>
-        {% for value in values: %}
-        <tr>
-            <td>{{ value['name'] }}</td>
-            <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['id'] }}"
-                {% if value['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
-        </tr>
-        {% endfor %}
+        <thead>
+            <tr>
+                <th width="80%">{{ current_table.capitalize()}}</th>
+                <th><input id="selectAll" type="button" value="Select all"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for value in values: %}
+            <tr>
+                <td>{{ value['name'] }}</td>
+                <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['id'] }}"
+                    {% if value['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
+            </tr>
+            {% endfor %}
+        </tbody>
     {% endif %}
-    </tbody>
     </table>
     <div class="submit-buttons">
         <input type="hidden" value="{{ current_table }}" name="table"  />
@@ -138,5 +143,6 @@ $(document).ready(function() {
         <input class="submit" type="submit" value="Submit" name="commit"/>
     </div>
     </form>
+</div>
 </div>
 {% endblock %}

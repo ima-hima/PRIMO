@@ -69,6 +69,7 @@ def collate_metadata(request):
             meta_names.append('missing points (indexed by specimen starting at 1)')
             rows = request.session['3d_metadata']
         else:
+            print('collate_metadata:', len(request.session['query_results']))
             rows = request.session['query_results']
         for row in rows:
             inDict = { k : row[k] for k in row.keys() if k != 'scalar_value'
@@ -201,13 +202,15 @@ def entity_relation_diagram(request):
 
 
 def export_2d(request):
+    print('export_2d:', len(request.session['query_results']))
     request.session['scalar_or_3d'] = 'scalar'
     set_up_download(request)
     collate_metadata(request)
     return download(request)
 
 
-def export_3d(request):
+def export_3d(request, which_3d_output_type = 'morphologika'):
+    request.session['which_3d_output_type'] = which_3d_output_type
     request.session['scalar_or_3d'] = '3D'
     set_up_download(request)
     create_3d_output_string(request)
@@ -360,6 +363,7 @@ def get_3D_data(request):
     ordering  = ' ORDER BY `specimen_id`, `variable_id`, `data_3d`.`datindex` ASC'
     final_sql = (base + where + ordering + ';')
 
+    query_results = []
     with connection.cursor() as cursor:
         cursor.execute( final_sql, [request.session['sessions']] )
         # Now return all rows as a dictionary object. Note that each variable
@@ -630,15 +634,15 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                                        } )
 
 
-def query_2d(request, preview_only):
+def query_2d(request):
     """ Set up the 2D query SQL. Do query. Call result table display. """
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
     request.session['scalar_or_3d'] = 'scalar'
-    preview_only = True if preview_only == 'True' else False # convert from String
-    if not request.user.is_authenticated or request.user.username == 'user':
-        preview_only = True
+    preview_only = True 
+    if request.user.is_authenticated and request.user.username != 'user':
+        preview_only = False
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
@@ -732,15 +736,16 @@ def query_2d(request, preview_only):
 
     are_results = True
     try:
-        new_query_results = tabulate_2d(request, query_results, preview_only)
-        request.session['query_results'] = new_query_results
+        new_query_results = tabulate_2d(request, query_results)
     except:
         print(sys.exc_info()[0])
-        raise
         are_results = False
-
+        new_query_results = []
+    print('query_2d new query:', len(new_query_results))
     # This is for use in export_csv_file().
-    request.session['variable_labels']   = variable_labels
+    request.session['variable_labels'] = variable_labels
+    request.session['query_results']   = new_query_results
+    print('query_2d request session:', len(request.session['query_results']))
     context = {
         'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
                                                             request.session['selected']['fossil'],
@@ -753,7 +758,8 @@ def query_2d(request, preview_only):
         'total_specimens'   : len(new_query_results),
         'variable_labels'   : variable_labels,
         'variable_ids'      : request.session['selected']['variable'],
-        'preview_only'        : preview_only,
+        'preview_only'      : preview_only,
+        'scalar_or_3d'      : request.session['scalar_or_3d'],
         'specimen_metadata' : get_specimen_metadata(request),
         'user'              : request.user.username,
     }
@@ -771,17 +777,16 @@ def query_start(request):
     return render(request, 'primo/query_start.jinja')
 
 
-def query_3d(request, which_3d_output_type, preview_only):
+def query_3d(request):
     """ Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
         Send results to either Morphologika or GRFND creator and downloader.
         If preview_only ignore which_output_type and show metadata preview for top five taxa. """
 
-    preview_only = True if preview_only == 'True' else False # convert from String
-    if not request.user.is_authenticated or request.user.username == 'user':
-        preview_only = True
+    preview_only = True # convert from String
+    if request.user.is_authenticated and request.user.username != 'user':
+        preview_only = False
 
     request.session['scalar_or_3d'] = '3D'
-    request.session['which_3d_output_type'] = which_3d_output_type
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Move all of this and 3D into db. As it was before, dammit.
 
@@ -848,9 +853,9 @@ def query_3d(request, which_3d_output_type, preview_only):
                  ' AND `taxon`.`id` IN %s')
     ordering  = ' ORDER BY `specimen_id` ASC'
     limit = ''
-    if preview_only:     # TODO: This could be a little more nicer.
-        limit = ' LIMIT 5'
-    final_sql = (base + where + ordering + limit + ';')
+    # if preview_only:     # TODO: This could be a little more nicer.
+    #     limit = ' LIMIT 5'
+    final_sql = (base + where + ordering + ';')
 
     # We skip varibles in 3D; we're getting all of them.
 
@@ -894,8 +899,9 @@ def query_3d(request, which_3d_output_type, preview_only):
                                                                 request.session['selected']['taxon'],
                                                               ).replace('[', '(').replace(']',')'),
         'groups'            : request.user.get_group_permissions(),
-        'preview_only'        : preview_only,
+        'preview_only'      : preview_only,
         'query_results'     : query_results,
+        'scalar_or_3d'      : request.session['scalar_or_3d'],
         'specimen_metadata' : get_specimen_metadata(request),
         'total_specimens'   : len(query_results), # This should be the same as len(request.session['sessions'])
         'user'              : request.user.username,
@@ -935,7 +941,7 @@ def set_up_download(request):
     request.session['directory_name'] = directory_name
 
 
-def tabulate_2d(request, query_results, preview_only):
+def tabulate_2d(request, query_results):
     """ Return a list of dictionaries where each dictionary has the keys
         Specimen ID
         Hypocode
@@ -970,9 +976,6 @@ def tabulate_2d(request, query_results, preview_only):
             # to do constant conditionals.
             current_dict[row['variable_label']] = row['scalar_value']
             current_specimen = row['hypocode']
-        # TODO: Figure out SQL so we don't have to do entire query and cull it here.
-        if preview_only == True and num_specimens >= 15:
-            break
     output.append(current_dict)
     return output
 

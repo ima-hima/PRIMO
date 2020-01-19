@@ -6,13 +6,18 @@
 <div id="main-content">
 
     {% if query_results %}
-        {% if not is_preview %}
-            <p>If these data are what you desired, click on <a href="{{ url('export_2d') }}" class="waitAndRedirect">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}" class="waitAndRedirect">front page</a> for instructions on how to get one.</p>
-            <p>Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
-            <a href="{{ url('query_3d', 'Morphologika', False) }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
-            &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{{ url('query_3d', 'GRFND', False) }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
-            <p><a href="{{ url('export_2d') }}" class="waitAndRedirect">Download CSV file</a></p>
+        {% if preview_only %}
+            <p>Here is a sample of the data you requested. If these are the what you desired, please log in or return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+        {% else %}
+            <p>Here is a sample of the data you requested. If these are what you desired, click on the download link below to get the entire result.</p>
+            <p>Please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
+            {% if scalar_or_3d == 'scalar' %}
+                <p><a href="{{ url('export_2d') }}">Download CSV file</a></p>
+            {% else %}
+                <a href="{{ url('export_3d', 'Morphologika') }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+                &nbsp;&nbsp; | &nbsp;&nbsp;
+                <a href="{{ url('export_3d', 'GRFND') }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
+            {% endif %}
         {% endif %}
 
         <script type="text/javascript" >
@@ -67,16 +72,25 @@
         </tbody>
         </table>
         </div>
-        {% if is_preview == 'False' %}
-            <p>If these data are what you desired, click on <a href="{{ url('export_2d') }}">Download CSV file</a> to get the entire result. If you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
-            <p>Also, please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
-
-            <p><a href="{{ url('export_2d') }}">Download CSV file</a></p>
+        {% if preview_only %}
+            <p>If you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+        {% else %}
+            <p>If these data are what you desired, click on the download link below to get the entire results.</p>
+            <p>Please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
+            {% if scalar_or_3d == 'scalar' %}
+                <p><a href="{{ url('export_2d') }}">Download CSV file</a></p>
+            {% else %}
+                <a href="{{ url('export_3d', 'Morphologika') }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+                &nbsp;&nbsp; | &nbsp;&nbsp;
+                <a href="{{ url('export_3d', 'GRFND') }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
+            {% endif %}
         {% endif %}
+
     {% else %}
         <h3>No results were returned.</h3>
     {% endif %} {# Are/aren't results #}
-    {% if user == 'superadmin' %}
+    {{ request.user.username }}
+    {% if request.user.username == 'superadmin' %}
         <div id="sql">
             <button class="submit" onclick="
               var x = document.getElementById('sql');
@@ -93,7 +107,7 @@
             {{ query_results[0] }}<br /><br />
             {{ query_results[1] }}<br /><br />
             {{ query_results[2] }}<br /><br />
-            Is preview: {{ is_preview }}
+            Preview only: {{ preview_only }}
         </div>
     {% endif %}
 </div>
