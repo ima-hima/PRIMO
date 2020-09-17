@@ -1,4 +1,3 @@
-{% load staticfiles %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,7 +7,7 @@
     <meta name = "description" content="primo" />
     <meta name = "keywords"    content="primo" />
     <meta name = "language"    content="en" />
-    <link rel = "stylesheet" type = "text/css"  href = "{% static style.css %}" />
+    <link rel = "stylesheet" type = "text/css"  href = "{{ static('/primo/style.css') }}" />
     <link rel = "icon"       type = "image/png" href = "{{ static('primo/images/favicon.png') }}" />
     <title>{% block title %}PRIMO{% endblock %}</title>
 </head>
