@@ -19,7 +19,7 @@ urlpatterns = [
         name="download_success"),
 
     url(r'^export_2d/',
-    # url(r'^exportCsvFile/(?P<current_table>\w+)/(?P<is_preview>\w+)',
+    # url(r'^exportCsvFile/(?P<current_table>\w+)/(?P<preview_only>\w+)',
         views.export_2d,
         name="export_2d"),
 
@@ -27,11 +27,11 @@ urlpatterns = [
         views.parameter_selection,
         name="parameter_selection"),
 
-    url(r'^query_3d/(?P<which_3d_output_type>\w+)/(?P<is_preview>\w+)',
+    url(r'^query_3d/(?P<which_3d_output_type>\w+)/(?P<preview_only>\w+)',
         views.query_3d,
         name="query_3d"),
 
-    url(r'^query_2d/(?P<is_preview>\w+)',
+    url(r'^query_2d/(?P<preview_only>\w+)',
         views.query_2d,
         name="query_2d"),
 

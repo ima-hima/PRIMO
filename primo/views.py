@@ -35,8 +35,10 @@ class IndexView(TemplateView):
 
 
 def collate_metadata(request):
-    """ Collate data returned from SQL query, render into csv, save csv to tmp directory.
-        For 2D this write all data. For 3D write only metadata. """
+    """ 
+    Collate data returned from SQL query, render into csv, save csv to tmp directory.
+    For 2D this write all data. For 3D write only metadata. 
+    """
     output_file_name = path.join( settings.DOWNLOAD_ROOT,
                                   request.session['directory_name'],
                                   request.session['file_to_download'] )
@@ -84,16 +86,19 @@ def concat_variable_list(myList):
 
 
 def create_tree_javascript(request, parent_id, current_table):
-    """ Create javascript for heirarchical tree display. Formal parameters for
-        tree.add() are:
-        add(node_id, parent_id, node name, url, icon, expand?, precheck?, extra info,
-        text on mouse hover).
-        The last two are currently unneeded, and therefore ignored below.
-        Function is recursive on parent_id and returns a properly-formatted string
-        of Javascript code, although from reading nlstree docs (https://www.addobject.com/nlstree),
-        it seems order is unimportant, so recursion may be unnecessary (wasteful?).
-        Oh, wait: necessary because of if statement dealing with Eucatarrhini.
-        Okay, so *eventually* unnecessary? """
+    """ 
+    Create javascript for heirarchical tree display. Formal parameters for
+    tree.add() are:
+    add(node_id, parent_id, node name, url, icon, expand?, precheck?, extra info,
+    text on mouse hover).
+    The last two are currently unneeded, and therefore ignored below.
+    Function is recursive on parent_id and returns a properly-formatted string
+    of Javascript code, although from reading nlstree docs (https://www.addobject.com/nlstree),
+    it seems order is unimportant, so recursion may be unnecessary (wasteful?).
+    Oh, wait: necessary because of if statement dealing with Eucatarrhini.
+    Okay, so *eventually* unnecessary? 
+    """
+
     javascript = ''
     js_item_delimiter = '", "'
     vals = apps.get_model( app_label  = 'primo',
@@ -128,8 +133,11 @@ def create_tree_javascript(request, parent_id, current_table):
 
 
 def download(request):
-    """ Download one of csv, Morphologika, GRFND. File has been written to path
-        before this is called. """
+    """ 
+    Download one of csv, Morphologika, GRFND. File has been written to path
+    before this is called. 
+    """
+
     if request.session['scalar_or_3d'] == '3D':
         filepath = path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'])
     else:
@@ -216,9 +224,11 @@ def export_3d(request):
 
 
 def create_3d_output_string(request):
-    """ Collate data returned from 3D SQL query.
-        Print out two files: a csv of metadata and a GRFND file. Fields
-        included in metadata are enumerated below. """
+    """ 
+    Collate data returned from 3D SQL query.
+    Print out two files: a csv of metadata and a GRFND file. Fields
+    included in metadata are enumerated below. 
+    """
 
     newline_char = request.session['newline_char']
     missing_pts = {} # These will be output in metadata csv file.
@@ -340,7 +350,7 @@ def fixQuotes(inStr):
 
 
 def get_3D_data(request):
-    ''' Execute query for actual 3D points, i.e. not metadata. '''
+    """ Execute query for actual 3D points, i.e. not metadata. """
 
     base = ('SELECT DISTINCT `session`  .`id` AS session_id, '
                             '`specimen` .`id` AS specimen_id, '
@@ -377,36 +387,40 @@ def get_3D_data(request):
 
 
 def get_specimen_metadata(request):
-    """ Return a list of tuples with SQL column name:csv column name as key:value.
-        Created a fn because this was called all over the place. """
+    """ 
+    Return a list of tuples with SQL column name:csv column name as key:value.
+    Created a fn because this was called all over the place. 
+    """
 
     three_d_list = [ ('protocol', 'Protocol'),
                      ('session_id', 'Session ID'),
                      ('missing_pts', 'Missing points (indexed by specimen starting at 1)'),
                    ] if request.session['scalar_or_3d'] == '3D' else []
     return [ ('specimen_id',        'Specimen ID'),
-              ('hypocode',           'Hypocode'),
-              ('collection_acronym', 'Collection Acronym'),
-              ('catalog_number',     'Catalog No.'),
-              ('taxon_name',         'Taxon name'),
-              ('sex_type',           'Sex'),
-              ('specimen_type',      'Type Status'),
-              ('mass',               'Mass'),
-              ('fossil_or_extant',   'Fossil or Extant'),
-              ('captive_or_wild',    'Captive or Wild'),
-              ('original_or_cast',   'Original or Cast'),
-              ('session_comments',   'Session Comments'),
-              ('specimen_comments',  'Specimen Comments'),
-              ('age_class',          'Age Class'),
-              ('locality_name',      'Locality'),
-              ('country_name',       'Country'),
+             ('hypocode',           'Hypocode'),
+             ('collection_acronym', 'Collection Acronym'),
+             ('catalog_number',     'Catalog No.'),
+             ('taxon_name',         'Taxon name'),
+             ('sex_type',           'Sex'),
+             ('specimen_type',      'Type Status'),
+             ('mass',               'Mass'),
+             ('fossil_or_extant',   'Fossil or Extant'),
+             ('captive_or_wild',    'Captive or Wild'),
+             ('original_or_cast',   'Original or Cast'),
+             ('session_comments',   'Session Comments'),
+             ('specimen_comments',  'Specimen Comments'),
+             ('age_class',          'Age Class'),
+             ('locality_name',      'Locality'),
+             ('country_name',       'Country'),
            ] + three_d_list
 
 
 def init_query_table(request, query_result):
-    """ Initialize query table (actually a dictionary) that is to be used for data
-        that will be pushed out to view. A single query row is received and put into
-        dictionary. """
+    """ 
+    Initialize query table (actually a dictionary) that is to be used for data
+    that will be pushed out to view. A single query row is received and put into
+    dictionary. 
+    """
     output = { key[0]: query_result[key[0]] for key in get_specimen_metadata(request) }
     output['variable_label'] = query_result['variable_label']
     output['scalar_value']   = query_result['scalar_value']
@@ -543,16 +557,18 @@ def parameter_selection(request, current_table):
 
 @login_required
 def query_setup(request, scalar_or_3d = 'scalar'):
-    ''' For scalar queries send parameter_selection to frontend. Once all
-        parameters are set, give option to call results, query_2d().
+    """ 
+    For scalar queries send parameter_selection to frontend. Once all
+    parameters are set, give option to call results, query_2d().
 
-        Tables will be all of the tables that are available to search on for a
-        particular search type (e.g. scalar or 3D). Of those tables sex and
-        fossil will be pre-filled with all values selected. In that case,
-        do a second query for all possible values and fill those values in. '''
+    Tables will be all of the tables that are available to search on for a
+    particular search type (e.g. scalar or 3D). Of those tables sex and
+    fossil will be pre-filled with all values selected. In that case,
+    do a second query for all possible values and fill those values in. 
+    """
 
-    # if there's a POST, then parameter_selection has been called and some
-    # values have been sent back
+    # If there's a POST, then parameter_selection() has been called and some
+    # values have been sent back.
     if request.method == 'POST':
         current_table = request.POST.get('table')
 
@@ -561,10 +577,11 @@ def query_setup(request, scalar_or_3d = 'scalar'):
             selected_rows = []
 
             if request.POST.get('table') == 'taxon' or request.POST.get('table') == 'bodypart':
-                # I have to look at all POST variables, and get the ones out that
+                # I have to look at all POST variables and remove those that
                 # start with 'cb_main', as those are set by nlstree.js.
+                #
                 # All selected items cause one 'cb_main' variable to be set,
-                # as such: cb_main423 = 'on'.So I need to get the number at
+                # as such: cb_main423 = 'on'. So I need to get the number at
                 # the end, as that's the id of the selected item.
                 for item in request.POST.items():
                     if item[0][:7] == 'cb_main':
@@ -588,11 +605,11 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                  ).objects.values('id').all()
             request.session['selected'][current_table] = [val['id'] for val in vals]
 
-    if not request.session['tables']: # if tables isn't set, query for all tables
-                                      # and set up both tables and selected lists
+    if not request.session['tables']: # If tables isn't set, query for all tables
+                                      # and set up both tables and selected lists.
         request.session['scalar_or_3d'] = scalar_or_3d
 
-        # note for this query that "tables" is set as the related name in Models.py
+        # Note for this query that "tables" is set as the related name in Models.py.
         tables   = QueryWizardQuery.objects.get(data_table = scalar_or_3d.capitalize()).tables.all()
         selected = dict() # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
         request.session['tables']   = []
@@ -608,14 +625,15 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                          model_name = table.filter_table_name.capitalize()
                                        )
                 values = model.objects.values('id').all()
-                # because vals is a list of dicts in format 'id': value
+                # Because vals is a list of dicts in format 'id': value.
                 request.session['selected'][table.filter_table_name] = [ value['id'] for value in values ]
             else:
-                request.session['selected'][table.filter_table_name] = [] # so I can use 'if selected[table]' in query_setup.jinja
+                request.session['selected'][table.filter_table_name] = [] # So I can use 'if selected[table]' 
+                                                                          # in query_setup.jinja.
 
     tables   = request.session['tables']
     selected = request.session['selected']
-    # I coudn't figure out any way to do this, other than to check each time
+    # I coudn't figure out any way to do this other than to check each time.
     finished = True
 
     for table in tables:
@@ -708,7 +726,7 @@ def query_2d(request, preview_only):
                                 [request.session['selected']['variable']] )
         variable_labels = [label[0] for label in variable_query.fetchall()]
 
-    # use cursor here?
+    # Use cursor here?
     with connection.cursor() as cursor:
         cursor.execute( final_sql,
                         [ request.session['selected']['sex'],
@@ -772,9 +790,11 @@ def query_start(request):
 
 
 def query_3d(request, which_3d_output_type, preview_only):
-    """ Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
-        Send results to either Morphologika or GRFND creator and downloader.
-        If preview_only ignore which_output_type and show metadata preview for top five taxa. """
+    """ 
+    Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
+    Send results to either Morphologika or GRFND creator and downloader.
+    If preview_only ignore which_output_type and show metadata preview for top five taxa. 
+    """
 
     preview_only = True if preview_only == 'True' else False # convert from String
     if not request.user.is_authenticated or request.user.username == 'user':
@@ -911,8 +931,10 @@ def query_3d(request, which_3d_output_type, preview_only):
 
 
 def set_up_download(request):
-    """ Set the newline character, set name of file based on current time.
-        Put both in session variable. If it's 3D make 3D output directory. """
+    """ 
+    Set the newline character, set name of file based on current time.
+    Put both in session variable. If it's 3D make 3D output directory. 
+    """
 
     # Stupid Windows: we need to make sure the newline is set correctly. Abundance of caution.
     newline_char = '\n'
@@ -936,21 +958,23 @@ def set_up_download(request):
 
 
 def tabulate_2d(request, query_results, preview_only):
-    """ Return a list of dictionaries where each dictionary has the keys
-        Specimen ID
-        Hypocode
-        Collection Acronym
-        Catalog No.
-        Taxon name
-        Sex
-        Fossil or Extant
-        Captive or Wild
-        Session Comments
-        Specimen Comments
-        Locality Name
-        Country Name
+    """ 
+    Return a list of dictionaries where each dictionary has the keys
+    Specimen ID
+    Hypocode
+    Collection Acronym
+    Catalog No.
+    Taxon name
+    Sex
+    Fossil or Extant
+    Captive or Wild
+    Session Comments
+    Specimen Comments
+    Locality Name
+    Country Name
 
-        All requested variables """
+    All requested variables 
+    """
 
     current_specimen = query_results[0]['hypocode']
     output = []
