@@ -493,8 +493,8 @@ def parameter_selection(request, current_table):
 
         else:
             values = apps.get_model( app_label  = 'primo',
-                                   model_name = current_table.capitalize(),
-                                 ).objects.values( 'name',
+                                     model_name = current_table.capitalize(),
+                                   ).objects.values( 'name',
                                                    'label',
                                                    'bodypartvariable__bodypart_id',
                                                  ).all()
@@ -547,6 +547,7 @@ def parameter_selection(request, current_table):
                                           )
         
         values = current_model.objects.values('id', 'name').all()
+    print('values', values)
 
 
     return render(request, 'primo/parameter_selection.jinja', {'current_table': current_table,
@@ -660,6 +661,7 @@ def query_2d(request, preview_only):
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
+    # TODO: move this back into the DB.
     base = ('SELECT `data_scalar`  . `id`             AS scalar_id, '
                    '`specimen`     . `id`             AS specimen_id, '
                    '`specimen`     . `hypocode`       AS hypocode, '
