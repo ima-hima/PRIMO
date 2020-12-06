@@ -511,7 +511,6 @@ def parameter_selection(request, current_table):
     javascript = ''
     
     if current_table == 'variable':
-        print(request.session['selected'])
         if len(request.session['selected']['bodypart']) > 0:
             with connection.cursor() as variable_query:
                 sql = ('SELECT variable.name AS var_name, '
