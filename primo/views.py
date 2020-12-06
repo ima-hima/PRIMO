@@ -511,6 +511,7 @@ def parameter_selection(request, current_table):
     javascript = ''
     
     if current_table == 'variable':
+        print(request.session['selected'])
         if len(request.session['selected']['bodypart']) > 0:
             with connection.cursor() as variable_query:
                 sql = ('SELECT variable.name AS var_name, '
@@ -522,8 +523,8 @@ def parameter_selection(request, current_table):
                               'JOIN bodypart_variable ON variable.id = bodypart_variable.variable_id '
                                    'JOIN (SELECT bodypart.id, bodypart.name '
                                            'FROM bodypart '
-                                          'WHERE parent_id IN %s) AS bps '
-                                   '  ON bps.id = bodypart_variable.bodypart_id '
+                                          'WHERE id IN %s) AS bps '
+                                     'ON bps.id = bodypart_variable.bodypart_id '
                        'ORDER BY variable.id')
 
                 variable_query.execute( sql, [request.session['selected']['bodypart']] )
@@ -533,19 +534,19 @@ def parameter_selection(request, current_table):
                 ]
 
         else:
-            values = apps.get_model( app_label = 'primo',
-                                   model_name = current_table.capitalize(),
-                                 ).objects.values('name',
-                                                  'label',
-                                                  'bodypartvariable__bodypart_id',
-                                                 ).all()
+            values = apps.get_model(app_label = 'primo',
+                                    model_name = current_table.capitalize(),
+                                   ).objects.values('name',
+                                                    'label',
+                                                    'bodypartvariable__bodypart_id',
+                                                   ).all()
 
     elif current_table == 'bodypart' or current_table == 'taxon':
         values = []
         # do original query to get root of tree.
         # The rest of the tree will be recursively created in `create_tree_javascript()`.
-        value = apps.get_model( app_label = 'primo',
-                                model_name = current_table.capitalize(),
+        value = apps.get_model(app_label = 'primo',
+                               model_name = current_table.capitalize(),
                               ).objects.values('id',
                                                'name',
                                                'parent_id',
@@ -570,7 +571,7 @@ def parameter_selection(request, current_table):
         javascript += 'false );\n' if item_id not in request.session['selected'][current_table] \
                                    else 'true );\n'
 
-        # now do follow-up query using root as parent
+        # Now do follow-up query using root as parent.
         javascript += create_tree_javascript(request, item_id, current_table)
 
     else:
