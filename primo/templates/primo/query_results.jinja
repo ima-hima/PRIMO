@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block subtitle %} {{scalar_or_3d.title()}} Query Wizard {% endblock %}
+{% block subtitle %} {{ request.session['scalar_or_3d'].title()}} Query Sample Results {% endblock %}
 {% block content %}
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
@@ -11,8 +11,8 @@
         {% else %}
             <p>Here is a sample of the data you requested. If these are what you desired, click on the download link below to get the entire result.</p>
             <p>Please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
-            {% if scalar_or_3d == 'scalar' %}
-                <p><a href="{{ url('export_2d') }}">Download CSV file</a></p>
+            {% if request.session['scalar_or_3d'] == 'scalar' %}
+                <p><a href="{{ url('export_scalar') }}">Download CSV file</a></p>
             {% else %}
                 <a href="{{ url('export_3d', 'Morphologika') }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
                 &nbsp;&nbsp; | &nbsp;&nbsp;
@@ -45,7 +45,7 @@
             {% for metadata in specimen_metadata %}
                 <th>{{metadata[1]}}</th>
             {% endfor %}
-            {% for label in variable_labels %}
+            {% for label in request.session['variable_labels'] %}
                 <th>{{label}}</th>
             {% endfor %}
         </tr>
@@ -58,7 +58,7 @@
                         <td>{{row[metadata[0]]}}</td>
                     {% endfor %}
 
-                    {% for label in variable_labels %}
+                    {% for label in request.session['variable_labels'] %}
                         {% if row[label] %}           {# The last element in the tuple
                                                          is the dictionary {variable id : variable label}. #}
                             <td>{{ row[label] }}</td> {# So print value at that location. #}
@@ -77,8 +77,8 @@
         {% else %}
             <p>If these data are what you desired, click on the download link below to get the entire results.</p>
             <p>Please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
-            {% if scalar_or_3d == 'scalar' %}
-                <p><a href="{{ url('export_2d') }}">Download CSV file</a></p>
+            {% if request.session['scalar_or_3d'] == 'scalar' %}
+                <p><a href="{{ url('export_scalar') }}">Download CSV file</a></p>
             {% else %}
                 <a href="{{ url('export_3d', 'Morphologika') }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
                 &nbsp;&nbsp; | &nbsp;&nbsp;

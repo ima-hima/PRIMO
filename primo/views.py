@@ -10,24 +10,21 @@ from django.core.files              import File
 from django.core.mail               import send_mail
 from django.db                      import connection
 from django.http                    import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts               import get_object_or_404, redirect, render, render_to_response
+from django.shortcuts               import get_object_or_404, redirect, render
 from django.urls                    import reverse
 from django.utils                   import timezone
 from django.utils.encoding          import smart_str
 from django.views.generic           import TemplateView
 # from jinja2                         import storage
 
-from csv                            import DictWriter
-from datetime                       import datetime
-from functools                      import reduce
-from os                             import mkdir, path, remove
+from csv import DictWriter
+from datetime import datetime
+from functools import reduce
+from os import mkdir, path, remove
 import subprocess
 import sys
-from uuid                           import uuid1
+from uuid import uuid1
 
-
-# def index(request):
-#     return render(request, 'frontend/index.html')
 
 # This so I can load static in jinja2.
 def environment(**options):
@@ -40,7 +37,7 @@ def environment(**options):
 
 
 class IndexView(TemplateView):
-    """ docstring for IndexView """
+    """docstring for IndexView"""
     template_name = 'primo/index.jinja'
 
 
@@ -49,6 +46,9 @@ def collate_metadata(request):
     Collate data returned from SQL query, render into csv, save csv to tmp directory.
     For 2D write all data. For 3D write only metadata. 
     """
+    print('*** collate_metadata', request.session.keys())
+    for key in request.session.keys():
+        print('*** collate_metadata', key, request.session[key])
     output_file_name = path.join(settings.DOWNLOAD_ROOT,
                                  request.session['directory_name'],
                                  request.session['file_to_download'] 
@@ -70,8 +70,10 @@ def collate_metadata(request):
             else: 
                 print('*** collate_metadata: variable labels missing.')
                 variable_names = []
-
-        writer = DictWriter(csv_file, fieldnames=meta_names + [request.session['variable_labels'].keys()])
+        print('*** collate_metadata', list(request.session.keys()))
+        print('*** collate_metadata', request.session['variable_labels'])
+        # print(variable_names, request.session[variable_labels])
+        writer = DictWriter(csv_file, fieldnames=meta_names + [request.session['variable_labels']])
 
         # This so I can replace default header, i.e. fieldnames, with custom header.
         # Note to self: since I'm using DictWriter I don't have to worry about
@@ -158,6 +160,7 @@ def download(request):
     Download one of csv, Morphologika, GRFND. File has been written to path
     before this is called.
     """
+    request.session['page_title'] = f"PRIMO Download {request.session['scalar_or_3d']} Data"
     if request.session['scalar_or_3d'] == '3D':
         filepath = path.join(settings.DOWNLOAD_ROOT, request.session['directory_name'])
     else:
@@ -191,13 +194,14 @@ def download(request):
 
 
 def download_success(request):
+    request.session['page_title'] = 'Download Success'
     return render(request, 'primo/download_success.jinja', {})
 
 
 def email(request):
     """Create email form, collect info, send email."""
+    request.session['page_title'] = 'Email Administrator'
     form = EmailForm(request.POST or None)
-
     success = False
     error = None
     if request.method == 'POST':
@@ -226,17 +230,18 @@ def email(request):
 
 def entity_relation_diagram(request):
     """Retrieve relational database table pdf."""
+    request.session['page_title'] = 'Database Structure'
     return render(request, 'primo/entity_relation_diagram.jinja', {})
 
 
-def export_2d(request):
-    print('*** export_2d', request.session.keys())
+def export_scalar(request):
+    print('*** export_scalar', request.session.keys())
     for key in request.session.keys():
         print(key, request.session[key])
     if 'query_results' in request.session:
-        print('*** export_2d query results:', len(request.session['query_results']), 'results found.')
+        print('*** export_scalar query results:', len(request.session['query_results']), 'results found.')
     else:
-        print('*** export_2d no query results.')
+        print('*** export_scalar no query results.')
     request.session['scalar_or_3d'] = 'scalar'
     set_up_download(request)
     collate_metadata(request)
@@ -430,26 +435,29 @@ def get_specimen_metadata(request):
     Created a fn because this was called all over the place.
     """
 
-    three_d_list = [ ('protocol', 'Protocol'),
-                     ('session_id', 'Session ID'),
-                     ('missing_pts', 'Missing points (indexed by specimen starting at 1)'),
-                   ] if request.session['scalar_or_3d'] == '3D' else []
-    return [ ('specimen_id', 'Specimen ID'),
-             ('hypocode', 'Hypocode'),
-             ('collection_acronym', 'Collection Acronym'),
-             ('catalog_number', 'Catalog No.'),
-             ('taxon_name', 'Taxon name'),
-             ('sex_type', 'Sex'),
-             ('specimen_type', 'Type Status'),
-             ('mass', 'Mass'),
-             ('fossil_or_extant', 'Fossil or Extant'),
-             ('captive_or_wild', 'Captive or Wild'),
-             ('original_or_cast', 'Original or Cast'),
-             ('session_comments', 'Session Comments'),
-             ('specimen_comments', 'Specimen Comments'),
-             ('age_class', 'Age Class'),
-             ('locality_name', 'Locality'),
-             ('country_name', 'Country'),
+    if request.session['scalar_or_3d'] == '3D':
+        three_d_list = [('protocol', 'Protocol'),
+                        ('session_id', 'Session ID'),
+                        ('missing_pts', 'Missing points (indexed by specimen starting at 1)'),
+                       ]
+    else: 
+        three_d_list = []
+    return [('specimen_id', 'Specimen ID'),
+            ('hypocode', 'Hypocode'),
+            ('collection_acronym', 'Collection Acronym'),
+            ('catalog_number', 'Catalog No.'),
+            ('taxon_name', 'Taxon name'),
+            ('sex_type', 'Sex'),
+            ('specimen_type', 'Type Status'),
+            ('mass', 'Mass'),
+            ('fossil_or_extant', 'Fossil or Extant'),
+            ('captive_or_wild', 'Captive or Wild'),
+            ('original_or_cast', 'Original or Cast'),
+            ('session_comments', 'Session Comments'),
+            ('specimen_comments', 'Specimen Comments'),
+            ('age_class', 'Age Class'),
+            ('locality_name', 'Locality'),
+            ('country_name', 'Country'),
            ] + three_d_list
 
 
@@ -466,6 +474,7 @@ def init_query_table(request, query_result):
 
 
 def log_in(request):
+    request.session['page_title'] = 'Login'
     form = LoginForm(request.POST or None)
 
     try:
@@ -502,6 +511,7 @@ def log_in(request):
 
 @login_required
 def logout_view(request):
+    request.session['page_title'] = 'Logout'
     logout(request)
     return render(request, 'primo/logout.jinja')
 
@@ -509,9 +519,10 @@ def logout_view(request):
 @login_required
 def parameter_selection(request, current_table): 
     javascript = ''
-    
+    request.session['page_title'] = f'{current_table} Selection'
+    print('*** parameter_selection', request.session.keys())
     if current_table == 'variable':
-        if len(request.session['selected']['bodypart']) > 0:
+        if request.session['selected']['bodypart']:
             with connection.cursor() as variable_query:
                 sql = ('SELECT variable.name AS var_name, '
                               'variable.label AS var_label, '
@@ -565,7 +576,8 @@ def parameter_selection(request, current_table):
                       + name
                       + '", "", "", '
                       + expand
-                      + ', ')
+                      + ', '
+                     )
 
         javascript += 'false );\n' if item_id not in request.session['selected'][current_table] \
                                    else 'true );\n'
@@ -603,17 +615,18 @@ def parameter_selection(request, current_table):
 def query_setup(request, scalar_or_3d = 'scalar'):
     """
     For scalar queries send parameter_selection to frontend. Once all
-    parameters are set, give option to call results, e.g. query_2d().
+    parameters are set, give option to call results, e.g. query_scalar().
 
     Tables will be all of the tables that are available to search on for a
     particular search type (e.g. scalar or 3D). Of those tables sex and
     fossil will be pre-filled with all values selected. In that case,
     do a second query for all possible values and fill those values in.
     """
-
+    request.session['page_title'] = f'{scalar_or_3d.title()} Query Wizard'
     # if there's a POST, then parameter_selection has been called and some
     # values have been sent back
     print('*** query_setup', request.session.keys())
+    print('*** query_setup', [request.session[val] for val in request.session.keys()])
     if request.method == 'POST':
         current_table = request.POST.get('table')
 
@@ -670,8 +683,8 @@ def query_setup(request, scalar_or_3d = 'scalar'):
 
         for table in tables:
             if table.preselected:
-                model = apps.get_model( app_label='primo',
-                                        model_name=table.filter_table_name.capitalize()
+                model = apps.get_model(app_label='primo',
+                                       model_name=table.filter_table_name.capitalize()
                                       )
                 values = model.objects.values('id').all()
                 # because vals is a list of dicts in format 'id': value
@@ -681,7 +694,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
 
     tables = request.session['tables']
     selected = request.session['selected']
-    # I coudn't figure out any way to do this, other than to check each time
+    # I coudn't figure out any way to do this other than to check each time
     finished = True
 
     for table in tables:
@@ -696,12 +709,12 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                                        } )
 
 
-def query_2d(request):
+def query_scalar(request):
     """Set up the 2D query SQL. Do query. Call result table display."""
-
+    request.session['page_title'] = 'Scalar Results'
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
-    print('*** query_2d keys', request.session.keys())
+    print('*** query_scalar keys', request.session.keys())
     request.session['scalar_or_3d'] = 'scalar'
     preview_only = True 
     if request.user.is_authenticated and request.user.username != 'user':
@@ -775,7 +788,7 @@ def query_2d(request):
                                  ORDER BY `label` ASC;',
                                [request.session['selected']['variable']] )
         variable_labels = [label[0] for label in variable_query.fetchall()]
-    print('*** variable_labels', variable_labels)
+    print('*** query_scalar variable_labels', variable_labels)
     # use cursor here?
     with connection.cursor() as cursor:
         cursor.execute(final_sql,
@@ -797,19 +810,20 @@ def query_2d(request):
 
     are_results = True
     try:
-        new_query_results = tabulate_2d(request, query_results)
+        new_query_results = tabulate_scalar(request, query_results)
         # print('*** after tabulate query results:', new_query_results)
     except:
         print(sys.exc_info()[0])
         are_results = False
         new_query_results = []
-    print('*** query_2d new query:', len(new_query_results), 'results found.')
+    print('*** query_scalar new query:', len(new_query_results), 'results found.')
     # This is for use in export_csv_file().
-    request.session['variable_labels'] = {key: 1 for key in variable_labels}
+    request.session['variable_labels'] = variable_labels
+    print('*** query_scalar session variable_labels', request.session['variable_labels'])
     request.session['query_results'] = list(new_query_results)
     # print('new query results', new_query_results)
     # print(request.session['query_results'])
-    # print('*** query_2d request session:', len(request.session['query_results']), 'results found.')
+    # print('*** query_scalar request session:', len(request.session['query_results']), 'results found.')
     context = {
         'final_sql': final_sql.replace('%s', '{}').format(request.session['selected']['sex'],
                                                           request.session['selected']['fossil'],
@@ -820,29 +834,30 @@ def query_2d(request):
         'query_results': new_query_results,
         'are_results': are_results,
         'total_specimens': len(new_query_results),
-        'variable_labels': [request.session['variable_labels'].keys()],
-        'variable_ids': request.session['selected']['variable'],
+        # 'variable_labels': request.session['variable_labels'],
+        # 'variable_ids': request.session['selected']['variable'],
         'preview_only': preview_only,
-        'scalar_or_3d': request.session['scalar_or_3d'],
+        # 'scalar_or_3d': request.session['scalar_or_3d'],
         'specimen_metadata': get_specimen_metadata(request),
         'user': request.user.username,
     }
-    print('*** query_2d keys:', request.session.keys())
+    print('*** query_scalar keys:', request.session.keys())
+    print('*** query_scalar just before render variable labels:', request.session['variable_labels'])
     return render(request, 'primo/query_results.jinja', context)
 
 
 @login_required
 def query_start(request):
     """Start query by creating necessary empty data structures."""
-
+    request.session['page_title'] = 'Query Wizard'
     # Not sure why I have to declare all session keys here?
     request.session['tables'] = []
-    request.session['selected'] = dict()
+    request.session['selected'] = {}
     request.session['selected']['table'] = []
     request.session['scalar_or_3d'] = ''
     request.session['sessions'] = []
     request.session['query_results'] = 'a'
-    request.session['variable_labels'] = 1
+    # request.session['variable_labels'] = []
     return render(request, 'primo/query_start.jinja')
 
 
@@ -939,9 +954,9 @@ def query_3d(request):
 
     with connection.cursor() as cursor:
         cursor.execute( final_sql,
-                        [ request.session['selected']['sex'],
-                          request.session['selected']['fossil'],
-                          request.session['selected']['taxon'],
+                        [request.session['selected']['sex'],
+                         request.session['selected']['fossil'],
+                         request.session['selected']['taxon'],
                         ],
                       )
         # Now return all rows as a dictionary object. Note that each variable
@@ -965,9 +980,9 @@ def query_3d(request):
     request.session['3d_metadata'] = query_results
 
     context = {
-        'final_sql': final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
-                                                           request.session['selected']['fossil'],
-                                                           request.session['selected']['taxon'],
+        'final_sql': final_sql.replace('%s', '{}').format(request.session['selected']['sex'],
+                                                          request.session['selected']['fossil'],
+                                                          request.session['selected']['taxon'],
                                                          ).replace('[', '(').replace(']',')'),
         'groups': request.user.get_group_permissions(),
         'preview_only': preview_only,
@@ -1009,7 +1024,7 @@ def set_up_download(request):
     request.session['directory_name'] = directory_name
 
 
-def tabulate_2d(request, query_results):
+def tabulate_scalar(request, query_results):
     """
     Return a list of dictionaries where each dictionary has the keys
     Specimen ID

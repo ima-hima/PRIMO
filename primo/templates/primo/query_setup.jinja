@@ -26,7 +26,7 @@
     {% if finished %}
         &nbsp;&nbsp; | &nbsp;&nbsp;
         {% if scalar_or_3d == "scalar" %}
-            <a href="{{ url('query_2d') }}">Preview and download results  &raquo;</a>
+            <a href="{{ url('query_scalar') }}">Preview and download results  &raquo;</a>
         {% else %}
             <a href="{{ url('query_3d') }}">Preview and download results  &raquo;</a>
         {% endif %}

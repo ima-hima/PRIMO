@@ -58,10 +58,22 @@ $(document).ready(function() {
   });
 });
 </script>
+{% if current_table == 'variable' and not request.session['selected']['bodypart'] %}
+        <p style="font-size: 16px;">No bodyparts were specified. Please select bodyparts before attempting to select variables. </p>
+        <div style="margin-bottom: 30px;">
+            <form action="{{ url('query_setup', request.session['scalar_or_3d']) }}" method="post" />
+            {% csrf_token %} 
+            <input type="hidden" value="{{ current_table }}" name="table" />
+            <input class="submit" type="submit" value="Return to Query Wizard" name="commit" />
+        </form>
+        </div>
+{% else %}
 <div id="table-scroll">
 <div id="query-wizard-filter-table-options">
+    
+    
     <form action="{{ url('query_setup', request.session['scalar_or_3d']) }}" method="post" />
-    {% csrf_token %}
+    {% csrf_token %} 
     <div class="submit-buttons">
         <input type="hidden" value="{{ current_table }}" name="table" />
         <input class="submit" type="submit" value="Cancel" name="commit" />
@@ -90,7 +102,7 @@ $(document).ready(function() {
                 </tr>
             {% endfor %}
         </tbody>
-    {% elif current_table == 'bodypart' or current_table == 'taxon' %}
+        {% elif current_table == 'bodypart' or current_table == 'taxon' %}
         <thead>
             <link href="{{ static('primo/js/nlstree/nlstree.css') }}" media="screen" type="text/css" rel="stylesheet">
             <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstree.js') }}"></script>
@@ -119,7 +131,7 @@ $(document).ready(function() {
             </div>
             </td></tr>
         </tbody>
-    {% else %} {# sex or fossil #}
+        {% else %} {# sex or fossil #}
         <thead>
             <tr>
                 <th width="80%">{{ current_table.capitalize()}}</th>
@@ -135,7 +147,7 @@ $(document).ready(function() {
             </tr>
             {% endfor %}
         </tbody>
-    {% endif %}
+        {% endif %} {# end of body part, etc. tables #}
     </table>
     <div class="submit-buttons">
         <input type="hidden" value="{{ current_table }}" name="table"  />
@@ -145,4 +157,6 @@ $(document).ready(function() {
     </form>
 </div>
 </div>
+    {% endif %}
+
 {% endblock %}

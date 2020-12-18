@@ -1,26 +1,26 @@
-from django.conf         import settings
-from django.conf.urls    import url
-from django.urls         import include, path, re_path
-from django.contrib      import admin
-from django.contrib.auth import views                  as auth_views
+from django.conf import settings
+from django.conf.urls import url
+from django.urls import include, path, re_path
+from django.contrib import admin
+from django.contrib.auth import views as auth_views
 
 from . import views
 
 urlpatterns = [
-    url(r'^$',                            views.IndexView.as_view(),     name='index'),
-    path('admin/',                        admin.site.urls,               name='admin'),
-    url(r'^email/',                       views.email,                   name="email"),
+    url(r'^$', views.IndexView.as_view(), name='index'),
+    path('admin/', admin.site.urls, name='admin'),
+    url(r'^email/', views.email, name="email"),
     url(r'^entity_relationship_diagram/', views.entity_relation_diagram, name="erd"),
-    url(r'login/',                        views.log_in,                  name="login"),
-    url(r'^logout/',                      views.logout_view,             name="logout"),
+    url(r'login/', views.log_in, name="login"),
+    url(r'^logout/', views.logout_view, name="logout"),
 
     url(r'^download_success/',
         views.download_success,
         name='download_success'),
 
-    url(r'^export_2d/',
-        views.export_2d,
-        name='export_2d'),
+    url(r'^export_scalar/',
+        views.export_scalar,
+        name='export_scalar'),
 
     url(r'^export_3d/(?P<which_3d_output_type>\w+)',
         views.export_3d,
@@ -39,9 +39,9 @@ urlpatterns = [
         views.query_3d,
         name='query_3d'),
 
-    url(r'^query_2d/',
-        views.query_2d,
-        name='query_2d'),
+    url(r'^query_scalar/',
+        views.query_scalar,
+        name='query_scalar'),
 
     url(r'^query_setup/(?P<scalar_or_3d>\w+)',
         views.query_setup,
