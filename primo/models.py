@@ -13,36 +13,36 @@ from django.db import models
 
 
 class Ageclass(models.Model):
-    name     = models.CharField('Age class',    max_length=50, blank=True, null=True)
-    abbr     = models.CharField('Abbreviation', max_length=50, blank=True, null=True)
-    comments = models.TextField(                               blank=True, null=True)
+    name = models.CharField('Age class', max_length=50, blank=True, null=True)
+    abbr = models.CharField('Abbreviation', max_length=50, blank=True, null=True)
+    comments = models.TextField( blank=True, null=True)
 
     def __str__(self):
         return self.name
 
     class Meta:
-        managed             = True
-        db_table            = 'age_class'
+        managed = True
+        db_table = 'age_class'
         verbose_name_plural = 'age classes'
 
 
 class AuthGroup(models.Model):
-    name        = models.CharField(max_length=80,            unique=True)
+    name        = models.CharField(max_length=80, unique=True)
     description = models.CharField(max_length=80, null=True)
 
     class Meta:
-        managed  = True
+        managed  = False
         db_table = 'auth_group'
 
 
 class AuthPermission(models.Model):
-    name         = models.CharField (            max_length=255)
+    name         = models.CharField ( max_length=255)
     content_type = models.ForeignKey('DjangoContentType', on_delete=models.PROTECT)
-    codename     = models.CharField (            max_length=100)
+    codename     = models.CharField ( max_length=100)
 
     class Meta:
-        managed         = True
-        db_table        = 'auth_permission'
+        managed = False
+        db_table = 'auth_permission'
         unique_together = (('content_type', 'codename'),)
 
 
@@ -51,35 +51,35 @@ class AuthGroupPermissions(models.Model):
     permission = models.ForeignKey(AuthPermission, on_delete=models.PROTECT)
 
     class Meta:
-        managed         = True
-#         db_table        = 'auth_group_permissions'
+        managed = False
+#         db_table = 'auth_group_permissions'
 #         # unique_together = (('group', 'permission'),)
 
 
 class AuthUser(models.Model):
-    password     = models.CharField    ( max_length=128)
-    last_login   = models.DateTimeField(                 blank=True, null=True)
+    password = models.CharField(max_length=128)
+    last_login = models.DateTimeField(blank=True, null=True)
     is_superuser = models.IntegerField ()
-    username     = models.CharField    (max_length=30,                          unique=True )
-    first_name   = models.CharField    (max_length=30)
-    last_name    = models.CharField    (max_length=30)
-    email        = models.CharField    (max_length=254)
-    is_staff     = models.IntegerField ()
-    is_active    = models.IntegerField ()
-    date_joined  = models.DateTimeField()
+    username = models.CharField    (max_length=30, unique=True )
+    first_name = models.CharField    (max_length=30)
+    last_name = models.CharField    (max_length=30)
+    email = models.CharField    (max_length=254)
+    is_staff = models.IntegerField ()
+    is_active = models.IntegerField ()
+    date_joined = models.DateTimeField()
 
     class Meta:
-        managed = True
+        managed = False
         db_table = 'auth_user'
 
 
 class AuthUserGroups(models.Model):
-    user  = models.ForeignKey(AuthUser,  on_delete=models.PROTECT)
+    user  = models.ForeignKey(AuthUser, on_delete=models.PROTECT)
     group = models.ForeignKey(AuthGroup, on_delete=models.PROTECT)
 
     class Meta:
-        managed         = True
-        # db_table        = 'auth_user_groups'
+        managed = False
+        # db_table = 'auth_user_groups'
         unique_together = (('user', 'group'),)
 
 
@@ -94,11 +94,11 @@ class AuthUserGroups(models.Model):
 
 
 class Bodypart(models.Model):
-    name           = models.CharField   ('Bodypart name',   max_length=191, blank=True,  null=True,                unique=True)
-    parent         = models.ForeignKey  ('Bodypart',                              null=True, on_delete=models.PROTECT, verbose_name="Parent Bodypart")
-    expand_in_tree = models.BooleanField(                                   blank=False, null=False, default=False)
-    tree_root      = models.BooleanField(                                   blank=False, null=False, default=False)
-    comments       = models.TextField   (                                   blank=True,  null=True)
+    name = models.CharField ('Bodypart name', max_length=191, blank=True, null=True, unique=True)
+    parent = models.ForeignKey ('Bodypart', null=True, on_delete=models.PROTECT, verbose_name="Parent Bodypart")
+    expand_in_tree = models.BooleanField(blank=False, null=False, default=False)
+    tree_root = models.BooleanField(blank=False, null=False, default=False)
+    comments = models.TextField (blank=True,  null=True)
 
     def __str__(self):
         return self.name
@@ -114,10 +114,10 @@ class BodypartVariable(models.Model):
     bodypart = models.ForeignKey('Bodypart', on_delete=models.PROTECT)
 
     class Meta:
-        managed      = True
-        db_table     = 'bodypart_variable'
+        managed = True
+        db_table = 'bodypart_variable'
         verbose_name = 'Bodypart-variable link'
-        ordering     = ['id']
+        ordering = ['id']
 
 
 class Captive(models.Model):
@@ -246,7 +246,7 @@ class DjangoAdminLog(models.Model):
     user           = models.ForeignKey       (AuthUser, on_delete=models.PROTECT)
 
     class Meta:
-        managed  = True
+        managed  = False
         db_table = 'django_admin_log'
 
 
@@ -255,7 +255,7 @@ class DjangoContentType(models.Model):
     model     = models.CharField(max_length=100)
 
     class Meta:
-        managed         = True
+        managed         = False
         db_table        = 'django_content_type'
         unique_together = (('app_label', 'model'),)
 
@@ -276,7 +276,7 @@ class DjangoSession(models.Model):
     expire_date = models.DateTimeField()
 
     class Meta:
-        managed  = True
+        managed  = False
         db_table = 'django_session'
 
 

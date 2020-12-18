@@ -208,7 +208,7 @@ def entity_relation_diagram(request):
     return render(request, 'primo/entity_relation_diagram.jinja')
 
 
-def export_2d(request):
+def export_scalar(request):
     request.session['scalar_or_3d'] = 'scalar'
     set_up_download(request)
     collate_metadata(request)
@@ -560,7 +560,7 @@ def parameter_selection(request, current_table):
 def query_setup(request, scalar_or_3d = 'scalar'):
     """ 
     For scalar queries send parameter_selection to frontend. Once all
-    parameters are set, give option to call results, query_2d().
+    parameters are set, give option to call results, query_scalar().
 
     Tables will be all of the tables that are available to search on for a
     particular search type (e.g. scalar or 3D). Of those tables sex and
@@ -649,7 +649,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                                        } )
 
 
-def query_2d(request, preview_only):
+def query_scalar(request, preview_only):
     """ Set up the 2D query SQL. Do query. Call result table display. """
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
@@ -752,7 +752,7 @@ def query_2d(request, preview_only):
 
     are_results = True
     try:
-        new_query_results = tabulate_2d(request, query_results, preview_only)
+        new_query_results = tabulate_scalar(request, query_results, preview_only)
         request.session['query_results'] = new_query_results
     except:
         print(sys.exc_info()[0])
@@ -959,7 +959,7 @@ def set_up_download(request):
     request.session['directory_name'] = directory_name
 
 
-def tabulate_2d(request, query_results, preview_only):
+def tabulate_scalar(request, query_results, preview_only):
     """ 
     Return a list of dictionaries where each dictionary has the keys
     Specimen ID
