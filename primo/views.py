@@ -639,7 +639,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                 # start with 'cb_main', as those are set by nlstree.js.
                 # All selected items cause one 'cb_main' variable to be set,
                 # as such: cb_main423 = 'on'.So I need to get the number at
-                # the end, as that's the id of the selected item.  
+                # the end, as that's the id of the selected item.
                 for item in request.POST.items():
                     if item[0][:7] == 'cb_main':
                         selected_rows.append(int(item[0][7:]))
