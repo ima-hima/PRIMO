@@ -1,27 +1,27 @@
-from .forms                         import *
-from .models                        import *
-from django.apps                    import apps
-from django.conf                    import settings
-from django.contrib.auth            import authenticate, login, logout
-from django.contrib.auth.models     import User
+from .forms import *
+from .models import *
+from django.apps import apps
+from django.conf import settings
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.core.files              import File
-from django.core.mail               import send_mail
-from django.db                      import connection
-from django.http                    import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts               import get_object_or_404, redirect, render, render_to_response
-from django.urls                    import reverse
-from django.utils                   import timezone
-from django.utils.encoding          import smart_str
-from django.views.generic           import TemplateView
+from django.core.files import File
+from django.core.mail import send_mail
+from django.db import connection
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, redirect, render, render_to_response
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.encoding import smart_str
+from django.views.generic import TemplateView
 
-from csv                            import DictWriter
-from datetime                       import datetime
-from functools                      import reduce
-from os                             import mkdir, path, remove
+from csv import DictWriter
+from datetime import datetime
+from functools import reduce
+from os import mkdir, path, remove
 import subprocess
 import sys
-from uuid                           import uuid1
+from uuid import uuid1
 
 
 # Create your views here.
