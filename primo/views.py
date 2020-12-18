@@ -9,7 +9,7 @@ from django.core.files import File
 from django.core.mail import send_mail
 from django.db import connection
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect, render, render_to_response
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str

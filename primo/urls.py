@@ -1,18 +1,18 @@
-from django.conf         import settings
-from django.conf.urls    import url
-from django.urls         import include, path, re_path
-from django.contrib      import admin
-from django.contrib.auth import views                  as auth_views
+from django.conf import settings
+from django.conf.urls import url
+from django.urls import include, path, re_path
+from django.contrib import admin
+from django.contrib.auth import views as auth_views
 
 from . import views
 
 urlpatterns = [
-    url(r'^$',                            views.IndexView.as_view(),     name='index'),
-    path('admin/',                        admin.site.urls,               name='admin'),
-    url(r'^email/',                       views.email,                   name="email"),
+    url(r'^$', views.IndexView.as_view(), name='index'),
+    path('admin/', admin.site.urls, name='admin'),
+    url(r'^email/', views.email,  name="email"),
     url(r'^entity_relationship_diagram/', views.entity_relation_diagram, name="erd"),
-    url(r'login/',                        views.log_in,                  name="login"),
-    url(r'^logout/',                      views.logout_view,             name="logout"),
+    url(r'login/', views.log_in, name="login"),
+    url(r'^logout/', views.logout_view, name="logout"),
 
     url(r'^download_success/',
         views.download_success,
