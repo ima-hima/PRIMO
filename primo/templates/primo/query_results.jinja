@@ -109,6 +109,10 @@
             {% for i in range(3) %}
                 {{ query_results[i] }}<br /><br />
             {% endfor %}
+            <br />
+            <strong>Variable labels:<br /></strong>
+            {{ request.session['variable_labels'] }}
+            <br /><br /><br />
             <strong>Preview only:</strong> {{ preview_only }}
         </div>
     {% endif %}

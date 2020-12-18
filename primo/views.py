@@ -849,6 +849,7 @@ def query_scalar(request):
 @login_required
 def query_start(request):
     """Start query by creating necessary empty data structures."""
+    print('***query_start***')
     request.session['page_title'] = 'Query Wizard'
     # Not sure why I have to declare all session keys here?
     request.session['tables'] = []
@@ -856,7 +857,7 @@ def query_start(request):
     request.session['selected']['table'] = []
     request.session['scalar_or_3d'] = ''
     request.session['sessions'] = []
-    request.session['query_results'] = 'a'
+    request.session['query_results'] = ''
     # request.session['variable_labels'] = []
     return render(request, 'primo/query_start.jinja')
 
