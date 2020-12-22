@@ -9,39 +9,52 @@ from . import views
 urlpatterns = [
     url(r'^$', views.IndexView.as_view(), name='index'),
     path('admin/', admin.site.urls, name='admin'),
-    url(r'^email/', views.email,  name="email"),
+    url(r'^email/', views.email, name="email"),
     url(r'^entity_relationship_diagram/', views.entity_relation_diagram, name="erd"),
     url(r'login/', views.log_in, name="login"),
     url(r'^logout/', views.logout_view, name="logout"),
 
     url(r'^download_success/',
         views.download_success,
-        name="download_success"),
+        name='download_success'),
 
     url(r'^export_scalar/',
-    # url(r'^exportCsvFile/(?P<current_table>\w+)/(?P<preview_only>\w+)',
         views.export_scalar,
-        name="export_scalar"),
+        name='export_scalar'),
+
+    url(r'^export_3d/(?P<which_3d_output_type>\w+)',
+        views.export_3d,
+        name='export_3d'),
+
+    # If none given, defaults to Morphologika.
+    url(r'^export_3d/',
+        views.export_3d,
+        name='export_3d'),
 
     url(r'^parameter_selection/(?P<current_table>\w+)',
         views.parameter_selection,
-        name="parameter_selection"),
+        name='parameter_selection'),
 
-    url(r'^query_3d/(?P<which_3d_output_type>\w+)/(?P<preview_only>\w+)',
+    url(r'^query_3d/',
         views.query_3d,
-        name="query_3d"),
+        name='query_3d'),
 
-    url(r'^query_scalar/(?P<preview_only>\w+)',
+    url(r'^query_scalar/',
         views.query_scalar,
-        name="query_scalar"),
+        name='query_scalar'),
 
     url(r'^query_setup/(?P<scalar_or_3d>\w+)',
         views.query_setup,
         name='query_setup'),
 
-    url(r'^query_setup/', views.query_setup, name="query_setup"),
+    # If there's no GET, it defaults to scalar.
+    url(r'^query_setup/', 
+        views.query_setup, 
+        name='query_setup'),
 
-    url(r'^query_start/', views.query_start, name="query_start"),
+    url(r'^query_start/', 
+        views.query_start, 
+        name='query_start'),
 ]
 
 if settings.DEBUG:
