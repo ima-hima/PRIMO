@@ -147,6 +147,7 @@ class Captive(models.Model):
     CHOICES = (('captive', 'captive'),
                ('wild-caught', 'wild-caught'),
                ('probably captive', 'probably captive'),
+               ('unknown', 'unknown'),
               )
     name = models.CharField('Captive or wild-caught',
                             max_length=16,
@@ -438,6 +439,7 @@ class Laterality(models.Model):
                ('median', 'median'),
                ('right', 'right'),
                ('left', 'left'),
+               ('unknown', 'unknown'),
               )
     name = models.CharField(max_length=255,
                             blank=True,

@@ -15,8 +15,6 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
-# from jinja2 import storage
-
 from csv import DictWriter
 from datetime import datetime
 from functools import reduce
@@ -44,7 +42,7 @@ class IndexView(TemplateView):
 def collate_metadata(request):
     """ 
     Collate data returned from SQL query, render into csv, save csv to tmp directory.
-    For 2D write all data. For 3D write only metadata. 
+    For scalar write all data. For 3D write only metadata. 
     """
     print('*** collate_metadata', request.session.keys())
     for key in request.session.keys():
@@ -662,11 +660,11 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                  ).objects.values('id').all()
             request.session['selected'][current_table] = [val['id'] for val in vals]
 
-    if not request.session['tables']: # if tables isn't set, query for all tables
-                                      # and set up both tables and selected lists
+    if not request.session['tables']: # If tables isn't set, query for all tables
+                                      # and set up both tables and selected lists.
         request.session['scalar_or_3d'] = scalar_or_3d
 
-        # note for this query that "tables" is set as the related name in Models.py
+        # Note for this query that "tables" is set as the related name in Models.py.
         tables = QueryWizardQuery.objects.get(data_table = scalar_or_3d.capitalize()).tables.all()
         selected = dict() # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
         request.session['tables'] = []
@@ -687,14 +685,15 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                                        model_name=table.filter_table_name.capitalize()
                                       )
                 values = model.objects.values('id').all()
-                # because vals is a list of dicts in format 'id': value
+                # Because vals is a list of dicts in format 'id': value.
                 request.session['selected'][table.filter_table_name] = [ value['id'] for value in values ]
             else:
-                request.session['selected'][table.filter_table_name] = [] # so I can use 'if selected[table]' in query_setup.jinja
+                request.session['selected'][table.filter_table_name] = [] # So I can use 'if selected[table]' 
+                                                                          # in query_setup.jinja.
 
     tables = request.session['tables']
     selected = request.session['selected']
-    # I coudn't figure out any way to do this other than to check each time
+    # I coudn't figure out any way to do this other than to check each time.
     finished = True
 
     for table in tables:
@@ -710,7 +709,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
 
 
 def query_scalar(request):
-    """Set up the 2D query SQL. Do query. Call result table display."""
+    """Set up the scalar query SQL. Do query. Call result table display."""
     request.session['page_title'] = 'Scalar Results'
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
@@ -722,6 +721,7 @@ def query_scalar(request):
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
+    # TODO: move this back into the DB.
     base = ('SELECT `data_scalar`  . `id`             AS scalar_id, '
                    '`specimen`     . `id`             AS specimen_id, '
                    '`specimen`     . `hypocode`       AS hypocode, '
@@ -789,7 +789,7 @@ def query_scalar(request):
                                [request.session['selected']['variable']] )
         variable_labels = [label[0] for label in variable_query.fetchall()]
     print('*** query_scalar variable_labels', variable_labels)
-    # use cursor here?
+    # Use cursor here?
     with connection.cursor() as cursor:
         cursor.execute(final_sql,
                        [request.session['selected']['sex'],
@@ -852,12 +852,12 @@ def query_start(request):
     print('***query_start***')
     request.session['page_title'] = 'Query Wizard'
     # Not sure why I have to declare all session keys here?
-    request.session['tables'] = []
-    request.session['selected'] = {}
-    request.session['selected']['table'] = []
-    request.session['scalar_or_3d'] = ''
-    request.session['sessions'] = []
-    request.session['query_results'] = ''
+#     request.session['tables'] = []
+#     request.session['selected'] = {}
+#     request.session['selected']['table'] = []
+#     request.session['scalar_or_3d'] = ''
+#     request.session['sessions'] = []
+#     request.session['query_results'] = ''
     # request.session['variable_labels'] = []
     return render(request, 'primo/query_start.jinja')
 
@@ -954,11 +954,11 @@ def query_3d(request):
     sessions = set()
 
     with connection.cursor() as cursor:
-        cursor.execute( final_sql,
-                        [request.session['selected']['sex'],
-                         request.session['selected']['fossil'],
-                         request.session['selected']['taxon'],
-                        ],
+        cursor.execute(final_sql,
+                       [request.session['selected']['sex'],
+                        request.session['selected']['fossil'],
+                        request.session['selected']['taxon'],
+                       ],
                       )
         # Now return all rows as a dictionary object. Note that each variable
         # name will have its own row, so I'm going to have to jump through some
