@@ -348,6 +348,7 @@ th {
 table.tablesorter {
   font-family: Helvetica,Arial,sans-serif;
   background-color: #CDCDCD;
+  line-height: 1.3em;
   margin:10px 0 0;
   font-size: 8pt;
   width: 100%;
