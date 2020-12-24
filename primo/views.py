@@ -782,6 +782,7 @@ def query_scalar(request):
     final_sql = (base + where +  ordering + ';') # .format( concat_variable_list(request.session['selected']['sex']) )
 
     # We have to query for the variable names separately.
+    variable_labels = []
     with connection.cursor() as variable_query:
         variable_query.execute('SELECT `label` \
                                   FROM `variable` \
