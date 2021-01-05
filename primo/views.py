@@ -632,7 +632,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                 request.session['selected'][table.filter_table_name] = [] # So I can use 'if selected[table]' 
                                                                           # in query_setup.jinja.
 
-    tables   = request.session['tables']
+    tables = request.session['tables']
     selected = request.session['selected']
     # I coudn't figure out any way to do this other than to check each time.
     finished = True
@@ -642,11 +642,11 @@ def query_setup(request, scalar_or_3d = 'scalar'):
             finished = False
 
     request.session.modified = True
-    return render( request, 'primo/query_setup.jinja', { 'scalar_or_3d': scalar_or_3d,
-                                                         'tables':       tables,
-                                                         'selected':     selected,
-                                                         'finished':     finished,
-                                                       } )
+    return render(request, 'primo/query_setup.jinja', {'scalar_or_3d': scalar_or_3d,
+                                                       'tables': tables,
+                                                       'selected': selected,
+                                                       'finished': finished,
+                                                      })
 
 
 def query_scalar(request, preview_only):
@@ -760,22 +760,22 @@ def query_scalar(request, preview_only):
         are_results = False
 
     # This is for use in export_csv_file().
-    request.session['variable_labels']   = variable_labels
+    request.session['variable_labels'] = variable_labels
     context = {
-        'final_sql' : final_sql.replace('%s', '{}').format( request.session['selected']['sex'],
-                                                            request.session['selected']['fossil'],
-                                                            request.session['selected']['taxon'],
-                                                            # concat_variable_list(request.session['selected']['bodypart']),
-                                                            request.session['selected']['variable'],
+        'final_sql' : final_sql.replace('%s', '{}').format(request.session['selected']['sex'],
+                                                           request.session['selected']['fossil'],
+                                                           request.session['selected']['taxon'],
+                                                           # concat_variable_list(request.session['selected']['bodypart']),
+                                                           request.session['selected']['variable'],
                                                           ),
-        'query_results'     : new_query_results,
-        'are_results'       : are_results,
-        'total_specimens'   : len(new_query_results),
-        'variable_labels'   : variable_labels,
-        'variable_ids'      : request.session['selected']['variable'],
-        'preview_only'        : preview_only,
-        'specimen_metadata' : get_specimen_metadata(request),
-        'user'              : request.user.username,
+        'query_results': new_query_results,
+        'are_results': are_results,
+        'total_specimens': len(new_query_results),
+        'variable_labels': variable_labels,
+        'variable_ids': request.session['selected']['variable'],
+        'preview_only': preview_only,
+        'specimen_metadata': get_specimen_metadata(request),
+        'user': request.user.username,
     }
 
     return render(request, 'primo/query_results.jinja', context)
@@ -784,10 +784,10 @@ def query_scalar(request, preview_only):
 @login_required
 def query_start(request):
     """ Start query by creating necessary empty data structures. """
-    request.session['tables']            = []
-    request.session['selected']          = dict()
+    request.session['tables'] = []
+    request.session['selected'] = dict()
     request.session['selected']['table'] = []
-    request.session['scalar_or_3d']      = ''
+    request.session['scalar_or_3d'] = ''
     return render(request, 'primo/query_start.jinja')
 
 
@@ -874,7 +874,7 @@ def query_3d(request, which_3d_output_type, preview_only):
         limit = ' LIMIT 5'
     final_sql = (base + where + ordering + limit + ';')
 
-    # We skip varibles in 3D; we're getting all of them.
+    # We skip variables in 3D; we're getting all of them.
 
     # This is a list of all the session that will be returned from the query
     # so I can send it to `get_3D_data()` for a second query to get the actual data.
