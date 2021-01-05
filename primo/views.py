@@ -481,7 +481,7 @@ def parameter_selection(request, current_table):
                               'JOIN bodypart_variable ON variable.id = bodypart_variable.variable_id '
                                    'JOIN (SELECT bodypart.id, bodypart.name '
                                            'FROM bodypart '
-                                          'WHERE parent_id IN %s) AS bps '
+                                          'WHERE id IN %s) AS bps '
                                    '  ON bps.id = bodypart_variable.bodypart_id '
                        'ORDER BY variable.id')
 
