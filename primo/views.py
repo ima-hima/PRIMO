@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.contrib.staticfiles.storage  import staticfiles_storage
+from django.contrib.staticfiles.storage import staticfiles_storage
 from django.core.files import File
 from django.core.mail import send_mail
 from django.db import connection
@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
+
 from csv import DictWriter
 from datetime import datetime
 from functools import reduce
@@ -598,6 +599,7 @@ def parameter_selection(request, current_table):
                                           )
         
         values = current_model.objects.values('id', 'name').all()
+    print('values', values)
 
 
     return render(request, 
@@ -633,10 +635,11 @@ def query_setup(request, scalar_or_3d = 'scalar'):
             selected_rows = []
 
             if request.POST.get('table') == 'taxon' or request.POST.get('table') == 'bodypart':
-                # I have to look at all POST variables, and get the ones out that
+                # I have to look at all POST variables and remove those that
                 # start with 'cb_main', as those are set by nlstree.js.
+                #
                 # All selected items cause one 'cb_main' variable to be set,
-                # as such: cb_main423 = 'on'.So I need to get the number at
+                # as such: cb_main423 = 'on'. So I need to get the number at
                 # the end, as that's the id of the selected item.
                 for item in request.POST.items():
                     if item[0][:7] == 'cb_main':
@@ -701,11 +704,11 @@ def query_setup(request, scalar_or_3d = 'scalar'):
             finished = False
 
     request.session.modified = True
-    return render( request, 'primo/query_setup.jinja', { 'scalar_or_3d': scalar_or_3d,
-                                                         'tables':       tables,
-                                                         'selected':     selected,
-                                                         'finished':     finished,
-                                                       } )
+    return render(request, 'primo/query_setup.jinja', {'scalar_or_3d': scalar_or_3d,
+                                                       'tables': tables,
+                                                       'selected': selected,
+                                                       'finished': finished,
+                                                      })
 
 
 def query_scalar(request):
@@ -788,6 +791,7 @@ def query_scalar(request):
                                  ORDER BY `label` ASC;',
                                [request.session['selected']['variable']] )
         variable_labels = [label[0] for label in variable_query.fetchall()]
+
     print('*** query_scalar variable_labels', variable_labels)
     # Use cursor here?
     with connection.cursor() as cursor:
@@ -945,7 +949,7 @@ def query_3d(request):
     #     limit = ' LIMIT 5'
     final_sql = (base + where + ordering + ';')
 
-    # We skip varibles in 3D; we're getting all of them.
+    # We skip variables in 3D; we're getting all of them.
 
     # This is a list of all the session that will be returned from the query
     # so I can send it to `get_3D_data()` for a second query to get the actual data.

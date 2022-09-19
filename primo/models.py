@@ -56,7 +56,7 @@ class AuthGroupPermissions(models.Model):
 
     class Meta:
         managed = False
-#         db_table        = 'auth_group_permissions'
+#         db_table = 'auth_group_permissions'
 #         # unique_together = (('group', 'permission'),)
 
 
