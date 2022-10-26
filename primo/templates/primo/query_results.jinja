@@ -7,7 +7,7 @@
 
     {% if query_results %}
         {% if preview_only %}
-            <p>Here is a sample of the data you requested. If these are the what you desired, please log in or return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+            <p>Here is a sample of the data you requested. If these are the data you desired, please log in or return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get access.</p>
         {% else %}
             <p>Here is a sample of the data you requested. If these are what you desired, click on the download link below to get the entire result.</p>
             <p>Please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
@@ -110,7 +110,7 @@
                 {{ query_results[i] }}<br /><br />
             {% endfor %}
             <br />
-            <strong>Variable labels:<br /></strong>
+            <strong>Variable labels from request session variable:<br /></strong>
             {{ request.session['variable_labels'] }}
             <br /><br /><br />
             <strong>Preview only:</strong> {{ preview_only }}

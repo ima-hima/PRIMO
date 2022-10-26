@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.conf.urls import url
+# from django.conf.urls import url
 from django.urls import include, path, re_path
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
@@ -7,52 +7,52 @@ from django.contrib.auth import views as auth_views
 from . import views
 
 urlpatterns = [
-    url(r'^$', views.IndexView.as_view(), name='index'),
+    path('', views.IndexView.as_view(), name='index'),
     path('admin/', admin.site.urls, name='admin'),
-    url(r'^email/', views.email, name="email"),
-    url(r'^entity_relationship_diagram/', views.entity_relation_diagram, name="erd"),
-    url(r'login/', views.log_in, name="login"),
-    url(r'^logout/', views.logout_view, name="logout"),
+    path('email/', views.email, name="email"),
+    path('entity_relationship_diagram/', views.entity_relation_diagram, name="erd"),
+    path('login/', views.log_in, name="login"),
+    path('logout/', views.logout_view, name="logout"),
 
-    url(r'^download_success/',
+    path('download_success/',
         views.download_success,
         name='download_success'),
 
-    url(r'^export_scalar/',
+    path('export_scalar/',
         views.export_scalar,
         name='export_scalar'),
 
-    url(r'^export_3d/(?P<which_3d_output_type>\w+)',
+    path('export_3d/(<which_3d_output_type>\w+)',
         views.export_3d,
         name='export_3d'),
 
     # If none given, defaults to Morphologika.
-    url(r'^export_3d/',
+    path('export_3d/',
         views.export_3d,
         name='export_3d'),
 
-    url(r'^parameter_selection/(?P<current_table>\w+)',
+    path('parameter_selection/(<current_table>\w+)',
         views.parameter_selection,
         name='parameter_selection'),
 
-    url(r'^query_3d/',
+    path('query_3d/',
         views.query_3d,
         name='query_3d'),
 
-    url(r'^query_scalar/',
+    path('query_scalar/',
         views.query_scalar,
         name='query_scalar'),
 
-    url(r'^query_setup/(?P<scalar_or_3d>\w+)',
+    path('query_setup/(<scalar_or_3d>\w+)',
         views.query_setup,
         name='query_setup'),
 
     # If there's no GET, it defaults to scalar.
-    url(r'^query_setup/', 
+    path('query_setup/',
         views.query_setup, 
         name='query_setup'),
 
-    url(r'^query_start/', 
+    path('query_start/',
         views.query_start, 
         name='query_start'),
 ]
@@ -60,5 +60,5 @@ urlpatterns = [
 if settings.DEBUG:
     import debug_toolbar
     urlpatterns = [
-        url(r'^__debug__/', include(debug_toolbar.urls)),
+        path(r'__debug__/', include(debug_toolbar.urls)),
     ] + urlpatterns
