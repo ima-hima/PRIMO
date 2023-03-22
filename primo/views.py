@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+
 # from django.contrib.staticfiles.storage  import staticfiles_storage
 from django.core.files import File
 from django.core.mail import send_mail
@@ -728,9 +729,11 @@ def query_setup(request, scalar_or_3d="scalar"):
         tables = QueryWizardQuery.objects.get(
             data_table=scalar_or_3d.capitalize()
         ).tables.all()
-        selected = dict() # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
+        selected = (
+            dict()
+        )  # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
         request.session["selected"] = dict()
-        print('\n***tables', tables)
+        print("\n***tables", tables)
         request.session["tables"] = [
             {"table_name": table.filter_table_name, "display_name": table.display_name}
             for table in tables
