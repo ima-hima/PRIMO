@@ -3,13 +3,13 @@
 infilename = '/Volumes/files/business/NYCEP/tables 2010:8:2/specimen.csv'
 outfilename = '/Volumes/files/business/NYCEP/tables 2010:8:2/specimen_out.csv'
 
-infile  = open(infilename, 'r')
+infile = open(infilename, 'r')
 outfile = open(outfilename, 'w')
 
 for i in range(15):
     line = infile.readline().rstrip()
-    arr  = line.split(',')
-    j    = 0
+    arr = line.split(',')
+    j = 0
     while j < len(arr):
         arr2 = []
         arr2.append(arr[j])
@@ -20,8 +20,8 @@ for i in range(15):
                 k += 1
             j += k - j
         j += 1
-    print arr2
-    print ''
+    print(arr2)
+    print('')
 
 infile.close()
 outfile.close()

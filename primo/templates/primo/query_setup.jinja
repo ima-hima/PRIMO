@@ -1,34 +1,34 @@
 {% extends 'base.html' %}
-<script type="text/javascript" src="{{ static('primo/js/nlstree') }}"></script>
-{% block subtitle %} {{scalar_or_3d.title()}} Query Wizard {% endblock %}
+{% load static %}
+<script type="text/javascript" src="{% static 'primo/js/nlstree' %}"></script>
+{% block subtitle %} {{scalar_or_3d.title}} Query Wizard {% endblock %}
 {% block content %}
 <div id="main-content">
 <p style="font-size: 20px;">The query generates data using the following criteria.</p>
 <div id="query-wizard-filter-table-options">
     <table class="selection-table">
         <tr><th>Table</th><th>Attributes Selected</th></tr>
-{% for table in tables %}
-
+{% for table in request.session.tables %}
         <tr>
-            <td><a href="{{ url('parameter_selection', table['table_name']) }}">{{ table['display_name']|safe() }} &raquo;</a></td>
-            {% if selected[table['table_name']] %}
-            <td><img alt="selected" class="attributes-selected" src="{{ static('primo/images/tick.gif') }}" /></td>
+            <td><a href="{% url 'parameter_selection' table.table_name %}">{{ table.display_name|safe }} &raquo;</a></td>
+            {% if table_name in selected.table %}
+            <td><img alt="selected" class="attributes-selected" src="{% static 'primo/images/tick.gif' %}" /></td>
             {% else %}
-            <td class="centered"><img alt="selected" class="attributes-selected" src="{{ static('primo/images/tick2_blank.gif') }}" /></td>
+            <td class="centered"><img alt="selected" class="attributes-selected" src="{% static 'primo/images/tick2_blank.gif' %}" /></td>
             {% endif %}
     {% endfor %}
     </table>
 </div>
     <br />
 
-    <p><a href="{{ url('query_start') }}">Reset Query </a>
+    <p><a href="{% url 'query_start' %}">Reset Query </a>
 
     {% if finished %}
         &nbsp;&nbsp; | &nbsp;&nbsp;
         {% if scalar_or_3d == "scalar" %}
-            <a href="{{ url('query_scalar') }}">Preview and download results  &raquo;</a>
+            <a href="{% url 'query_scalar' %}">Preview and download results  &raquo;</a>
         {% else %}
-            <a href="{{ url('query_3d') }}">Preview and download results  &raquo;</a>
+            <a href="{% url 'query_3d' %}">Preview and download results  &raquo;</a>
         {% endif %}
     </p>
     {% endif %}

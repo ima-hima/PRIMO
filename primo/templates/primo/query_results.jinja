@@ -1,22 +1,23 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block subtitle %} {{ request.session['scalar_or_3d'].title()}} Query Sample Results {% endblock %}
 {% block content %}
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-<script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
+<script type="text/javascript" src="{% static 'primo/js/tablesorter-master/jquery.tablesorter.min.js' %}"></script>
 <div id="main-content">
 
     {% if query_results %}
         {% if preview_only %}
-            <p>Here is a sample of the data you requested. If these are the data you desired, please log in or return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get access.</p>
+            <p>Here is a sample of the data you requested. If these are the data you desired, please log in or return to the <a href="{% url index %}">front page</a> for instructions on how to get access.</p>
         {% else %}
             <p>Here is a sample of the data you requested. If these are what you desired, click on the download link below to get the entire result.</p>
             <p>Please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
             {% if request.session['scalar_or_3d'] == 'scalar' %}
-                <p><a href="{{ url('export_scalar') }}">Download CSV file</a></p>
+                <p><a href="{% url export_scalar %}">Download CSV file</a></p>
             {% else %}
-                <a href="{{ url('export_3d', 'Morphologika') }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+                <a href="{% url export_3d', 'Morphologika %}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
                 &nbsp;&nbsp; | &nbsp;&nbsp;
-                <a href="{{ url('export_3d', 'GRFND') }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
+                <a href="{% url export_3d', 'GRFND %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
             {% endif %}
         {% endif %}
 
@@ -73,16 +74,16 @@
         </table>
         </div>
         {% if preview_only %}
-            <p>If you do not have a user ID, please return to the <a href="{{ url('index') }}">front page</a> for instructions on how to get one.</p>
+            <p>If you do not have a user ID, please return to the <a href="{% url index %}">front page</a> for instructions on how to get one.</p>
         {% else %}
             <p>If these data are what you desired, click on the download link below to get the entire results.</p>
             <p>Please note that some browsers may change the extension of the resultant file. If this is the case, please rename it to .csv.</p>
             {% if request.session['scalar_or_3d'] == 'scalar' %}
-                <p><a href="{{ url('export_scalar') }}">Download CSV file</a></p>
+                <p><a href="{% url export_scalar %}">Download CSV file</a></p>
             {% else %}
-                <a href="{{ url('export_3d', 'Morphologika') }}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+                <a href="{% url export_3d, Morphologika %}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
                 &nbsp;&nbsp; | &nbsp;&nbsp;
-                <a href="{{ url('export_3d', 'GRFND') }}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
+                <a href="{% url export_3d, GRFND %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
             {% endif %}
         {% endif %}
 

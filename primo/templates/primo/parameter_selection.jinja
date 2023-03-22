@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
-
+{% load static %}
 {% block subtitle %} 
     {% if current_table == "bodypart" %}
         Body Part
     {% else %}
-        {{ current_table.capitalize() }} 
+        {{ current_table|capfirst }}
     {% endif %}
     Selection {% endblock %}
 {% block content %}
 <div id="main-content">
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
 <script>
 $(document).ready(function() {
     // set up box at top to select or deselect all
@@ -58,10 +58,10 @@ $(document).ready(function() {
   });
 });
 </script>
-{% if current_table == 'variable' and not request.session['selected']['bodypart'] %}
+{% if current_table == 'variable' and not request.session.selected.bodypart %}
         <p style="font-size: 16px;">No bodyparts were specified. Please select bodyparts before attempting to select variables. </p>
         <div style="margin-bottom: 30px;">
-            <form action="{{ url('query_setup', request.session['scalar_or_3d']) }}" method="post" />
+            <form action="{% url 'query_setup' request.session.scalar_or_3d %}" method="post" />
             {% csrf_token %} 
             <input type="hidden" value="{{ current_table }}" name="table" />
             <input class="submit" type="submit" value="Return to Query Wizard" name="commit" />
@@ -72,7 +72,7 @@ $(document).ready(function() {
 <div id="query-wizard-filter-table-options">
     
     
-    <form action="{{ url('query_setup', request.session['scalar_or_3d']) }}" method="post" />
+    <form action="{% url 'query_setup' request.session.scalar_or_3d %}" method="post" />
     {% csrf_token %} 
     <div class="submit-buttons">
         <input type="hidden" value="{{ current_table }}" name="table" />
@@ -91,22 +91,22 @@ $(document).ready(function() {
             </tr>
         </thead>
         <tbody>
-            {% for value in values: %}
+            {% for value in values %}
                 <tr>
-                    <td>{{ value['bodypart_name'] }}</td>
-                    <td>{{ value['var_id']}}</td>
-                    <td>{{ value['var_name'] }}</td>
-                    <td>{{ value['var_label']}}</td>
-                    <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['var_id'] }}"
-                            {% if value["id"] in request.session["selected"][current_table] %} CHECKED {% endif %}></td>
+                    <td>{{ value.bodypart_name }}</td>
+                    <td>{{ value.var_id }}</td>
+                    <td>{{ value.var_name }}</td>
+                    <td>{{ value.var_label }}</td>
+                    <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.var_id }}"
+                            {% if value.id in request.session.selected.current_table %} CHECKED {% endif %}></td>
                 </tr>
             {% endfor %}
         </tbody>
         {% elif current_table == 'bodypart' or current_table == 'taxon' %}
         <thead>
-            <link href="{{ static('primo/js/nlstree/nlstree.css') }}" media="screen" type="text/css" rel="stylesheet">
-            <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstree.js') }}"></script>
-            <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstreeext_state.js') }}"></script>
+            <link href="{% static 'primo/js/nlstree/nlstree.css' %}" media="screen" type="text/css" rel="stylesheet">
+            <script type="text/javascript" src="{% static 'primo/js/nlstree/nlstree.js' %}"></script>
+            <script type="text/javascript" src="{% static 'primo/js/nlstree/nlstreeext_state.js' %}"></script>
         </thead>
         <tbody>
             <tr><td>
@@ -134,16 +134,16 @@ $(document).ready(function() {
         {% else %} {# sex or fossil #}
         <thead>
             <tr>
-                <th width="80%">{{ current_table.capitalize()}}</th>
+                <th width="80%">{{ current_table|capfirst }}</th>
                 <th><input id="selectAll" type="button" value="Select all"></th>
             </tr>
         </thead>
         <tbody>
-            {% for value in values: %}
+            {% for value in values %}
             <tr>
-                <td>{{ value['name'] }}</td>
-                <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['id'] }}"
-                    {% if value['id'] in request.session['selected'][current_table] %} CHECKED {% endif %}></td>
+                <td>{{ value.name }}</td>
+                <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.id }}"
+                    {% if value.id in request.session.selected.current_table %} CHECKED {% endif %}></td>
             </tr>
             {% endfor %}
         </tbody>

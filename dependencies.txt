@@ -6,7 +6,6 @@ conda install:
     mysqlclient
 
 pip install
-    django-jinja
     django-debug-toolbar
 
 

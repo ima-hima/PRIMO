@@ -1,11 +1,16 @@
-from .forms import *
-from .models import *
+import subprocess
+import sys
+from csv import DictWriter
+from datetime import datetime
+from functools import reduce
+from os import mkdir, path, remove
+from uuid import uuid1
+
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-
+from django.contrib.auth.models import User
 # from django.contrib.staticfiles.storage  import staticfiles_storage
 from django.core.files import File
 from django.core.mail import send_mail
@@ -16,14 +21,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
-from csv import DictWriter
-from datetime import datetime
-from functools import reduce
-from os import mkdir, path, remove
-import subprocess
-import sys
-from uuid import uuid1
 
+from .forms import *
+from .models import *
 
 # This so I can load static in jinja2.
 # def environment(**options):
@@ -66,7 +66,7 @@ def collate_metadata(request):
             meta_names.append("missing points (indexed by specimen starting at 1)")
             variable_names = []
         elif "variable_labels" in request.session:
-                variable_names = request.session["variable_labels"]
+            variable_names = request.session["variable_labels"]
         else:
             print("*** collate_metadata: variable labels missing.")
             variable_names = []
@@ -339,7 +339,7 @@ def create_3d_output_string(request):
                 "[individuals]",
                 str(num_query_results),
                 "[landmarks]",
-                str(num_query_results/num_sessions),
+                str(num_query_results / num_sessions),
                 "[dimensions]",
                 "3",
                 "[names]",
@@ -561,7 +561,7 @@ def logout_view(request):
 @login_required
 def parameter_selection(request, current_table):
     javascript = ""
-    request.session["page_title"] = f"{current_table} Selection"
+    request.session["page_title"] = f"{current_table.capitalize()} Selection"
     print("*** parameter_selection", request.session.keys())
     if current_table == "variable":
         if request.session["selected"]["bodypart"]:
@@ -675,15 +675,17 @@ def query_setup(request, scalar_or_3d="scalar"):
     do a second query for all possible values and fill those values in.
     """
     request.session["page_title"] = f"{scalar_or_3d.title()} Query Wizard"
-    # if there's a POST, then parameter_selection has been called and some
-    # values have been sent back
-    print("*** query_setup", request.session.keys())
-    print("*** query_setup", [request.session[val] for val in request.session.keys()])
+    print(
+        "\n*** query_setup",
+        [(val, request.session[val]) for val in request.session.keys()],
+    )
     if request.method == "POST":
+        # If there's a POST, then parameter_selection has been called and some
+        # values have been sent back.
         current_table = request.POST.get("table")
 
         if request.POST.get("commit") == "Submit":
-            # otherwise, either cancel select all was chosen
+            # Otherwise, either cancel or select all was chosen.
             selected_rows = []
 
             if (
@@ -697,7 +699,7 @@ def query_setup(request, scalar_or_3d="scalar"):
                 # as such: cb_main423 = 'on'. So I need to get the number at
                 # the end, as that's the id of the selected item.
                 for item in request.POST.items():
-                    if item[0][:7] == "cb_main":
+                    if item[0].startswith("cb_main"):
                         selected_rows.append(int(item[0][7:]))
 
                 if request.POST.get("table") == "bodypart":
@@ -717,8 +719,7 @@ def query_setup(request, scalar_or_3d="scalar"):
                 .all()
             )
             request.session["selected"][current_table] = [val["id"] for val in vals]
-
-    if not request.session["tables"]:
+    if "tables" not in request.session:
         # If tables isn't set, query for all tables and set up both tables and
         # selected lists.
         request.session["scalar_or_3d"] = scalar_or_3d
@@ -727,18 +728,9 @@ def query_setup(request, scalar_or_3d="scalar"):
         tables = QueryWizardQuery.objects.get(
             data_table=scalar_or_3d.capitalize()
         ).tables.all()
-        selected = (
-            dict()
-        )  # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
-        request.session["tables"] = []
+        selected = dict() # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
         request.session["selected"] = dict()
-
-        # for table in tables:
-        #     # if len(request.session['selected'][table.filter_table_name]) == 0:
-        #     request.session['tables'].append({'table_name': table.filter_table_name,
-        #                                       'display_name': table.display_name
-        #                                      }
-        #                                     )
+        print('\n***tables', tables)
         request.session["tables"] = [
             {"table_name": table.filter_table_name, "display_name": table.display_name}
             for table in tables
@@ -751,11 +743,11 @@ def query_setup(request, scalar_or_3d="scalar"):
                 )
                 values = model.objects.values("id").all()
                 # Because vals is a list of dicts in format 'id': value.
-                request.session["selected"][table.filter_table_name] = [
-                    value["id"] for value in values
+                request.session["selected"]["table"].filter_table_name = [
+                    value.id for value in values
                 ]
             else:
-                request.session["selected"][table.filter_table_name] = []
+                request.session["selected"]["table"].filter_table_name = []
                 # So I can use 'if selected[table]' in query_setup.jinja.
 
     tables = request.session["tables"]
@@ -785,7 +777,7 @@ def query_scalar(request):
     request.session["page_title"] = "Scalar Results"
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
-    print("*** query_scalar keys", request.session.keys())
+    print("\n*** query_scalar keys", request.session.keys())
     request.session["scalar_or_3d"] = "scalar"
     preview_only = True
     if request.user.is_authenticated and request.user.username != "user":
@@ -860,13 +852,13 @@ def query_scalar(request):
         variable_query.execute(
             "SELECT label "
             "  FROM variable "
-            "WHERE variable.id "
-            "   IN %s "
+            " WHERE variable.id "
+            "    IN %s "
             "ORDER BY label ASC;",
             [request.session["selected"]["variable"]],
         )
         variable_labels = [label[0] for label in variable_query.fetchall()]
-    print("*** query_scalar variable_labels", variable_labels)
+    print("\n*** query_scalar variable_labels", variable_labels)
     # Use cursor here?
     with connection.cursor() as cursor:
         cursor.execute(
@@ -896,11 +888,11 @@ def query_scalar(request):
         print(sys.exc_info()[0])
         are_results = False
         new_query_results = []
-    print("*** query_scalar new query:", len(new_query_results), "results found.")
+    print("\n*** query_scalar new query:", len(new_query_results), "results found.")
     # This is for use in export_csv_file().
     request.session["variable_labels"] = variable_labels
     print(
-        "*** query_scalar session variable_labels", request.session["variable_labels"]
+        "\n*** query_scalar session variable_labels", request.session["variable_labels"]
     )
     request.session["query_results"] = list(new_query_results)
     # print('new query results', new_query_results)
@@ -924,9 +916,9 @@ def query_scalar(request):
         "specimen_metadata": get_specimen_metadata(request),
         "user": request.user.username,
     }
-    print("*** query_scalar keys:", request.session.keys())
+    print("\n*** query_scalar keys:", request.session.keys())
     print(
-        "*** query_scalar just before render variable labels:",
+        "\n*** query_scalar just before render variable labels:",
         request.session["variable_labels"],
     )
     return render(request, "primo/query_results.jinja", context)
@@ -935,15 +927,15 @@ def query_scalar(request):
 @login_required
 def query_start(request):
     """Start query by creating necessary empty data structures."""
-    print("***query_start***")
+    print("\n***query_start***")
     request.session["page_title"] = "Query Wizard"
     # Not sure why I have to declare all session keys here?
-    #     request.session['tables'] = []
-    #     request.session['selected'] = {}
-    #     request.session['selected']['table'] = []
-    #     request.session['scalar_or_3d'] = ''
-    #     request.session['sessions'] = []
-    #     request.session['query_results'] = ''
+    # request.session['tables'] = []
+    # request.session['selected'] = {}
+    # request.session['selected']['table'] = []
+    # request.session['scalar_or_3d'] = ''
+    # request.session['sessions'] = []
+    # request.session['query_results'] = ''
     # request.session['variable_labels'] = []
     return render(request, "primo/query_start.jinja")
 
@@ -954,7 +946,7 @@ def query_3d(request):
     Send results to either Morphologika or GRFND creator and downloader.
     If preview_only, ignore which_output_type and show metadata preview for top five taxa.
     """
-    print("*** query_3d at beginning", request.session.keys())
+    print("\n*** query_3d at beginning", request.session.keys())
 
     preview_only = True  # convert from String
     if request.user.is_authenticated and request.user.username != "user":
