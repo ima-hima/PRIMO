@@ -363,9 +363,9 @@ for root, dirs, files in os.walk(inDir):
             comments = '"' + comments + '"'
             # print("Comment!!! " + comments)
 
-        ### all info checks out, so start reading file to send to resample ###
+        """ all info checks out, so start reading file to send to resample """
 
-        # note: \r\n after this, because resample needs Windows line returns
+        # Note: \r\n after this, because resample needs Windows line returns.
         outfile = open(toResample + file + "_out.prn", "w", newline="\r\n")
         print("#", institution, catNo, fileName, file=outfile, end="\r\n")
         for line in infile:

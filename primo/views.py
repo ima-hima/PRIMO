@@ -172,7 +172,6 @@ def create_tree_javascript(request, parent_id, current_table):
                 javascript += "false );\n"
             else:
                 javascript += "true );\n"
-
             javascript += create_tree_javascript(request, item_id, current_table)
 
     return javascript
@@ -196,11 +195,12 @@ def download(request):
     if path.exists(filepath):
         if request.session["scalar_or_3d"] == "3D":
             # Just a s a reminer, c is create a new file; z is gzip it; f is filename;
-            # -C is move to the following directory first; name at end is the directory to compress.
+            # -C is move to the following directory first; name at end is the directory
+            # to compress.
             # Using -C here to get rid of prefix of absolute file path.
             # So: tar -czf DOWNLOAD_ROOT/filename.tar.gz -C DOWNLOAD_ROOT directory_name
-            # Files should be in request.session['directory_name'], so that directory is what needs
-            # to be compressed, meaning tar needs to operate from DOWNLOAD_ROOT.
+            # Files should be in request.session['directory_name'], so that directory is
+            # what needs to be compressed, meaning tar needs to operate from DOWNLOAD_ROOT.
             subprocess.run(
                 [
                     "tar",
@@ -350,7 +350,11 @@ def create_3d_output_string(request):
         # GRFND file format:
         # 1 number of individuals L 3*number of landmarks 1 9999 DIM-3
         # datapoints as x \t y \t z (TODO: are these ordered?)
-        output_str = f"1 {num_query_results}L {3 * num_query_results / num_sessions} 1 9999 DIM=3{newline_char}"
+        output_str = (
+            f"1 {num_query_results}L "
+            f"{3 * num_query_results / num_sessions} 1 9999 "
+            f"DIM=3{newline_char}"
+        )
 
     for row in request.session["query_results"]:
         output_str += f"{row['specimen_id']}{newline_char}"
@@ -365,7 +369,9 @@ def create_3d_output_string(request):
         if row["specimen_id"] != current_specimen:
             current_specimen = row["specimen_id"]
             if request.session["which_3d_output_type"] == "Morphologika":
-                output_str += f"{newline_char}'{row['hypocode'].replace('/ /', '_')}{newline_char}"
+                output_str += (
+                    f"{newline_char}'{row['hypocode'].replace('/ /', '_')}{newline_char}"
+                )
             else:
                 output_str += newline_char
             missing_pts[row["specimen_id"]] = ""
@@ -847,7 +853,7 @@ def query_scalar(request):
         "AND variable.id IN %s "
     )
     ordering = " ORDER BY specimen.id, variable.label ASC"
-    final_sql = f"{base} {where} {ordering};"  # .format( concat_variable_list(request.session['selected']['sex']) )
+    final_sql = f"{base} {where} {ordering};" # .format( concat_variable_list(request.session['selected']['sex']) )
 
     # We have to query for the variable names separately.
     variable_labels = []
@@ -1092,7 +1098,8 @@ def set_up_download(request):
     Put both in session variable. If it's 3D make 3D output directory.
     """
 
-    # Stupid Windows: we need to make sure the newline is set correctly. Abundance of caution.
+    # Stupid Windows: we need to make sure the newline is set correctly.
+    # Abundance of caution.
     newline_char = "\n"
     if request.META["HTTP_USER_AGENT"].lower().find("win"):
         newline_char = "\r\n"

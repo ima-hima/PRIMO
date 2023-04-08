@@ -60,16 +60,20 @@
                     {% endfor %}
 
                     {% for label in request.session['variable_labels'] %}
-                        {% if row[label] %}           {# The last element in the tuple
-                                                         is the dictionary {variable id : variable label}. #}
-                            <td>{{ row[label] }}</td> {# So print value at that location. #}
+                        {% if row[label] %}
+                             {#
+                             The last element in the tuple is the dictionary
+                             {variable id : variable label}. So print value at
+                             that location.
+                             #}
+                            <td>{{ row[label] }}</td>
                         {% else %}
                             <td></td>
                         {% endif %}
-                    {% endfor %} {# loop over labels (columns) #}
+                    {% endfor %} {# End loop over labels (columns). #}
                 </tr>
             {% endif %}
-        {% endfor %} {# loop over rows #}
+        {% endfor %} {# End loop over rows. #}
         </tbody>
         </table>
         </div>
@@ -86,7 +90,6 @@
                 <a href="{% url export_3d, GRFND %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
             {% endif %}
         {% endif %}
-
     {% else %}
         <h3>No results were returned.</h3>
     {% endif %} {# Are/aren't results #}
@@ -101,7 +104,7 @@
                 x.style.display = 'none';
               }
             ">Hide query and results</button>
-        
+
             <br /><br />
             {{ final_sql }}
             <br /><br /><br />
