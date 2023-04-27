@@ -1,8 +1,12 @@
 from django.contrib import admin
-from .models import Ageclass, Bodypart, BodypartVariable, Captive, Continent, Country, Data3D, Datatype, Fossil, Institute, IslandRegion, Laterality, Locality, Observer, Original, Paired, ProtocolVariable, Protocol, Rank, DataScalar, Session, Sex, Specimen, SpecimenType, StateProvince, Taxon, Variable
 
 # because filters.py is at top level, import from .filters
 from .filters import DropdownFilter
+from .models import (Ageclass, Bodypart, BodypartVariable, Captive, Continent,
+                     Country, Data3D, DataScalar, Datatype, Fossil, Institute,
+                     IslandRegion, Laterality, Locality, Observer, Original,
+                     Paired, Protocol, ProtocolVariable, Rank, Session, Sex,
+                     Specimen, SpecimenType, StateProvince, Taxon, Variable)
 
 # Register your models here.
 
