@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% load static %}
 {% block subtitle %}
     {% if current_table == "bodypart" %}
         Body Part
@@ -80,20 +80,20 @@ $(document).ready(function() {
     </tr>
     </thead>
     <tbody>
-        {% for value in values: %}
+        {% for value in values %}
         <tr>
-            <td>{{ value['bodypart_name'] }}</td>
-            <td>{{ value['var_id']}}</td>
-            <td>{{ value['var_name'] }}</td>
-            <td>{{ value['var_label']}}</td>
-            <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value['var_id'] }}"
-                    {% if value["id"] in request.session["selected"][current_table] %} CHECKED {% endif %}></td>
+            <td>{{ value.bodypart_name }}</td>
+            <td>{{ value.var_id}}</td>
+            <td>{{ value.var_name }}</td>
+            <td>{{ value.var_label }}</td>
+            <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.var_id }}"
+                    {% if value.id in request.session.selected.current_table %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% elif current_table == 'bodypart' or current_table == 'taxon' %}
-        <link href="{{ static('primo/js/nlstree/nlstree.css') }}" media="screen" type="text/css" rel="stylesheet">
-        <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstree.js') }}"></script>
-        <script type="text/javascript" src="{{ static('primo/js/nlstree/nlstreeext_state.js') }}"></script>
+        <link href="{% static 'primo/js/nlstree/nlstree.css' %}" media="screen" type="text/css" rel="stylesheet">
+        <script type="text/javascript" src="{% static 'primo/js/nlstree/nlstree.js' %}"></script>
+        <script type="text/javascript" src="{% static 'primo/js/nlstree/nlstreeext_state.js' %}"></script>
 
     </thead>
     <tbody>

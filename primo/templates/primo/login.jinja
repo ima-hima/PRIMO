@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block subtitle %} PRIMO Login {% endblock %}
 {% block content %}
 
@@ -6,7 +7,7 @@
         {% if error %}
         <p class='error'>{{ error }}</p>
         {% endif %}
-        <form action="{% url login %}" method="post">
+        <form action="{% url "login" %}" method="post">
             <ul type="none">
             {% csrf_token %}
             {% for item in form %}
