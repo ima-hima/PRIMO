@@ -24,10 +24,6 @@ import sys
 from uuid import uuid1
 
 
-# Create your views here.
-
-# def index(request):
-#     return render(request, 'frontend/index.html')
 
 class IndexView(TemplateView):
     """ docstring for IndexView """
@@ -35,9 +31,9 @@ class IndexView(TemplateView):
 
 
 def collate_metadata(request):
-    """ 
+    """
     Collate data returned from SQL query, render into csv, save csv to tmp directory.
-    For 2D this write all data. For 3D write only metadata. 
+    For 2D this write all data. For 3D write only metadata.
     """
     output_file_name = path.join( settings.DOWNLOAD_ROOT,
                                   request.session['directory_name'],
@@ -86,7 +82,7 @@ def concat_variable_list(myList):
 
 
 def create_tree_javascript(request, parent_id, current_table):
-    """ 
+    """
     Create javascript for heirarchical tree display. Formal parameters for
     tree.add() are:
     add(node_id, parent_id, node name, url, icon, expand?, precheck?, extra info,
@@ -96,7 +92,7 @@ def create_tree_javascript(request, parent_id, current_table):
     of Javascript code, although from reading nlstree docs (https://www.addobject.com/nlstree),
     it seems order is unimportant, so recursion may be unnecessary (wasteful?).
     Oh, wait: necessary because of if statement dealing with Eucatarrhini.
-    Okay, so *eventually* unnecessary? 
+    Okay, so *eventually* unnecessary?
     """
 
     javascript = ''
@@ -133,9 +129,9 @@ def create_tree_javascript(request, parent_id, current_table):
 
 
 def download(request):
-    """ 
+    """
     Download one of csv, Morphologika, GRFND. File has been written to path
-    before this is called. 
+    before this is called.
     """
 
     if request.session['scalar_or_3d'] == '3D':
@@ -192,10 +188,6 @@ def email(request):
             body += request.POST.get('country') + ','
             body += request.POST.get('body')
 
-            # send email
-            # error   = send_mail('PRIMO password request', body, email,
-            #                     ['ericford@mac.com'], fail_silently=False)
-            # success = True
             return render(request, 'primo/email.jinja', {'success': True, 'error': error})
         # Form is not valid, so errors should print.
         return render(request, 'primo/email.jinja', {'form': form})
@@ -224,10 +216,10 @@ def export_3d(request):
 
 
 def create_3d_output_string(request):
-    """ 
+    """
     Collate data returned from 3D SQL query.
     Print out two files: a csv of metadata and a GRFND file. Fields
-    included in metadata are enumerated below. 
+    included in metadata are enumerated below.
     """
 
     newline_char = request.session['newline_char']
@@ -316,7 +308,7 @@ def create_3d_output_string(request):
 def fixQuotes(inStr):
     """ Quote all the things that need to be quoted in a csv row. """
 
-    needQuote = False;
+    needQuote = False
 
     # -----------------------------------------------------------------
     #  Quotes in the value must be escaped.
@@ -343,7 +335,7 @@ def fixQuotes(inStr):
     elif inStr.find('=') >= 0:
         needQuote = True
 
-    if (needQuote):
+    if needQuote:
         inStr = '"' + inStr + '"'
 
     return inStr
@@ -387,9 +379,9 @@ def get_3D_data(request):
 
 
 def get_specimen_metadata(request):
-    """ 
+    """
     Return a list of tuples with SQL column name:csv column name as key:value.
-    Created a fn because this was called all over the place. 
+    Created a fn because this was called all over the place.
     """
 
     three_d_list = [ ('protocol', 'Protocol'),
@@ -416,10 +408,10 @@ def get_specimen_metadata(request):
 
 
 def init_query_table(request, query_result):
-    """ 
+    """
     Initialize query table (actually a dictionary) that is to be used for data
     that will be pushed out to view. A single query row is received and put into
-    dictionary. 
+    dictionary.
     """
     output = { key[0]: query_result[key[0]] for key in get_specimen_metadata(request) }
     output['variable_label'] = query_result['variable_label']
@@ -466,9 +458,9 @@ def logout_view(request):
 
 
 @login_required
-def parameter_selection(request, current_table): 
+def parameter_selection(request, current_table):
     javascript = ''
-    
+
     if current_table == 'variable':
         if len(request.session['selected']['bodypart']) > 0:
             with connection.cursor() as variable_query:
@@ -487,12 +479,12 @@ def parameter_selection(request, current_table):
 
                 variable_query.execute( sql, [request.session['selected']['bodypart']] )
                 columns = [col[0] for col in variable_query.description]
-                values = [
+                vals = [
                     dict(zip(columns, row)) for row in variable_query.fetchall()
                 ]
 
         else:
-            values = apps.get_model( app_label  = 'primo',
+            vals = apps.get_model( app_label  = 'primo',
                                      model_name = current_table.capitalize(),
                                    ).objects.values( 'name',
                                                    'label',
@@ -500,7 +492,7 @@ def parameter_selection(request, current_table):
                                                  ).all()
 
     elif current_table == 'bodypart' or current_table == 'taxon':
-        values = []
+        vals = []
         # do original query to get root of tree.
         # The rest of the tree will be recursively created in `create_tree_javascript()`.
         value = apps.get_model( app_label  = 'primo',
@@ -539,33 +531,32 @@ def parameter_selection(request, current_table):
             current_model = apps.get_model( app_label  = 'primo',
                                             model_name = current_table.capitalize(),
                                           )
-        except: # I have to do the set because nlsTree seems to be forcing a 
+        except: # I have to do the set because nlsTree seems to be forcing a
                 # refresh with current_table set to "undefined". The actual
                 # value is unimportant, so I've just chosen one that has a model.
             current_model = apps.get_model( app_label  = 'primo',
                                             model_name = 'Taxon',
                                           )
-        
-        values = current_model.objects.values('id', 'name').all()
-    print('values', values)
+
+        vals = current_model.objects.values('id', 'name').all()
 
 
     return render(request, 'primo/parameter_selection.jinja', {'current_table': current_table,
-                                                               'values': values,
+                                                               'values': vals,
                                                                'javascript': javascript,
                                                               } )
 
 
 @login_required
 def query_setup(request, scalar_or_3d = 'scalar'):
-    """ 
+    """
     For scalar queries send parameter_selection to frontend. Once all
     parameters are set, give option to call results, query_scalar().
 
     Tables will be all of the tables that are available to search on for a
     particular search type (e.g. scalar or 3D). Of those tables sex and
     fossil will be pre-filled with all values selected. In that case,
-    do a second query for all possible values and fill those values in. 
+    do a second query for all possible values and fill those values in.
     """
 
     # If there's a POST, then parameter_selection() has been called and some
@@ -573,7 +564,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
     if request.method == 'POST':
         current_table = request.POST.get('table')
 
-        if request.POST.get('commit') == 'Submit':
+        if request.POST.get('commit') == 'Submit checked options':
             # otherwise, either cancel select all was chosen
             selected_rows = []
 
@@ -585,7 +576,7 @@ def query_setup(request, scalar_or_3d = 'scalar'):
                 # as such: cb_main423 = 'on'. So I need to get the number at
                 # the end, as that's the id of the selected item.
                 for item in request.POST.items():
-                    if item[0][:7] == 'cb_main':
+                    if item[0].startswith('cb_main'):
                         selected_rows.append(int(item[0][7:]))
 
                 if request.POST.get('table') == 'bodypart':
@@ -611,53 +602,59 @@ def query_setup(request, scalar_or_3d = 'scalar'):
         request.session['scalar_or_3d'] = scalar_or_3d
 
         # Note for this query that "tables" is set as the related name in Models.py.
-        tables   = QueryWizardQuery.objects.get(data_table = scalar_or_3d.capitalize()).tables.all()
+        tables = QueryWizardQuery.objects.get(data_table = scalar_or_3d.capitalize()).tables.all()
         selected = dict() # will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])
-        request.session['tables']   = []
+        request.session['tables'] = []
         request.session['selected'] = dict()
 
         for table in tables:
-            # if len(request.session['selected'][table.filter_table_name]) == 0:
-            request.session['tables'].append( { 'table_name': table.filter_table_name,
+            # if len(request.session['selected'][table.table_name]) == 0:
+            print(table.table_name)
+            request.session['tables'].append( { 'table_name': table.table_name,
                                                 'display_name': table.display_name} )
 
             if table.preselected:
                 model  = apps.get_model( app_label  = 'primo',
-                                         model_name = table.filter_table_name.capitalize()
+                                         model_name = table.table_name.capitalize()
                                        )
                 values = model.objects.values('id').all()
                 # Because vals is a list of dicts in format 'id': value.
-                request.session['selected'][table.filter_table_name] = [ value['id'] for value in values ]
+                request.session["selected"][table.table_name] = [
+                    value.id for value in values
+                ]
             else:
-                request.session['selected'][table.filter_table_name] = [] # So I can use 'if selected[table]' 
-                                                                          # in query_setup.jinja.
+                request.session["selected"][table.table_name] = []
+                # So I can use 'if selected[table]' in query_setup.jinja.
 
-    tables = request.session['tables']
+    # tables = request.session['tables']
     selected = request.session['selected']
     # I coudn't figure out any way to do this other than to check each time.
     finished = True
+    print('selected')
+    print(selected)
 
-    for table in tables:
+    for table in request.session['tables']:
+        # print(table)
         if len(selected[table['table_name']]) == 0:
             finished = False
 
     request.session.modified = True
     return render(request, 'primo/query_setup.jinja', {'scalar_or_3d': scalar_or_3d,
-                                                       'tables': tables,
+                                                       'tables': request.session['tables'],
                                                        'selected': selected,
                                                        'finished': finished,
                                                       })
 
 
-def query_scalar(request, preview_only):
+def query_scalar(request):
     """ Set up the 2D query SQL. Do query. Call result table display. """
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
     request.session['scalar_or_3d'] = 'scalar'
-    preview_only = True if preview_only == 'True' else False # convert from String
-    if not request.user.is_authenticated or request.user.username == 'user':
-        preview_only = True
+    preview_only = True
+    if request.user.is_authenticated and request.user.username != "user":
+        preview_only = False
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
@@ -792,10 +789,10 @@ def query_start(request):
 
 
 def query_3d(request, which_3d_output_type, preview_only):
-    """ 
+    """
     Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
     Send results to either Morphologika or GRFND creator and downloader.
-    If preview_only ignore which_output_type and show metadata preview for top five taxa. 
+    If preview_only ignore which_output_type and show metadata preview for top five taxa.
     """
 
     preview_only = True if preview_only == 'True' else False # convert from String
@@ -933,9 +930,9 @@ def query_3d(request, which_3d_output_type, preview_only):
 
 
 def set_up_download(request):
-    """ 
+    """
     Set the newline character, set name of file based on current time.
-    Put both in session variable. If it's 3D make 3D output directory. 
+    Put both in session variable. If it's 3D make 3D output directory.
     """
 
     # Stupid Windows: we need to make sure the newline is set correctly. Abundance of caution.
@@ -960,7 +957,7 @@ def set_up_download(request):
 
 
 def tabulate_scalar(request, query_results, preview_only):
-    """ 
+    """
     Return a list of dictionaries where each dictionary has the keys
     Specimen ID
     Hypocode
@@ -975,7 +972,7 @@ def tabulate_scalar(request, query_results, preview_only):
     Locality Name
     Country Name
 
-    All requested variables 
+    All requested variables
     """
 
     current_specimen = query_results[0]['hypocode']

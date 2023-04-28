@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load get_item %}
 <script type="text/javascript" src="{% static 'primo/js/nlstree' %}"></script>
 {% block subtitle %} {{scalar_or_3d.title}} Query Wizard {% endblock %}
 {% block content %}
@@ -8,10 +9,10 @@
 <div id="query-wizard-filter-table-options">
     <table class="selection-table">
         <tr><th>Table</th><th>Attributes Selected</th></tr>
-{% for table in tables %}
+{% for table in request.session.tables %}
         <tr>
             <td><a href="{% url 'parameter_selection' table.table_name %}">{{ table.display_name|safe }}</a></td>
-            {% if table_name in selected.table %}
+            {% if selected|get_item:table.table_name %}
             <td><img alt="selected" class="attributes-selected" src="{% static 'primo/images/tick.gif' %}" /></td>
             {% else %}
             <td class="centered"><img alt="selected" class="attributes-selected" src="{% static 'primo/images/tick2_blank.gif' %}" /></td>

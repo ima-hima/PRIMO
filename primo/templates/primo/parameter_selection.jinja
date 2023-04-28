@@ -58,6 +58,17 @@ $(document).ready(function() {
   });
 });
 </script>
+{% if current_table == 'variable' and not request.session.selected.bodypart %}
+        <p style="font-size: 16px;">No bodyparts were specified. Please select bodyparts before attempting to select variables. </p>
+        <div style="margin-bottom: 30px;">
+            <form action="{% url 'query_setup' request.session.scalar_or_3d %}" method="post" />
+            {% csrf_token %}
+            <input type="hidden" value="{{ current_table }}" name="table" />
+            <input class="submit" type="submit" value="Return to Query Wizard" name="commit" />
+        </form>
+        </div>
+{% else %}
+<div id="table-scroll">
 <div id="query-wizard-filter-table-options">
 
 
@@ -66,7 +77,7 @@ $(document).ready(function() {
     <div class="submit-buttons">
         <input type="hidden" value="{{ current_table }}" name="table" />
         <input class="submit" type="submit" value="Cancel" name="commit" />
-        <input class="submit" type="submit" value="Submit" name="commit" />
+        <input class="submit" type="submit" value="Submit checked options" name="commit" />
     </div>
     <table class="selection-table">
     <thead>
@@ -138,8 +149,11 @@ $(document).ready(function() {
     <div class="submit-buttons">
         <input type="hidden" value="{{ current_table }}" name="table"  />
         <input class="submit" type="submit" value="Cancel" name="commit"/>
-        <input class="submit" type="submit" value="Submit" name="commit"/>
+        <input class="submit" type="submit" value="Submit checked options" name="commit"/>
     </div>
     </form>
 </div>
+</div>
+    {% endif %}
+
 {% endblock %}
