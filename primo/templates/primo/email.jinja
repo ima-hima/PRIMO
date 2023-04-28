@@ -8,7 +8,7 @@
         {% elif success %}
             Thanks for your interest in PRIMO. Your email has been sent to Eric Delson. He&rsquo;ll contact you with further details soon.
         {% else %}
-            <form action="{{ url('email') }}" method="post">
+            <form action="{% url 'email' %}" method="post">
                 <ul type="none">
                 {% csrf_token %}
                 {% for item in form %}

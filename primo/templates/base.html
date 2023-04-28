@@ -1,21 +1,21 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta http-equiv = "Content-Type" content = "text/html; charset=utf-8" />
-    <meta name = "title"       content="PRIMO" />
-    <meta name = "robots"      content="index, follow" />
-    <meta name = "description" content="primo" />
-    <meta name = "keywords"    content="primo" />
-    <meta name = "language"    content="en" />
-    {# load staticfiles #}
-    <link rel = "stylesheet" type = "text/css"  href = "{{ static('primo/style.css') }}" />
-    <link rel = "icon"       type = "image/png" href = "{{ static('primo/images/favicon.png') }}" />
-    <title>{% block title %}PRIMO{% endblock %}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="title" content="PRIMO {{request.session.page_title}}" />
+    <meta name="robots" content="index, follow" />
+    <meta name="description" content="primo" />
+    <meta name="keywords" content="primo" />
+    <meta name="language" content="en" />
+    <link rel="stylesheet" type="text/css" href="{% static 'primo/style.css' %}" />
+    <link rel="icon" type="image/png" href="{% static 'primo/images/favicon.png' %}" />
+    <title>{% block title %}PRIMO {{request.session.page_title}}{% endblock %}</title>
 </head>
 
 <body>
-    <a href = "/"><img alt = "PRIMO" src = "{{ static('primo/images/primo.jpg') }}" /></a>
-    <div class = "subheading">NYCEP Morphometrics Database</div>
+    <a href="/"><img alt="PRIMO" src="{% static 'primo/images/primo.jpg' %}" /></a>
+    <div class="subheading">NYCEP Morphometrics Database</div>
     {% include "topMenu.html" %}
 
     <div id = "content">
@@ -24,6 +24,6 @@
         {% block content %}{% endblock %}
     </div>
     <!-- TODO: make this a query of some kind? -->
-    <div class = "footer"><span class = "footerText">Updated: January 2020</span></div>
+    <div class="footer"><span class="footerText">Updated: October 2022</span></div>
 </body>
 </html>

@@ -2,7 +2,7 @@
 {% block subtitle %} {{request.session['scalar_or_3d'].title()}} Query Wizard {% endblock %}
 {% block content %}
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-<script type="text/javascript" src="{{ static('primo/js/tablesorter-master/jquery.tablesorter.min.js') }}"></script>
+<script type="text/javascript" src="{% static 'primo/js/tablesorter-master/jquery.tablesorter.min.js' %}"></script>
 <div id="main-content">
 
     {% if query_results %}
@@ -50,7 +50,7 @@
         </thead>
         <tbody>
         {% for row in query_results %}
-            {% if loop.index0 < 5 %}
+            {% if loop.index0 < 5 %} {# index0 because it's 0 indexed #}
                 <tr>
                     {% for metadata in specimen_metadata %}
                         <td>{{row[metadata[0]]}}</td>
@@ -89,7 +89,7 @@
                 x.style.display = 'none';
               }
             ">Hide query and results</button>
-        
+
             <br /><br />
             {{ final_sql }}
             <br /><br />
