@@ -8,7 +8,7 @@
 <div id="main-content">
 
     {% if query_results %}
-        {% if not is_preview %}
+        {% if not preview_only %}
             <p>The first five speciments are shown below. If these data are what you desired,
             click on <a href="{% url 'export_scalar' %}" class="waitAndRedirect">Download CSV
             file</a> to get the entire result. If you do not have a user ID, please return to
@@ -74,7 +74,7 @@
         </tbody>
         </table>
         </div>
-        {% if is_preview == 'False' %}
+        {% if not preview_only %}
             <p>If these data are what you desired, click on <a href="{% url 'export_scalar' %}">
             Download CSV file</a> to get the entire result. If you do not have a user ID,
             please return to the <a href="{% url 'index' %}">front page</a> for instructions
@@ -108,7 +108,7 @@
             <strong>Variable labels from request session variable:<br /></strong>
             {{ request.session.variable_labels }}
             <br /><br /><br />
-            Is preview: {{ is_preview }}
+            Is preview: {{ preview_only }}
         </div>
     {% endif %}
 </div>

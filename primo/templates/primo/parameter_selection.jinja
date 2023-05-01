@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load get_item %}
 {% block subtitle %}
     {% if current_table == "bodypart" %}
         Body Part
@@ -98,7 +99,7 @@ $(document).ready(function() {
             <td>{{ value.var_name }}</td>
             <td>{{ value.var_label }}</td>
             <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.var_id }}"
-                    {% if value.id in request.session.selected.current_table %} CHECKED {% endif %}></td>
+                    {% if request.session.selected.current_table|get_item:value.id %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% elif current_table == 'bodypart' or current_table == 'taxon' %}

@@ -609,32 +609,28 @@ def query_setup(request, scalar_or_3d = 'scalar'):
 
         for table in tables:
             # if len(request.session['selected'][table.table_name]) == 0:
-            print(table.table_name)
-            request.session['tables'].append( { 'table_name': table.table_name,
+            request.session['tables'].append( { 'table_name': table.filter_table_name,
                                                 'display_name': table.display_name} )
 
             if table.preselected:
                 model  = apps.get_model( app_label  = 'primo',
-                                         model_name = table.table_name.capitalize()
+                                         model_name = table.filter_table_name.capitalize()
                                        )
                 values = model.objects.values('id').all()
                 # Because vals is a list of dicts in format 'id': value.
-                request.session["selected"][table.table_name] = [
-                    value.id for value in values
+                request.session["selected"][table.filter_table_name] = [
+                    value["id"] for value in values
                 ]
             else:
-                request.session["selected"][table.table_name] = []
+                request.session["selected"][table.filter_table_name] = []
                 # So I can use 'if selected[table]' in query_setup.jinja.
 
     # tables = request.session['tables']
     selected = request.session['selected']
     # I coudn't figure out any way to do this other than to check each time.
     finished = True
-    print('selected')
-    print(selected)
 
     for table in request.session['tables']:
-        # print(table)
         if len(selected[table['table_name']]) == 0:
             finished = False
 
@@ -785,6 +781,8 @@ def query_start(request):
     request.session['selected'] = dict()
     request.session['selected']['table'] = []
     request.session['scalar_or_3d'] = ''
+    request.session['variable_labels'] = []
+    # request.session['query_results'] = []
     return render(request, 'primo/query_start.jinja')
 
 
@@ -903,7 +901,7 @@ def query_3d(request, which_3d_output_type, preview_only):
         for item in query_results:
             sessions.add(item['session_id'])
 
-    request.session['query']    = final_sql
+    request.session['query'] = final_sql
     request.session['sessions'] = list(sessions)
     request.session['3d_metadata'] = query_results
 
@@ -913,7 +911,7 @@ def query_3d(request, which_3d_output_type, preview_only):
                                                                 request.session['selected']['taxon'],
                                                               ).replace('[', '(').replace(']',')'),
         'groups'            : request.user.get_group_permissions(),
-        'preview_only'        : preview_only,
+        'preview_only'      : preview_only,
         'query_results'     : query_results,
         'specimen_metadata' : get_specimen_metadata(request),
         'total_specimens'   : len(query_results), # This should be the same as len(request.session['sessions'])
