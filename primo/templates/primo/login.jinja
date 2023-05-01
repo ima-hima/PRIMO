@@ -6,17 +6,17 @@
         {% if error %}
         <p class='error'>{{ error }}</p>
         {% endif %}
-        <form action="{{ url('login') }}" method="post">
+        <form action="{% url "login" %}" method="post">
             <ul type="none">
             {% csrf_token %}
             {% for item in form %}
                 <li>
-                <label for="id_{{ item.name }}">{{ item.label }}</label> {{ item }} 
+                <label for="id_{{ item.name }}">{{ item.label }}</label> {{ item }}
                 {% for error in item.errors %}
                 <span class="error">{{ error }}</span><br />
                 {% endfor %}
                 </li>
-                
+
             {% endfor %}
             <input type="hidden" name="next" value="{{ next }}" />
             <label>&nbsp;</label><input type="submit" value="Sign in" />
