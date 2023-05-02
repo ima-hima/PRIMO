@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load get_item %}
-{% block subtitle %} Query Wizard {% endblock %}
+{% block subtitle %} {{ request.session.scalar_or_3d|title  }} Query Sample Results {% endblock %}
 {% block content %}
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script type="text/javascript" src="{% static 'primo/js/tablesorter-master/jquery.tablesorter.min.js' %}"></script>
