@@ -1,0 +1,11 @@
+black
+django-debug-toolbar==3.6.0
+django-stubs==1.16.0
+django-stubs-ext==0.8.0
+flake8==6.0.0
+flake8-pyproject==1.2.3
+isort
+mock==5.0.1
+mypy==1.2.0
+mypy-extensions==1.0.0
+pre-commit==3.2.2
