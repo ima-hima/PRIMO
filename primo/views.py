@@ -43,8 +43,7 @@ def collate_metadata(request):
         output_file_name,
         "w",
         newline="",
-        # For some reason request.session['newline_char']
-        # added a newline on each row
+        # For some reason request.session['newline_char'] added a newline on each row
     ) as f:
         csv_file = File(f)
         meta_names = [m[0] for m in get_specimen_metadata(request)]
@@ -159,7 +158,9 @@ def download(request):
     Download one of csv, Morphologika, GRFND. File has been written to path
     before this is called.
     """
-
+    request.session[
+        "page_title"
+    ] = f"PRIMO Download {request.session['scalar_or_3d']} Data"
     if request.session["scalar_or_3d"] == "3D":
         filepath = path.join(settings.DOWNLOAD_ROOT, request.session["directory_name"])
     else:
@@ -204,11 +205,13 @@ def download(request):
 
 
 def download_success(request):
+    request.session["page_title"] = "Download Success"
     return render(request, "primo/download_success.jinja", {})
 
 
 def email(request):
     """Create email form, collect info, send email."""
+    request.session["page_title"] = "Email Administrator"
     form = EmailForm(request.POST or None)
     success = False
     error = None
@@ -236,7 +239,8 @@ def email(request):
 
 def entity_relation_diagram(request):
     """Retrieve relational database table pdf."""
-    return render(request, "primo/entity_relation_diagram.jinja")
+    request.session["page_title"] = "Database Structure"
+    return render(request, "primo/entity_relation_diagram.jinja", {})
 
 
 def export_scalar(request):
@@ -247,6 +251,7 @@ def export_scalar(request):
 
 
 def export_3d(request):
+#     request.session["which_3d_output_type"] = which_3d_output_type
     request.session["scalar_or_3d"] = "3D"
     set_up_download(request)
     create_3d_output_string(request)
@@ -474,6 +479,7 @@ def init_query_table(request, query_result):
 
 
 def log_in(request):
+    request.session["page_title"] = "Login"
     form = LoginForm(request.POST or None)
 
     try:
@@ -514,6 +520,7 @@ def log_in(request):
 
 @login_required
 def logout_view(request):
+    request.session["page_title"] = "Logout"
     logout(request)
     return render(request, "primo/logout.jinja")
 
@@ -521,7 +528,7 @@ def logout_view(request):
 @login_required
 def parameter_selection(request, current_table):
     javascript = ""
-
+    request.session["page_title"] = f"{current_table.capitalize()} Selection"
     if current_table == "variable":
         if request.session["selected"]["bodypart"]:
             with connection.cursor() as variable_query:
@@ -633,6 +640,7 @@ def query_setup(request, scalar_or_3d="scalar"):
     fossil will be pre-filled with all values selected. In that case,
     do a second query for all possible values and fill those values in.
     """
+    request.session["page_title"] = f"{scalar_or_3d.title()} Query Wizard"
     if request.method == "POST":
         # If there's a POST, then parameter_selection has been called and some
         # values have been sent back.
@@ -724,7 +732,7 @@ def query_setup(request, scalar_or_3d="scalar"):
 
 def query_scalar(request):
     """Set up the scalar query SQL. Do query. Call result table display."""
-
+    request.session["page_title"] = "Scalar Results"
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
     request.session["scalar_or_3d"] = "scalar"
@@ -861,6 +869,7 @@ def query_scalar(request):
 @login_required
 def query_start(request):
     """Start query by creating necessary empty data structures."""
+    request.session["page_title"] = "Query Wizard"
     request.session["tables"] = []
     request.session["selected"] = dict()
     request.session["selected"]["table"] = []
@@ -874,7 +883,7 @@ def query_3d(request, which_3d_output_type, preview_only):
     """
     Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
     Send results to either Morphologika or GRFND creator and downloader.
-    If preview_only ignore which_output_type and show metadata preview for top
+    If preview_only, ignore which_output_type and show metadata preview for top
     five taxa.
     """
 
