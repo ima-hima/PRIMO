@@ -312,7 +312,7 @@ th {
 }
 .submit-buttons {
   text-align: right;
-  margin: 15px 0;
+  margin: 15px 10px;
 }
 .data-preview-heading {
     color: #48a265;
@@ -348,6 +348,7 @@ th {
 table.tablesorter {
   font-family: Helvetica,Arial,sans-serif;
   background-color: #CDCDCD;
+  line-height: 1.3em;
   margin:10px 0 0;
   font-size: 8pt;
   width: 100%;
