@@ -1,6 +1,7 @@
 from django import forms
-from django.utils.safestring import mark_safe
 from django.contrib.auth.forms import AuthenticationForm
+from django.utils.safestring import mark_safe
+
 
 class LoginForm(forms.Form):
     user_name = forms.CharField(label="Username:", max_length=100)
