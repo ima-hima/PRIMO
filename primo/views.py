@@ -83,11 +83,11 @@ def collate_metadata(request):
             writer.writerow(inDict)
 
 
-def concat_variable_list(myList):
-    """
-    Return myList as comma-seperated string of values enclosed in parens.
-    """
-    return "(" + reduce((lambda b, c: b + str(c) + ","), myList, "")[:-1] + ")"
+# def concat_variable_list(myList):
+#     """
+#     Return myList as comma-separated string of values enclosed in parens.
+#     """
+#     return "(" + reduce((lambda b, c: b + str(c) + ","), myList, "")[:-1] + ")"
 
 
 def create_tree_javascript(request, parent_id, current_table):
