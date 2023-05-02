@@ -127,10 +127,8 @@ def create_tree_javascript(request, parent_id, current_table):
         parent_id = val["parent_id"]
         expand = "true" if val["expand_in_tree"] else "false"
         if name != "Eocatarrhini":
-            # I'm not clear why I don't need to recurse up
-            # Eucatarrhini heirarchy.
-            # Note that there's an extra blank entry for
-            # icon after the second item_id.
+            # I'm not clear why I don't need to recurse up Eucatarrhini heirarchy.
+            # Note that there's an extra blank entry for icon after the second item_id.
             javascript += (
                 'tree.add("'
                 + str(item_id)
@@ -637,7 +635,7 @@ def query_setup(request, scalar_or_3d="scalar"):
         current_table = request.POST.get("table")
 
         if request.POST.get("commit") == "Submit checked options":
-            # Otherwise, either cancel or select all was chosen.
+            # Otherwise, cancel or select all was chosen.
             selected_rows = []
 
             if (
@@ -663,17 +661,9 @@ def query_setup(request, scalar_or_3d="scalar"):
                     # returns an empty list for any missing key.
                     selected_rows.append(int(item))
             request.session["selected"][current_table] = selected_rows
-
-        elif request.POST.get("commit") == "Select All":
-            vals = (
-                apps.get_model(app_label="primo", model_name=current_table.capitalize())
-                .objects.values("id")
-                .all()
-            )
-            request.session["selected"][current_table] = [val["id"] for val in vals]
-    if "tables" not in request.session:
+    if not request.session["tables"]:
         # If tables isn't set, query for all tables and set up both tables and
-        # selected lists.
+        # selected lists. Note that "tables" will exist as key either way.
         request.session["scalar_or_3d"] = scalar_or_3d
 
         # Note for this query that "tables" is set as the related name in Models.py.
@@ -687,8 +677,8 @@ def query_setup(request, scalar_or_3d="scalar"):
 
         for table in tables:
             # if len(request.session['selected'][table.table_name]) == 0:
-            request.session['tables'].append( { 'table_name': table.filter_table_name,
-                                                'display_name': table.display_name} )
+            request.session['tables'].append({'table_name': table.filter_table_name,
+                                              'display_name': table.display_name})
 
             if table.preselected:
                 model = apps.get_model(
@@ -703,13 +693,12 @@ def query_setup(request, scalar_or_3d="scalar"):
                 request.session["selected"][table.filter_table_name] = []
                 # So I can use 'if selected[table]' in query_setup.jinja.
 
-    tables = request.session["tables"]
     selected = request.session["selected"]
     # I coudn't figure out any way to do this other than to check each time.
     finished = True
 
     for table in request.session["tables"]:
-        if len(selected[table["table_name"]]) == 0:
+        if not selected[table["table_name"]]:
             finished = False
 
     request.session.modified = True
@@ -718,7 +707,7 @@ def query_setup(request, scalar_or_3d="scalar"):
         "primo/query_setup.jinja",
         {
             "scalar_or_3d": scalar_or_3d,
-            "tables": tables,
+            "tables": request.session['tables'],
             "selected": selected,
             "finished": finished,
         },
@@ -877,7 +866,8 @@ def query_3d(request, which_3d_output_type, preview_only):
     """
     Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
     Send results to either Morphologika or GRFND creator and downloader.
-    If preview_only, ignore which_output_type and show metadata preview for top five taxa.
+    If preview_only, ignore which_output_type and show metadata preview for top
+    five taxa.
     """
 
     preview_only = True if preview_only == 'True' else False # convert from String
