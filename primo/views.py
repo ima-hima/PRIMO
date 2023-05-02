@@ -31,8 +31,8 @@ class IndexView(TemplateView):
 
 def collate_metadata(request):
     """
-    Collate data returned from SQL query, render into csv, save csv to tmp directory.
-    For 2D this write all data. For 3D write only metadata.
+    Collate data returned from SQL query, render into csv, save csv to tmp
+    directory. For scalar write all data. For 3D write only metadata.
     """
     output_file_name = path.join(
         settings.DOWNLOAD_ROOT,
@@ -97,14 +97,16 @@ def create_tree_javascript(request, parent_id, current_table):
     tree.add() are:
     add(node_id, parent_id, node name, url, icon, expand?, precheck?, extra info,
     text on mouse hover).
-    The last two are currently unneeded, and therefore ignored below.
     Function is recursive on parent_id and returns a properly-formatted string
-    of Javascript code, although from reading nlstree docs (https://www.addobject.com/nlstree),
-    it seems order is unimportant, so recursion may be unnecessary (wasteful?).
-    Oh, wait: necessary because of if statement dealing with Eucatarrhini.
-    Okay, so *eventually* unnecessary?
+    of Javascript code.
     """
 
+    # From reading nlstree docs (https://www.addobject.com/nlstree),
+    # it seems order is unimportant, so recursion may be unnecessary (wasteful?).
+    # Oh, wait: necessary because of if statement dealing with Eucatarrhini.
+    # Okay, so *eventually* unnecessary?
+
+    # The last two are currently unneeded, and therefore ignored below.
     javascript = ""
     js_item_delimiter = '", "'
     vals = (
@@ -168,7 +170,8 @@ def download(request):
     if path.exists(filepath):
         if request.session["scalar_or_3d"] == "3D":
             # Just a s a reminer, c is create a new file; z is gzip it; f is filename;
-            # -C is move to the following directory first; name at end is the directory to compress.
+            # -C is move to the following directory first; name at end is the directory
+            # to compress.
             # Using -C here to get rid of prefix of absolute file path.
             # So: tar -czf DOWNLOAD_ROOT/filename.tar.gz -C DOWNLOAD_ROOT directory_name
             # Files should be in request.session['directory_name'], so that directory is
@@ -266,6 +269,8 @@ def create_3d_output_string(request):
     missing_pts = {}
 
     # Header is different, otherwise files are nearly identical.
+    num_query_results = len(request.session["query_results"])
+    num_sessions = len(request.session["sessions"])
     if request.session["which_3d_output_type"] == "Morphologika":
         # Morphologika file format:
         # [individuals]
@@ -282,12 +287,9 @@ def create_3d_output_string(request):
         output_str = (newline_char * 2).join(
             [
                 "[individuals]",
-                str(len(request.session["query_results"])),
+                str(num_query_results),
                 "[landmarks]",
-                str(
-                    len(request.session["query_results"])
-                    / len(request.session["sessions"])
-                ),
+                str(num_query_results / num_sessions),
                 "[dimensions]",
                 "3",
                 "[names]",
@@ -298,16 +300,9 @@ def create_3d_output_string(request):
         # 1 number of individuals L 3*number of landmarks 1 9999 DIM-3
         # datapoints as x \t y \t z (TODO: are these ordered?)
         output_str = (
-            "1 "
-            + str(len(request.session["query_results"]))
-            + "L "
-            + str(
-                3
-                * len(request.session["query_results"])
-                / len(request.session["sessions"])
-            )
-            + " 1 9999 DIM=3"
-            + newline_char
+            f"1 {num_query_results}L "
+            f"{3 * num_query_results / num_sessions} 1 9999 "
+            f"DIM=3{newline_char}"
         )
 
     for row in request.session["query_results"]:
@@ -594,7 +589,7 @@ def parameter_selection(request, current_table):
         else:
             javascript += "true );\n"
 
-        # now do follow-up query using root as parent
+        # Now do follow-up query using root as parent.
         javascript += create_tree_javascript(request, item_id, current_table)
 
     else:
@@ -631,7 +626,7 @@ def parameter_selection(request, current_table):
 def query_setup(request, scalar_or_3d="scalar"):
     """
     For scalar queries send parameter_selection to frontend. Once all
-    parameters are set, give option to call results, query_scalar().
+    parameters are set, give option to call results, e.g. query_scalar().
 
     Tables will be all of the tables that are available to search on for a
     particular search type (e.g. scalar or 3D). Of those tables sex and
@@ -839,7 +834,6 @@ def query_scalar(request):
         request.session["query_results"] = new_query_results
     except:
         print(sys.exc_info()[0])
-        raise
         are_results = False
 
     # This is for use in export_csv_file().
@@ -880,7 +874,7 @@ def query_3d(request, which_3d_output_type, preview_only):
     """
     Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
     Send results to either Morphologika or GRFND creator and downloader.
-    If preview_only, ignore which_output_type and show metadata preview for top
+    If preview_only ignore which_output_type and show metadata preview for top
     five taxa.
     """
 
@@ -951,9 +945,7 @@ def query_3d(request, which_3d_output_type, preview_only):
         "       ON state_province.country_id = country.id "
     )
 
-    where = (
-        " WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s"
-    )
+    where = " WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s"
     ordering = " ORDER BY `specimen_id` ASC"
     limit = ""
     if preview_only:  # TODO: This could be a little more nicer.
