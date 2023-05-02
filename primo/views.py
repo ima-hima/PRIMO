@@ -26,8 +26,6 @@ from uuid import uuid1
 
 
 class IndexView(TemplateView):
-    """docstring for IndexView"""
-
     template_name = "primo/index.jinja"
 
 
@@ -44,7 +42,8 @@ def collate_metadata(request):
     with open(
         output_file_name,
         "w",
-        newline="",  # For some reason request.session['newline_char']
+        newline="",
+        # For some reason request.session['newline_char']
         # added a newline on each row
     ) as f:
         csv_file = File(f)
@@ -264,7 +263,8 @@ def create_3d_output_string(request):
     newline_char = request.session["newline_char"]
     """
     missing_pts will be output in metadata csv file. key is specimen id,
-    value is string of missing points for specimen."""
+    value is string of missing points for specimen.
+    """
     missing_pts = {}
 
     # Header is different, otherwise files are nearly identical.
@@ -281,26 +281,27 @@ def create_3d_output_string(request):
         # specimen ids
         # [rawpoints]
         # datapoints as x \t y \t z (TODO: are these ordered?)
-        output_str = (newline_char * 2).join(
-            [
-                "[individuals]",
-                str(num_query_results),
-                "[landmarks]",
-                str(num_query_results / num_sessions),
-                "[dimensions]",
-                "3",
-                "[names]",
-            ]
-        )
-    else:  # GRFND file
+        output_str =  (newline_char * 2).join([ '[individuals]',
+                                                str(len(request.session['query_results'])),
+                                                '[landmarks]',
+                                                str(len(request.session['query_results']) \
+                                                    / len(request.session['sessions'])),
+                                                '[dimensions]',
+                                                '3',
+                                                '[names]',
+                                    ])
+    else: # GRFND file
         # GRFND file format:
         # 1 number of individuals L 3*number of landmarks 1 9999 DIM-3
         # datapoints as x \t y \t z (TODO: are these ordered?)
-        output_str = (
-            f"1 {num_query_results}L "
-            f"{3 * num_query_results / num_sessions} 1 9999 "
-            f"DIM=3{newline_char}"
-        )
+        output_str = '1 ' \
+                    + str(len(request.session['query_results'])) \
+                    + 'L ' \
+                    + str( 3
+                          * len(request.session['query_results']) \
+                          / len(request.session['sessions'])) \
+                    + ' 1 9999 DIM=3' \
+                    + newline_char
 
     for row in request.session["query_results"]:
         output_str += f"{row['specimen_id']}{newline_char}"
@@ -309,7 +310,7 @@ def create_3d_output_string(request):
         output_str += f"{newline_char}[rawpoints]{newline_char}"
     current_specimen = ""  # Keeps track of when new specimen data starts.
     """
-    point_ctr this will be used to track which points are missing for a given
+    point_ctr will be used to track which points are missing for a given
     sessiom/specimen.
     """
     point_ctr = 1
@@ -539,10 +540,10 @@ def parameter_selection(request, current_table):
 
                 variable_query.execute(sql, [request.session["selected"]["bodypart"]])
                 columns = [col[0] for col in variable_query.description]
-                values = [dict(zip(columns, row)) for row in variable_query.fetchall()]
+                vals = [dict(zip(columns, row)) for row in variable_query.fetchall()]
 
         else:
-            values = (
+            vals = (
                 apps.get_model(
                     app_label="primo",
                     model_name=current_table.capitalize(),
@@ -579,7 +580,7 @@ def parameter_selection(request, current_table):
         parent_id = value["parent_id"]
         expand = "true" if value["expand_in_tree"] else "false"
         javascript = (
-            f'tree.add("{item_id}", "{parent_id}", ' f'"{name}"", "", "", {expand}, '
+            f'tree.add("{item_id}", "{parent_id}", "{name}", "", "", {expand}, '
         )
         if item_id not in request.session["selected"][current_table]:
             javascript += "false );\n"
@@ -597,7 +598,8 @@ def parameter_selection(request, current_table):
                 app_label="primo",
                 model_name=current_table.capitalize(),
             )
-        except:  # I have to do the set because nlsTree seems to be forcing a
+        except:
+            # I have to do the set because nlsTree seems to be forcing a
             # refresh with current_table set to "undefined". The actual
             # value is unimportant, so I've just chosen one that has a model.
             current_model = apps.get_model(
@@ -634,7 +636,7 @@ def query_setup(request, scalar_or_3d="scalar"):
         # values have been sent back.
         current_table = request.POST.get("table")
 
-        if request.POST.get("commit") == "Submit":
+        if request.POST.get("commit") == "Submit checked options":
             # Otherwise, either cancel or select all was chosen.
             selected_rows = []
 
@@ -946,12 +948,14 @@ def query_3d(request, which_3d_output_type, preview_only):
     )
 
     where = (
-        " WHERE `sex`.`id` IN %s" " AND `fossil`.`id` IN %s" " AND `taxon`.`id` IN %s"
+        " WHERE `sex`.`id` IN %s "
+        "AND `fossil`.`id` IN %s "
+        "AND `taxon`.`id` IN %s"
     )
     ordering = " ORDER BY `specimen_id` ASC"
     limit = ""
     if preview_only:     # TODO: This could be a little more nicer.
-        limit = ' LIMIT 5'
+        limit = " LIMIT 5"
     final_sql = base + where + ordering + limit + ";"
 
     # We skip variables in 3D: we're getting all of them.
@@ -1082,6 +1086,7 @@ def tabulate_scalar(request, query_results, preview_only):
         else:
             num_specimens += 1
             output.append(current_dict)
+            # TODO: do I need this del here?
             del current_dict
             current_dict = init_query_table(request, row)
             # This next so we can look up values quickly in view rather than having
