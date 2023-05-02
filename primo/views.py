@@ -318,12 +318,7 @@ def create_3d_output_string(request):
         if row["specimen_id"] != current_specimen:
             current_specimen = row["specimen_id"]
             if request.session["which_3d_output_type"] == "Morphologika":
-                output_str += (
-                    newline_char
-                    "'"
-                    row["hypocode"].replace('/ /', '_')
-                    newline_char
-                )
+                output_str += newline_char + "'" + row["hypocode"].replace('/ /', '_') + newline_char
             else:
                 output_str += newline_char
             missing_pts[row["specimen_id"]] = ""
@@ -706,7 +701,7 @@ def query_setup(request, scalar_or_3d="scalar"):
                 request.session["selected"][table.filter_table_name] = []
                 # So I can use 'if selected[table]' in query_setup.jinja.
 
-    # tables = request.session["tables"]
+    tables = request.session["tables"]
     selected = request.session["selected"]
     # I coudn't figure out any way to do this other than to check each time.
     finished = True

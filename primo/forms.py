@@ -30,8 +30,8 @@ class EmailForm(forms.Form):
     body = forms.CharField(
         label=mark_safe(
             "Reasons for wishing to access PRIMO data: <br /> "
-            ''<span class="description">(indicate types desired, '
-            "uses to which data will be put, projects (briefly))</span>""
+            '<span class="description">(indicate types desired, '
+            "uses to which data will be put, projects (briefly))</span>"
         ),
         widget=forms.Textarea,
     )
