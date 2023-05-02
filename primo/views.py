@@ -24,7 +24,6 @@ import sys
 from uuid import uuid1
 
 
-
 class IndexView(TemplateView):
     template_name = "primo/index.jinja"
 
@@ -53,7 +52,7 @@ def collate_metadata(request):
             variable_names = []
         else:
             # variable_names = [ v[0] for v in request.session.keys() ]
-            variable_names = request.session['variable_labels']
+            variable_names = request.session["variable_labels"]
 
         writer = DictWriter(csv_file, fieldnames=meta_names + variable_names)
 
@@ -205,7 +204,7 @@ def download_success(request):
 
 
 def email(request):
-    """ Create email form, collect info, send email. """
+    """Create email form, collect info, send email."""
     form = EmailForm(request.POST or None)
     success = False
     error = None
@@ -232,7 +231,7 @@ def email(request):
 
 
 def entity_relation_diagram(request):
-    """ Retrieve relational database table pdf. """
+    """Retrieve relational database table pdf."""
     return render(request, "primo/entity_relation_diagram.jinja")
 
 
@@ -266,7 +265,7 @@ def create_3d_output_string(request):
     missing_pts = {}
 
     # Header is different, otherwise files are nearly identical.
-    if request.session['which_3d_output_type'] == 'Morphologika':
+    if request.session["which_3d_output_type"] == "Morphologika":
         # Morphologika file format:
         # [individuals]
         # number of individuals
@@ -279,27 +278,36 @@ def create_3d_output_string(request):
         # specimen ids
         # [rawpoints]
         # datapoints as x \t y \t z (TODO: are these ordered?)
-        output_str =  (newline_char * 2).join([ '[individuals]',
-                                                str(len(request.session['query_results'])),
-                                                '[landmarks]',
-                                                str(len(request.session['query_results']) \
-                                                    / len(request.session['sessions'])),
-                                                '[dimensions]',
-                                                '3',
-                                                '[names]',
-                                    ])
-    else: # GRFND file
+        output_str = (newline_char * 2).join(
+            [
+                "[individuals]",
+                str(len(request.session["query_results"])),
+                "[landmarks]",
+                str(
+                    len(request.session["query_results"])
+                    / len(request.session["sessions"])
+                ),
+                "[dimensions]",
+                "3",
+                "[names]",
+            ]
+        )
+    else:  # GRFND file
         # GRFND file format:
         # 1 number of individuals L 3*number of landmarks 1 9999 DIM-3
         # datapoints as x \t y \t z (TODO: are these ordered?)
-        output_str = '1 ' \
-                    + str(len(request.session['query_results'])) \
-                    + 'L ' \
-                    + str( 3
-                          * len(request.session['query_results']) \
-                          / len(request.session['sessions'])) \
-                    + ' 1 9999 DIM=3' \
-                    + newline_char
+        output_str = (
+            "1 "
+            + str(len(request.session["query_results"]))
+            + "L "
+            + str(
+                3
+                * len(request.session["query_results"])
+                / len(request.session["sessions"])
+            )
+            + " 1 9999 DIM=3"
+            + newline_char
+        )
 
     for row in request.session["query_results"]:
         output_str += f"{row['specimen_id']}{newline_char}"
@@ -317,7 +325,12 @@ def create_3d_output_string(request):
         if row["specimen_id"] != current_specimen:
             current_specimen = row["specimen_id"]
             if request.session["which_3d_output_type"] == "Morphologika":
-                output_str += newline_char + "'" + row["hypocode"].replace('/ /', '_') + newline_char
+                output_str += (
+                    newline_char
+                    + "'"
+                    + row["hypocode"].replace("/ /", "_")
+                    + newline_char
+                )
             else:
                 output_str += newline_char
             missing_pts[row["specimen_id"]] = ""
@@ -331,12 +344,7 @@ def create_3d_output_string(request):
             missing_pts[row["specimen_id"]] += " " + str(missing_pt_ctr)
 
         else:
-            output_str += str(row['x']) \
-                        + '\t' \
-                        + str(row['y']) \
-                        + '\t' \
-                        + str(row['z']) \
-                        + str(newline_char)
+            output_str += f"{row['x']}\t{row['y']}\t{row['z']}{newline_char}"
 
         missing_pt_ctr += 1
     request.session["missing_pts"] = missing_pts
@@ -655,7 +663,7 @@ def query_setup(request, scalar_or_3d="scalar"):
                 if request.POST.get("table") == "bodypart":
                     request.session["selected"]["variable"] = []
 
-            else: # Return is *not* from nlstree.js, so can just get id values.
+            else:  # Return is *not* from nlstree.js, so can just get id values.
                 for item in request.POST.getlist("id"):
                     # Because .get() returns only last item. Note that getlist()
                     # returns an empty list for any missing key.
@@ -677,8 +685,12 @@ def query_setup(request, scalar_or_3d="scalar"):
 
         for table in tables:
             # if len(request.session['selected'][table.table_name]) == 0:
-            request.session['tables'].append({'table_name': table.filter_table_name,
-                                              'display_name': table.display_name})
+            request.session["tables"].append(
+                {
+                    "table_name": table.filter_table_name,
+                    "display_name": table.display_name,
+                }
+            )
 
             if table.preselected:
                 model = apps.get_model(
@@ -707,7 +719,7 @@ def query_setup(request, scalar_or_3d="scalar"):
         "primo/query_setup.jinja",
         {
             "scalar_or_3d": scalar_or_3d,
-            "tables": request.session['tables'],
+            "tables": request.session["tables"],
             "selected": selected,
             "finished": finished,
         },
@@ -715,7 +727,7 @@ def query_setup(request, scalar_or_3d="scalar"):
 
 
 def query_scalar(request):
-    """ Set up the 2D query SQL. Do query. Call result table display. """
+    """Set up the scalar query SQL. Do query. Call result table display."""
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
@@ -785,7 +797,7 @@ def query_scalar(request):
         "AND variable.id IN %s "
     )
     ordering = " ORDER BY specimen.id, variable.label ASC"
-    final_sql = f"{base} {where} {ordering};" # .format( concat_variable_list(request.session['selected']['sex']) )
+    final_sql = f"{base} {where} {ordering};"
 
     # We have to query for the variable names separately.
     with connection.cursor() as variable_query:
@@ -823,7 +835,7 @@ def query_scalar(request):
     are_results = True
     try:
         new_query_results = tabulate_scalar(request, query_results, preview_only)
-        request.session['query_results'] = new_query_results
+        request.session["query_results"] = new_query_results
     except:
         print(sys.exc_info()[0])
         raise
@@ -832,20 +844,21 @@ def query_scalar(request):
     # This is for use in export_csv_file().
     request.session["variable_labels"] = variable_labels
     context = {
-        'final_sql' : final_sql.replace('%s', '{}').format(request.session['selected']['sex'],
-                                                           request.session['selected']['fossil'],
-                                                           request.session['selected']['taxon'],
-                                                           # concat_variable_list(request.session['selected']['bodypart']),
-                                                           request.session['selected']['variable'],
-                                                          ),
-        'query_results': new_query_results,
-        'are_results': are_results,
-        'total_specimens': len(new_query_results),
-        'variable_labels': variable_labels,
-        'variable_ids': request.session['selected']['variable'],
-        'preview_only': preview_only,
-        'specimen_metadata': get_specimen_metadata(request),
-        'user': request.user.username,
+        "final_sql": final_sql.replace("%s", "{}").format(
+            request.session["selected"]["sex"],
+            request.session["selected"]["fossil"],
+            request.session["selected"]["taxon"],
+            # concat_variable_list(request.session['selected']['bodypart']),
+            request.session["selected"]["variable"],
+        ),
+        "query_results": new_query_results,
+        "are_results": are_results,
+        "total_specimens": len(new_query_results),
+        "variable_labels": variable_labels,
+        "variable_ids": request.session["selected"]["variable"],
+        "preview_only": preview_only,
+        "specimen_metadata": get_specimen_metadata(request),
+        "user": request.user.username,
     }
     return render(request, "primo/query_results.jinja", context)
 
@@ -853,13 +866,13 @@ def query_scalar(request):
 @login_required
 def query_start(request):
     """Start query by creating necessary empty data structures."""
-    request.session['tables'] = []
-    request.session['selected'] = dict()
-    request.session['selected']['table'] = []
-    request.session['scalar_or_3d'] = ''
-    request.session['variable_labels'] = []
+    request.session["tables"] = []
+    request.session["selected"] = dict()
+    request.session["selected"]["table"] = []
+    request.session["scalar_or_3d"] = ""
+    request.session["variable_labels"] = []
     # request.session['query_results'] = []
-    return render(request, 'primo/query_start.jinja')
+    return render(request, "primo/query_start.jinja")
 
 
 def query_3d(request, which_3d_output_type, preview_only):
@@ -870,8 +883,8 @@ def query_3d(request, which_3d_output_type, preview_only):
     five taxa.
     """
 
-    preview_only = True if preview_only == 'True' else False # convert from String
-    if not request.user.is_authenticated or request.user.username == 'user':
+    preview_only = True if preview_only == "True" else False  # convert from String
+    if not request.user.is_authenticated or request.user.username == "user":
         preview_only = True
 
     request.session["scalar_or_3d"] = "3D"
@@ -938,13 +951,11 @@ def query_3d(request, which_3d_output_type, preview_only):
     )
 
     where = (
-        " WHERE `sex`.`id` IN %s "
-        "AND `fossil`.`id` IN %s "
-        "AND `taxon`.`id` IN %s"
+        " WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s"
     )
     ordering = " ORDER BY `specimen_id` ASC"
     limit = ""
-    if preview_only:     # TODO: This could be a little more nicer.
+    if preview_only:  # TODO: This could be a little more nicer.
         limit = " LIMIT 5"
     final_sql = base + where + ordering + limit + ";"
 
@@ -1011,7 +1022,7 @@ def query_3d(request, which_3d_output_type, preview_only):
         export_3d(request)
         # return render(request, 'primo/download_success.jinja')
 
-    return render(request, 'primo/query_results.jinja', context)
+    return render(request, "primo/query_results.jinja", context)
 
 
 def set_up_download(request):
