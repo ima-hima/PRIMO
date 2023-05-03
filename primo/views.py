@@ -21,15 +21,18 @@ from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
 
+# from django_stubs_ext.db.models import TypedModelMeta
+
 from .forms import *
 from .models import *
+from typing import Dict, Tuple
 
 
 class IndexView(TemplateView):
     template_name = "primo/index.jinja"
 
 
-def collate_metadata(request):
+def collate_metadata(request: HttpRequest) -> None:
     """
     Collate data returned from SQL query, render into csv, save csv to tmp
     directory. For scalar write all data. For 3D write only metadata.
@@ -83,14 +86,16 @@ def collate_metadata(request):
             writer.writerow(inDict)
 
 
-def concat_variable_list(myList):
+def concat_variable_list(myList: str) -> str:
     """
-    Return myList as comma-seperated string of values enclosed in parens.
+    Return myList as comma-separated string of values enclosed in parens.
     """
     return "(" + reduce((lambda b, c: b + str(c) + ","), myList, "")[:-1] + ")"
 
 
-def create_tree_javascript(request, parent_id, current_table):
+def create_tree_javascript(
+    request: HttpRequest, parent_id: int, current_table: str
+) -> str:
     """
     Create javascript for heirarchical tree display. Formal parameters for
     tree.add() are:
@@ -153,7 +158,7 @@ def create_tree_javascript(request, parent_id, current_table):
     return javascript
 
 
-def download(request):
+def download(request: HttpRequest) -> HttpResponse:
     """
     Download one of csv, Morphologika, GRFND. File has been written to path
     before this is called.
@@ -204,12 +209,12 @@ def download(request):
     raise Http404
 
 
-def download_success(request):
+def download_success(request: HttpRequest) -> HttpResponse:
     request.session["page_title"] = "Download Success"
     return render(request, "primo/download_success.jinja", {})
 
 
-def email(request):
+def email(request: HttpRequest) -> HttpResponse:
     """Create email form, collect info, send email."""
     request.session["page_title"] = "Email Administrator"
     form = EmailForm(request.POST or None)
@@ -217,7 +222,7 @@ def email(request):
     error = None
     if request.method == "POST":
         if form.is_valid():
-            # get crap from POST
+            # Get crap from POST.
             name = request.POST.get("first_name") + "," + request.POST.get("last_name")
             email = request.POST.get("email") + ","
             body = name + "," + email + ","
@@ -237,21 +242,21 @@ def email(request):
     return render(request, "primo/email.jinja", {"form": form})
 
 
-def entity_relation_diagram(request):
+def entity_relation_diagram(request: HttpRequest) -> HttpResponse:
     """Retrieve relational database table pdf."""
     request.session["page_title"] = "Database Structure"
     return render(request, "primo/entity_relation_diagram.jinja", {})
 
 
-def export_scalar(request):
+def export_scalar(request: HttpRequest) -> HttpResponse:
     request.session["scalar_or_3d"] = "scalar"
     set_up_download(request)
     collate_metadata(request)
     return download(request)
 
 
-def export_3d(request):
-#     request.session["which_3d_output_type"] = which_3d_output_type
+def export_3d(request: HttpRequest) -> HttpResponse:
+    #     request.session["which_3d_output_type"] = which_3d_output_type
     request.session["scalar_or_3d"] = "3D"
     set_up_download(request)
     create_3d_output_string(request)
@@ -259,7 +264,7 @@ def export_3d(request):
     return download(request)
 
 
-def create_3d_output_string(request):
+def create_3d_output_string(request: HttpRequest) -> None:
     """
     Collate data returned from 3D SQL query.
     Print out two files: a csv of metadata and a GRFND file. Fields
@@ -315,13 +320,12 @@ def create_3d_output_string(request):
     # data points
     if request.session["which_3d_output_type"] == "Morphologika":
         output_str += f"{newline_char}[rawpoints]{newline_char}"
-    current_specimen = ""  # Keeps track of when new specimen data starts.
     """
     point_ctr will be used to track which points are missing for a given
     sessiom/specimen.
     """
     point_ctr = 1
-    current_specimen = -1
+    current_specimen = -1  # Keeps track of when new specimen data starts.
     for row in request.session["query_results"]:
         if row["specimen_id"] != current_specimen:
             current_specimen = row["specimen_id"]
@@ -359,7 +363,7 @@ def create_3d_output_string(request):
         outfile.write(output_str)
 
 
-def fixQuotes(inStr):
+def fixQuotes(inStr: str) -> str:
     """Quote all the things that need to be quoted in a csv row."""
 
     needQuote = False
@@ -395,7 +399,7 @@ def fixQuotes(inStr):
     return inStr
 
 
-def get_3D_data(request):
+def get_3D_data(request: HttpRequest) -> None:
     """Execute query for actual 3D points, i.e. not metadata."""
 
     base = (
@@ -432,7 +436,7 @@ def get_3D_data(request):
     request.session["query_results"] = query_results
 
 
-def get_specimen_metadata(request):
+def get_specimen_metadata(request: HttpRequest) -> list[Tuple[str, str]]:
     """
     Return a list of tuples with SQL column name:csv column name as key:value.
     Created a fn because this was called all over the place.
@@ -466,7 +470,9 @@ def get_specimen_metadata(request):
     ] + three_d_list
 
 
-def init_query_table(request, query_result):
+def init_query_table(
+    request: HttpRequest, query_result: Dict[str, str]
+) -> Dict[str, str]:
     """
     Initialize query table (actually a dictionary) that is to be used for data
     that will be pushed out to view. A single query row is received and put into
@@ -478,7 +484,7 @@ def init_query_table(request, query_result):
     return output
 
 
-def log_in(request):
+def log_in(request: HttpRequest) -> HttpResponse:
     request.session["page_title"] = "Login"
     form = LoginForm(request.POST or None)
 
@@ -519,14 +525,14 @@ def log_in(request):
 
 
 @login_required
-def logout_view(request):
+def logout_view(request: HttpRequest) -> HttpResponse:
     request.session["page_title"] = "Logout"
     logout(request)
     return render(request, "primo/logout.jinja")
 
 
 @login_required
-def parameter_selection(request, current_table):
+def parameter_selection(request: HttpRequest, current_table: str) -> HttpResponse:
     javascript = ""
     request.session["page_title"] = f"{current_table.capitalize()} Selection"
     if current_table == "variable":
@@ -630,7 +636,7 @@ def parameter_selection(request, current_table):
 
 
 @login_required
-def query_setup(request, scalar_or_3d="scalar"):
+def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpResponse:
     """
     For scalar queries send parameter_selection to frontend. Once all
     parameters are set, give option to call results, e.g. query_scalar().
@@ -648,7 +654,7 @@ def query_setup(request, scalar_or_3d="scalar"):
 
         if request.POST.get("commit") == "Submit checked options":
             # Otherwise, cancel or select all was chosen.
-            selected_rows = []
+            selected_rows: list[int] = []
 
             if (
                 request.POST.get("table") == "taxon"
@@ -730,7 +736,7 @@ def query_setup(request, scalar_or_3d="scalar"):
     )
 
 
-def query_scalar(request):
+def query_scalar(request: HttpRequest) -> HttpResponse:
     """Set up the scalar query SQL. Do query. Call result table display."""
     request.session["page_title"] = "Scalar Results"
     # TODO: Look into doing this all with built-ins, rather than with .raw()
@@ -867,7 +873,7 @@ def query_scalar(request):
 
 
 @login_required
-def query_start(request):
+def query_start(request: HttpRequest) -> HttpResponse:
     """Start query by creating necessary empty data structures."""
     request.session["page_title"] = "Query Wizard"
     request.session["tables"] = []
@@ -879,15 +885,18 @@ def query_start(request):
     return render(request, "primo/query_start.jinja")
 
 
-def query_3d(request, which_3d_output_type, preview_only):
+def query_3d(
+    request: HttpRequest, which_3d_output_type: str, only_preview: str
+) -> HttpResponse:
     """
     Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
     Send results to either Morphologika or GRFND creator and downloader.
-    If preview_only, ignore which_output_type and show metadata preview for top
+    If only_preview, ignore which_output_type and show metadata preview for top
     five taxa.
     """
 
-    preview_only = True if preview_only == "True" else False  # convert from String
+    # We'll use a bool, `preview_only`, for the rest of the fn.
+    preview_only = True if only_preview == "True" else False  # convert from String
     if not request.user.is_authenticated or request.user.username == "user":
         preview_only = True
 
@@ -1027,7 +1036,7 @@ def query_3d(request, which_3d_output_type, preview_only):
     return render(request, "primo/query_results.jinja", context)
 
 
-def set_up_download(request):
+def set_up_download(request: HttpRequest) -> None:
     """
     Set the newline character, set name of file based on current time.
     Put both in session variable. If it's 3D make 3D output directory.
@@ -1058,7 +1067,9 @@ def set_up_download(request):
     request.session["directory_name"] = directory_name
 
 
-def tabulate_scalar(request, query_results, preview_only):
+def tabulate_scalar(
+    request: HttpRequest, query_results, preview_only: str
+) -> list[Dict[str, str]]:
     """
     Return a list of dictionaries where each dictionary has the keys
     Specimen ID
