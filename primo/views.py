@@ -14,8 +14,8 @@ from django.contrib.auth.models import User
 from django.core.files import File
 from django.core.mail import send_mail
 from django.db import connection
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
@@ -31,6 +31,10 @@ from typing import Dict, Tuple
 class IndexView(TemplateView):
     template_name = "primo/index.jinja"
 
+
+def entity_relation_diagram(request: HttpRequest) -> HttpResponse:
+    request.session["page_title"] = "Entity Relation Diagram"
+    return render(request, "primo/erd.jinja")
 
 def collate_metadata(request: HttpRequest) -> None:
     """
@@ -222,16 +226,17 @@ def email(request: HttpRequest) -> HttpResponse:
     error = None
     if request.method == "POST":
         if form.is_valid():
-            # Get crap from POST.
-            name = request.POST.get("first_name") + "," + request.POST.get("last_name")
-            email = request.POST.get("email") + ","
+            # Get crap from POST. I'm using `type: ignore` here because I know
+            # the form has already been validated and all of these fields exist.
+            name = request.POST.get("first_name") + "," + request.POST.get("last_name") # type: ignore
+            email = request.POST.get("email") + "," # type: ignore
             body = name + "," + email + ","
-            body += request.POST.get("affiliation") + ","
-            body += request.POST.get("position") + ","
-            body += request.POST.get("dept") + ","
-            body += request.POST.get("institute") + ","
-            body += request.POST.get("country") + ","
-            body += request.POST.get("body")
+            body += request.POST.get("affiliation") + "," # type: ignore
+            body += request.POST.get("position") + "," # type: ignore
+            body += request.POST.get("dept") + "," # type: ignore
+            body += request.POST.get("institute") + "," # type: ignore
+            body += request.POST.get("country") + "," # type: ignore
+            body += request.POST.get("body") # type: ignore
 
             return render(
                 request, "primo/email.jinja", {"success": True, "error": error}
@@ -495,7 +500,7 @@ def log_in(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         username = request.POST.get("user_name")
         password = request.POST.get("password")
-        next_page = request.POST.get("next")
+        next_page = request.POST.get("next") # type: ignore
         user = authenticate(username=username, password=password)
 
         if user is not None and user.is_active:
@@ -674,7 +679,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
                     request.session["selected"]["variable"] = []
 
             else:  # Return is *not* from nlstree.js, so can just get id values.
-                for item in request.POST.getlist("id"):
+                for item in request.POST.getlist("id"): # type: ignore
                     # Because .get() returns only last item. Note that getlist()
                     # returns an empty list for any missing key.
                     selected_rows.append(int(item))
@@ -886,17 +891,15 @@ def query_start(request: HttpRequest) -> HttpResponse:
 
 
 def query_3d(
-    request: HttpRequest, which_3d_output_type: str, only_preview: str
+    request: HttpRequest, which_3d_output_type: str, preview_only: bool
 ) -> HttpResponse:
     """
     Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
     Send results to either Morphologika or GRFND creator and downloader.
-    If only_preview, ignore which_output_type and show metadata preview for top
+    If preview_only, ignore which_output_type and show metadata preview for top
     five taxa.
     """
 
-    # We'll use a bool, `preview_only`, for the rest of the fn.
-    preview_only = True if only_preview == "True" else False  # convert from String
     if not request.user.is_authenticated or request.user.username == "user":
         preview_only = True
 
@@ -1068,7 +1071,7 @@ def set_up_download(request: HttpRequest) -> None:
 
 
 def tabulate_scalar(
-    request: HttpRequest, query_results, preview_only: str
+    request: HttpRequest, query_results: list[dict[str,str]], preview_only: bool
 ) -> list[Dict[str, str]]:
     """
     Return a list of dictionaries where each dictionary has the keys
@@ -1108,7 +1111,7 @@ def tabulate_scalar(
             current_dict[row["variable_label"]] = row["scalar_value"]
             current_specimen = row["hypocode"]
         # TODO: Figure out SQL so we don't have to do entire query and cull it here.
-        if preview_only == True and num_specimens >= 15:
+        if preview_only and num_specimens >= 15:
             break
     output.append(current_dict)
     return output
