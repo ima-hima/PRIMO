@@ -4,6 +4,7 @@ from csv import DictWriter
 from datetime import datetime
 from functools import reduce
 from os import mkdir, path, remove
+from typing import Dict, Tuple
 from uuid import uuid1
 
 from django.apps import apps
@@ -14,18 +15,23 @@ from django.contrib.auth.models import User
 from django.core.files import File
 from django.core.mail import send_mail
 from django.db import connection
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+)
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
 
-# from django_stubs_ext.db.models import TypedModelMeta
-
 from .forms import *
 from .models import *
-from typing import Dict, Tuple
+
+# from django_stubs_ext.db.models import TypedModelMeta
+
 
 
 class IndexView(TemplateView):
