@@ -1,13 +1,4 @@
-# This is an auto-generated Django model module.
-# You'll have to do the following manually to clean this up:
-#   * Rearrange models' order
-#   * Make sure each model has one field with primary_key=True
-#   * Remove `managed = True` lines if you wish to allow Django to create, modify, and delete the table
-# Feel free to rename the models, but don't rename db_table values or field names.
-#
-# Also note: You'll have to insert the output of 'django-admin sqlcustom [app_label]'
-# into your database.
-from __future__ import unicode_literals
+from typing import Optional
 
 from django.db import models
 
@@ -15,11 +6,11 @@ from django.db import models
 class Ageclass(models.Model):
     """Ages, can include Infant, Juvenile, Adult, Unknown."""
 
-    name = models.CharField("Age class", max_length=50, blank=True, null=True)
-    abbr = models.CharField("Abbreviation", max_length=50, blank=True, null=True)
+    name = models.CharField("Age class", max_length=50)
+    abbr = models.CharField("Abbreviation", max_length=50)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -109,7 +100,7 @@ class Bodypart(models.Model):
     """
 
     name = models.CharField(
-        "Bodypart name", max_length=191, blank=True, null=True, unique=True
+        "Bodypart name", max_length=191, unique=True
     )
     parent = models.ForeignKey(
         "Bodypart",
@@ -121,7 +112,7 @@ class Bodypart(models.Model):
     tree_root = models.BooleanField(blank=False, null=False, default=False)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -156,13 +147,12 @@ class Captive(models.Model):
         "Captive or wild-caught",
         max_length=16,
         blank=True,
-        null=True,
         choices=CHOICES,
     )
     abbr = models.CharField("Abbreviation", max_length=2, blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -189,7 +179,7 @@ class Continent(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -213,7 +203,7 @@ class Country(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -286,12 +276,11 @@ class Datatype(models.Model):
         "Data type",
         max_length=32,
         blank=True,
-        null=True,
         choices=TYPES,
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.data_table
 
     class Meta:
@@ -305,7 +294,7 @@ class Device(models.Model):
 
     name = models.CharField(max_length=255)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -375,18 +364,14 @@ class Fossil(models.Model):
     name = models.CharField(
         "Fossil or Extant",
         max_length=16,
-        blank=True,
-        null=True,
     )
     abbr = models.CharField(
         "Abbreviation",
         max_length=2,
-        blank=True,
-        null=True,
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -427,7 +412,7 @@ class Institute(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -448,7 +433,7 @@ class IslandRegion(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -471,19 +456,15 @@ class Laterality(models.Model):
     )
     name = models.CharField(
         max_length=255,
-        blank=True,
-        null=True,
         choices=CHOICES,
     )
     abbr = models.CharField(
         "Abbreviation",
         max_length=1,
-        blank=True,
-        null=True,
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -504,8 +485,6 @@ class Locality(models.Model):
     name = models.CharField(
         "Locality",
         max_length=191,
-        blank=True,
-        null=True,
     )
     state_province = models.ForeignKey(
         "StateProvince",
@@ -527,7 +506,7 @@ class Locality(models.Model):
     age = models.FloatField(blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -541,8 +520,6 @@ class Observer(models.Model):
 
     name = models.CharField(
         max_length=191,
-        blank=True,
-        null=True,
         unique=True,
     )
     initials = models.CharField(
@@ -553,7 +530,7 @@ class Observer(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -572,8 +549,6 @@ class Original(models.Model):
     name = models.CharField(
         "Type",
         max_length=16,
-        blank=True,
-        null=True,
         choices=CHOICES,
     )
     abbr = models.CharField(
@@ -584,7 +559,7 @@ class Original(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -603,8 +578,6 @@ class Paired(models.Model):
     name = models.CharField(
         "Type",
         max_length=64,
-        blank=True,
-        null=True,
         choices=CHOICES,
     )
     abbr = models.CharField(
@@ -615,7 +588,7 @@ class Paired(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -638,10 +611,10 @@ class ProtocolVariable(models.Model):
 
 
 class Protocol(models.Model):
-    label = models.CharField("Protocol label", max_length=255, blank=True, null=True)
+    label = models.CharField("Protocol label", max_length=255, blank=True)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.label
 
     class Meta:
@@ -687,10 +660,10 @@ class QueryWizardTable(models.Model):
 
 
 class Rank(models.Model):
-    name = models.CharField("Rank name", max_length=255, blank=True, null=True)
+    name = models.CharField("Rank name", max_length=255, blank=True)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -713,7 +686,7 @@ class Session(models.Model):
     filename = models.CharField(max_length=255, blank=True, null=True)
     group = models.ForeignKey("AuthGroup", default=3, on_delete=models.PROTECT)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.id)
 
     class Meta:
@@ -735,8 +708,6 @@ class Sex(models.Model):
     name = models.CharField(
         "Sex",
         max_length=16,
-        blank=True,
-        null=True,
         choices=CHOICES,
     )
     abbr = models.CharField(
@@ -747,7 +718,7 @@ class Sex(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -806,7 +777,7 @@ class Taxon(models.Model):
     tree_root = models.BooleanField(blank=False, null=False, default=False)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -828,11 +799,11 @@ class SpecimenType(
         ("future neotype", "future neotype"),
         ("unknown", "unknown"),
     )
-    name = models.CharField("Name", max_length=16, blank=True, null=True)
+    name = models.CharField("Name", max_length=16)
     abbr = models.CharField("Abbreviation", max_length=2, blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -853,7 +824,7 @@ class Variable(models.Model):
     label = models.CharField(
         max_length=32, blank=True, null=True
     )  # this is the id, set by biologists
-    name = models.CharField(max_length=255, blank=True, null=True)
+    name = models.CharField(max_length=255)
     laterality = models.ForeignKey(
         Laterality,
         null=True,
@@ -867,7 +838,7 @@ class Variable(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     class Meta:
@@ -889,7 +860,7 @@ class Specimen(models.Model):
                   specimen type
     """
 
-    hypocode = models.CharField(max_length=20, blank=True, null=True)
+    hypocode = models.CharField(max_length=20, blank=True)
     taxon = models.ForeignKey(Taxon, on_delete=models.PROTECT)
     institute = models.ForeignKey(
         Institute,
@@ -952,7 +923,7 @@ class Specimen(models.Model):
     )
     comments = models.TextField(blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.hypocode
 
     class Meta:
