@@ -15,9 +15,6 @@ def create_question(question_text, days):
 
 
 class ViewsTests(TestCase):
-    def test_concat_variable_list(self):
-        assertEqual(concat_variable_list([]))
-
     def test_detail_view_with_a_past_question(self):
         """
         The detail view of a question with a pub_date in the past should
