@@ -9,7 +9,7 @@ urlpatterns = [
     path("", views.IndexView.as_view(), name="index"),
     path("admin/", admin.site.urls, name="admin"),
     path("email/", views.email, name="email"),
-    path("entity_relationship_diagram/", views.entity_relation_diagram, name="erd"),
+    path("entity_relation_diagram/", views.entity_relation_diagram, name="erd"),
     path("login/", views.log_in, name="login"),
     path("accounts/login/", views.log_in, name="login"),
     path("logout/", views.logout_view, name="logout"),
@@ -32,7 +32,7 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    import debug_toolbar
+    import debug_toolbar  # type: ignore
 
     urlpatterns = [
         path("__debug__/", include(debug_toolbar.urls)),

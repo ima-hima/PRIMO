@@ -10,7 +10,8 @@ class LoginForm(forms.Form):
     )
 
 
-# note that in views the label suffix has been removed, so in this form I had to add them.
+# Note that in views the label suffix has been removed,
+# so in this form I had to add them.
 class EmailForm(forms.Form):
     first_name = forms.CharField(label="First name:", max_length=30)
     last_name = forms.CharField(label="Last name:", max_length=30)
