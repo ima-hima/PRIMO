@@ -16,9 +16,29 @@ exclude = '''
 )/
 '''
 
+
+[tool.flake8]
+exclude = ["migrations", "__pycache__", "manage.py", "settings.py", "pyproject.toml"]
+max-line-length = 88
+# per-file-ignores = __init__.py:F401
+ignore = [
+    "E203", # Whitespace before ':'. Ignored for black compatibility
+    "W503", # Line break occurred before a binary operator. Ignored for black compatibility
+    "D100", # Missing docstring in public module
+    "D104", # Missing docstring in public package
+    "D105",# Missing docstring in magic method
+    "D107", # Missing docstring in __init__
+    "SC200", # Spelling error in name (e.g. variable, function, class)
+    ]
+# ban-relative-imports = True
+# docstring-convention = google
+# inline-quotes = "
+
+
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
 disallow_untyped_defs = true
+
 
 [tool.django-stubs]
 django_settings_module = "primo.settings"

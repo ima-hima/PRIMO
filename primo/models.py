@@ -1,5 +1,3 @@
-from typing import Optional
-
 from django.db import models
 
 
@@ -99,9 +97,7 @@ class Bodypart(models.Model):
     generated in the front end by nlstree.
     """
 
-    name = models.CharField(
-        "Bodypart name", max_length=191, unique=True
-    )
+    name = models.CharField("Bodypart name", max_length=191, unique=True)
     parent = models.ForeignKey(
         "Bodypart",
         null=True,
@@ -644,14 +640,23 @@ class QueryWizardQuery(models.Model):
 
 
 class QueryWizardTable(models.Model):
+    """
+    A list of tables that will be used during query setup parameter selection.
+    """
+
     query_wizard_query = models.ForeignKey(
         "QueryWizardQuery",
         related_name="tables",
         on_delete=models.PROTECT,
     )
+    # How the name of the table will be displayed.
     display_name = models.CharField(max_length=100, blank=True, null=True)
+    # When we're filtering by table name, what string to use.
     filter_table_name = models.CharField(max_length=50, blank=True, null=True)
+    # Which order to display the tables in.
     display_order = models.IntegerField(blank=True, null=True)
+    # If all values from a table (e.g. fossil, sex) will be pre-selected when
+    # calling parameter selection, this is True.
     preselected = models.BooleanField(blank=False, null=False, default=False)
 
     class Meta:
@@ -787,9 +792,7 @@ class Taxon(models.Model):
         ordering = ["name"]
 
 
-class SpecimenType(
-    models.Model
-):  # wanted to use 'Type', but table already exists, and also `type` is a reserved word.
+class SpecimenType(models.Model):
     CHOICES = (
         ("holotype", "holotype"),
         ("lectotype", "lectotype"),
