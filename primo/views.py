@@ -145,7 +145,7 @@ def create_tree_javascript(
                 + expand
                 + ", "
             )
-            if item_id not in request.session["selected"][current_table]:
+            if item_id not in request.session["table_var_select_done"][current_table]:
                 javascript += "false );\n"
             else:
                 javascript += "true );\n"
@@ -541,7 +541,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
     javascript = ""
     request.session["page_title"] = f"{current_table.capitalize()} Selection"
     if current_table == "variable":
-        if request.session["selected"]["bodypart"]:
+        if request.session["table_var_select_done"]["bodypart"]:
             with connection.cursor() as variable_query:
                 sql = (
                     "SELECT variable.name AS var_name, "
@@ -559,7 +559,9 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
                     "ORDER BY variable.id"
                 )
 
-                variable_query.execute(sql, [request.session["selected"]["bodypart"]])
+                variable_query.execute(
+                    sql, [request.session["table_var_select_done"]["bodypart"]]
+                )
                 columns = [col[0] for col in variable_query.description]
                 vals = [dict(zip(columns, row)) for row in variable_query.fetchall()]
 
@@ -604,7 +606,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         javascript = (
             f'tree.add("{item_id}", "{parent_id}", "{name}", "", "", {expand}, '
         )
-        if item_id not in request.session["selected"][current_table]:
+        if item_id not in request.session["table_var_select_done"][current_table]:
             javascript += "false );\n"
         else:
             javascript += "true );\n"
@@ -657,7 +659,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
         current_table = request.POST.get("table")
 
         if request.POST.get("commit") == "Submit checked options":
-            # Otherwise, cancel or select all was chosen.
+            # Otherwise, "cancel" or "select all" was chosen.
             selected_rows: list[int] = []
 
             if (
@@ -675,14 +677,14 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
                         selected_rows.append(int(item[0][7:]))
 
                 if request.POST.get("table") == "bodypart":
-                    request.session["selected"]["variable"] = []
+                    request.session["table_var_select_done"]["variable"] = []
 
             else:  # Return is *not* from nlstree.js, so can just get id values.
                 for item in request.POST.getlist("id"):  # type: ignore
                     # Because .get() returns only last item. Note that getlist()
                     # returns an empty list for any missing key.
                     selected_rows.append(int(item))  # type: ignore
-            request.session["selected"][current_table] = selected_rows
+            request.session["table_var_select_done"][current_table] = selected_rows
     if not request.session["tables"]:
         # If tables isn't set, query for all tables and set up both tables and
         # selected lists. Note that "tables" will exist as key either way.
@@ -695,7 +697,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
         """selected will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])."""
         selected = dict()
         request.session["tables"] = []
-        request.session["selected"] = dict()
+        request.session["table_var_select_done"] = dict()
 
         for table in tables:
             # if len(request.session['selected'][table.table_name]) == 0:
@@ -713,19 +715,19 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
                 )
                 values = model.objects.values("id").all()
                 # Because vals is a list of dicts in format 'id': value.
-                request.session["selected"][table.filter_table_name] = [
+                request.session["table_var_select_done"][table.filter_table_name] = [
                     value["id"] for value in values
                 ]  # type: ignore
             else:
-                request.session["selected"][table.filter_table_name] = []
+                request.session["table_var_select_done"][table.filter_table_name] = []
                 # So I can use 'if selected[table]' in query_setup.jinja.
 
-    selected = request.session["selected"]
+    selected = request.session["table_var_select_done"]
     # I coudn't figure out any way to do this other than to check each time.
     finished = True
 
     for table in request.session["tables"]:
-        if not selected[table.filter_table_name]:
+        if not selected[table["table_name"]]:  # type: ignore
             finished = False
 
     request.session.modified = True
@@ -799,10 +801,8 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
         "          ON specimen.age_class_id = age_class.id "
         "     JOIN locality "
         "          ON specimen.locality_id = locality.id "
-        "     JOIN state_province "
-        "          ON locality.state_province_id = state_province.id "
         "     JOIN country "
-        "          ON state_province.country_id = country.id"
+        "          ON locality.country_id = country.id"
     )
 
     where = (
@@ -822,7 +822,7 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
             " WHERE variable.id "
             "    IN %s "
             "ORDER BY label ASC;",
-            [request.session["selected"]["variable"]],
+            [request.session["table_var_select_done"]["variable"]],
         )
         variable_labels = [label[0] for label in variable_query.fetchall()]
 
@@ -831,11 +831,11 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
         cursor.execute(
             final_sql,
             [
-                request.session["selected"]["sex"],
-                request.session["selected"]["fossil"],
-                request.session["selected"]["taxon"],
+                request.session["table_var_select_done"]["sex"],
+                request.session["table_var_select_done"]["fossil"],
+                request.session["table_var_select_done"]["taxon"],
                 # concat_variable_list(request.session['selected']['bodypart']),
-                request.session["selected"]["variable"],
+                request.session["table_var_select_done"]["variable"],
             ],
         )
         # Now return all rows as a dictionary object. Note that each variable
@@ -859,17 +859,17 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
     request.session["variable_labels"] = variable_labels
     context = {
         "final_sql": final_sql.replace("%s", "{}").format(
-            request.session["selected"]["sex"],
-            request.session["selected"]["fossil"],
-            request.session["selected"]["taxon"],
+            request.session["table_var_select_done"]["sex"],
+            request.session["table_var_select_done"]["fossil"],
+            request.session["table_var_select_done"]["taxon"],
             # concat_variable_list(request.session['selected']['bodypart']),
-            request.session["selected"]["variable"],
+            request.session["table_var_select_done"]["variable"],
         ),
         "query_results": new_query_results,
         "are_results": are_results,
         "total_specimens": len(new_query_results),
         "variable_labels": variable_labels,
-        "variable_ids": request.session["selected"]["variable"],
+        "variable_ids": request.session["table_var_select_done"]["variable"],
         "preview_only": preview_only,
         "specimen_metadata": get_specimen_metadata(request),
         "user": request.user.username,
@@ -960,10 +960,8 @@ def query_3d(
         "       ON specimen.age_class_id = age_class.id "
         "     JOIN `locality` "
         "       ON specimen.locality_id = locality.id "
-        "     JOIN `state_province` "
-        "       ON locality.state_province_id = state_province.id "
         "     JOIN `country` "
-        "       ON state_province.country_id = country.id "
+        "       ON locality.country_id = country.id "
     )
 
     where = " WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s"
@@ -985,9 +983,9 @@ def query_3d(
         cursor.execute(
             final_sql,
             [
-                request.session["selected"]["sex"],
-                request.session["selected"]["fossil"],
-                request.session["selected"]["taxon"],
+                request.session["table_var_select_done"]["sex"],
+                request.session["table_var_select_done"]["fossil"],
+                request.session["table_var_select_done"]["taxon"],
             ],
         )
         # Now return all rows as a dictionary object. Note that each variable
@@ -1012,9 +1010,9 @@ def query_3d(
     context = {
         "final_sql": final_sql.replace("%s", "{}")
         .format(
-            request.session["selected"]["sex"],
-            request.session["selected"]["fossil"],
-            request.session["selected"]["taxon"],
+            request.session["table_var_select_done"]["sex"],
+            request.session["table_var_select_done"]["fossil"],
+            request.session["table_var_select_done"]["taxon"],
         )
         .replace("[", "(")
         .replace("]", ")"),
