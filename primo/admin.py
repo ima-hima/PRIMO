@@ -14,7 +14,6 @@ from .models import (
     Datatype,
     Fossil,
     Institute,
-    IslandRegion,
     Laterality,
     Locality,
     Observer,
@@ -248,19 +247,6 @@ class InstituteAdmin(admin.ModelAdmin):
     actions_on_bottom = True
 
 
-@admin.register(IslandRegion)
-class IslandRegionAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "name",
-        "comments",
-    ]
-    fields = [
-        "name",
-        "comments",
-    ]
-
-
 @admin.register(Laterality)
 class LateralityAdmin(admin.ModelAdmin):
     list_display = [
@@ -279,9 +265,7 @@ class LocalityAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "name",
-        "state_province",
         "continent",
-        "island_region",
         "latitude",
         "longitude",
         "site_unit",
@@ -293,7 +277,6 @@ class LocalityAdmin(admin.ModelAdmin):
         "name",
         "state_province",
         "continent",
-        "island_region",
         "latitude",
         "longitude",
         "site_unit",
@@ -305,7 +288,6 @@ class LocalityAdmin(admin.ModelAdmin):
         ("name", DropdownFilter),
         ("state_province__name", DropdownFilter),
         ("continent__name", DropdownFilter),
-        ("island_region__name", DropdownFilter),
         ("age", DropdownFilter),
     )
     search_fields = [

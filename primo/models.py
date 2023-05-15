@@ -417,28 +417,6 @@ class Institute(models.Model):
         ordering = ["name"]
 
 
-class IslandRegion(models.Model):
-    """Stores list of islands or regions. Used in Locality."""
-
-    name = models.CharField(
-        "Region Name",
-        max_length=255,
-        blank=True,
-        null=False,
-        default=10000,
-    )
-    comments = models.TextField(blank=True, null=True)
-
-    def __str__(self) -> str:
-        return self.name
-
-    class Meta:
-        managed = True
-        db_table = "island_region"
-        ordering = ["name"]
-        verbose_name = "Island region"
-
-
 class Laterality(models.Model):
     """Whether two 3D points are lateral, and which kind of laterality."""
 
@@ -472,10 +450,7 @@ class Laterality(models.Model):
 class Locality(models.Model):
     """
     A locality is a small region marked by a latitude and longitude.
-    Foreign keys:
-    state,
-    continent,
-    and island region.
+    Foreign keys: state and continent.
     """
 
     name = models.CharField(
@@ -489,12 +464,6 @@ class Locality(models.Model):
         default=10000,
     )
     continent = models.ForeignKey("Continent", default=7, on_delete=models.SET_DEFAULT)
-    island_region = models.ForeignKey(
-        "IslandRegion",
-        null=False,
-        on_delete=models.SET_DEFAULT,
-        default=10000,
-    )
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     site_unit = models.CharField(max_length=255, blank=True, null=True)

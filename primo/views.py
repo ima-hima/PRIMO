@@ -657,7 +657,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
         current_table = request.POST.get("table")
 
         if request.POST.get("commit") == "Submit checked options":
-            # Otherwise, cancel or select all was chosen.
+            # Otherwise, "cancel" or "select all" was chosen.
             selected_rows: list[int] = []
 
             if (
@@ -799,10 +799,8 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
         "          ON specimen.age_class_id = age_class.id "
         "     JOIN locality "
         "          ON specimen.locality_id = locality.id "
-        "     JOIN state_province "
-        "          ON locality.state_province_id = state_province.id "
         "     JOIN country "
-        "          ON state_province.country_id = country.id"
+        "          ON locality.country_id = country.id"
     )
 
     where = (
@@ -960,10 +958,8 @@ def query_3d(
         "       ON specimen.age_class_id = age_class.id "
         "     JOIN `locality` "
         "       ON specimen.locality_id = locality.id "
-        "     JOIN `state_province` "
-        "       ON locality.state_province_id = state_province.id "
         "     JOIN `country` "
-        "       ON state_province.country_id = country.id "
+        "       ON locality.country_id = country.id "
     )
 
     where = " WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s"
