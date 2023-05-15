@@ -450,20 +450,15 @@ class Laterality(models.Model):
 class Locality(models.Model):
     """
     A locality is a small region marked by a latitude and longitude.
-    Foreign keys: state and continent.
+    Foreign keys: country and continent.
     """
 
     name = models.CharField(
         "Locality",
         max_length=191,
     )
-    state_province = models.ForeignKey(
-        "StateProvince",
-        null=False,
-        on_delete=models.SET_DEFAULT,
-        default=10000,
-    )
     continent = models.ForeignKey("Continent", default=7, on_delete=models.SET_DEFAULT)
+    country = models.ForeignKey("Country", default=10000, on_delete=models.SET_DEFAULT)
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     site_unit = models.CharField(max_length=255, blank=True, null=True)
@@ -700,36 +695,6 @@ class Sex(models.Model):
         db_table = "sex"
         verbose_name_plural = "sexes"
         ordering = ["id"]
-
-
-class StateProvince(models.Model):
-    country = models.ForeignKey(
-        "Country",
-        on_delete=models.SET_DEFAULT,
-        blank=False,
-        null=False,
-        default=10000,
-    )
-    name = models.CharField(
-        "State",
-        max_length=255,
-        blank=False,
-        null=False,
-    )
-    abbr = models.CharField(
-        "Abbreviation",
-        max_length=8,
-        blank=False,
-        null=False,
-    )
-    comments = models.TextField(blank=True, null=True)
-
-    class Meta:
-        managed = True
-        db_table = "state_province"
-        verbose_name = "State/province"
-        verbose_name_plural = "States/provinces"
-        ordering = ["name"]
 
 
 class Taxon(models.Model):

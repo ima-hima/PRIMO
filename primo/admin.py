@@ -26,7 +26,6 @@ from .models import (
     Sex,
     Specimen,
     SpecimenType,
-    StateProvince,
     Taxon,
     Variable,
 )
@@ -266,6 +265,7 @@ class LocalityAdmin(admin.ModelAdmin):
         "id",
         "name",
         "continent",
+        "country",
         "latitude",
         "longitude",
         "site_unit",
@@ -275,8 +275,8 @@ class LocalityAdmin(admin.ModelAdmin):
     ]
     fields = [
         "name",
-        "state_province",
         "continent",
+        "country",
         "latitude",
         "longitude",
         "site_unit",
@@ -286,8 +286,8 @@ class LocalityAdmin(admin.ModelAdmin):
     ]
     list_filter = (
         ("name", DropdownFilter),
-        ("state_province__name", DropdownFilter),
         ("continent__name", DropdownFilter),
+        ("country__name", DropdownFilter),
         ("age", DropdownFilter),
     )
     search_fields = [
@@ -500,30 +500,6 @@ class SpecimenTypeAdmin(admin.ModelAdmin):
         "abbr",
         "comments",
     ]
-
-
-@admin.register(StateProvince)
-class StateProvinceAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "country",
-        "name",
-        "abbr",
-        "comments",
-    ]
-    fields = [
-        "country",
-        "name",
-        "abbr",
-        "comments",
-    ]
-    list_filter = (
-        ("country__name", DropdownFilter),
-        ("name", DropdownFilter),
-        ("abbr", DropdownFilter),
-    )
-    actions_on_top = True
-    actions_on_bottom = True
 
 
 @admin.register(Taxon)
