@@ -59,7 +59,7 @@ $(document).ready(function() {
   });
 });
 </script>
-{% if current_table == 'variable' and not request.session.selected.bodypart %}
+{% if current_table == 'variable' and not request.session.table_var_select_done.bodypart %}
         <p style="font-size: 16px;">No bodyparts were specified. Please select bodyparts before attempting to select variables. </p>
         <div style="margin-bottom: 30px;">
             <form action="{% url 'query_setup' request.session.scalar_or_3d %}" method="post" />
@@ -99,7 +99,7 @@ $(document).ready(function() {
             <td>{{ value.var_name }}</td>
             <td>{{ value.var_label }}</td>
             <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.var_id }}"
-                    {% if request.session.selected.current_table|get_item:value.id %} CHECKED {% endif %}></td>
+                    {% if request.session.table_var_select_done.current_table|get_item:value.id %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% elif current_table == 'bodypart' or current_table == 'taxon' %}
@@ -141,7 +141,7 @@ $(document).ready(function() {
         <tr>
             <td>{{ value.name }}</td>
             <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.id }}"
-                {% if value.id in request.session.selected.current_table %} CHECKED {% endif %}></td>
+                {% if value.id in request.session.table_var_select_done.current_table %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% endif %}
