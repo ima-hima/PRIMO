@@ -18,9 +18,7 @@ from .models import (
     Locality,
     Observer,
     Original,
-    Paired,
     Protocol,
-    ProtocolVariable,
     Rank,
     Session,
     Sex,
@@ -326,40 +324,6 @@ class OriginalAdmin(admin.ModelAdmin):
         "name",
         "abbr",
     ]
-
-
-@admin.register(Paired)
-class PairedAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "name",
-        "abbr",
-        "comments",
-    ]
-    fields = [
-        "paired",
-        "abbr",
-        "comments",
-    ]
-
-
-@admin.register(ProtocolVariable)
-class ProtocolVariableAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "protocol",
-        "variable",
-    ]
-    fields = [
-        "protocol",
-        "variable",
-    ]
-    list_filter = (
-        ("protocol__label", DropdownFilter),
-        ("variable__name", DropdownFilter),
-    )
-    actions_on_top = True
-    actions_on_bottom = True
 
 
 @admin.register(Protocol)
