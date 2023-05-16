@@ -122,7 +122,7 @@ def create_tree_javascript(
         .filter(parent_id=parent_id)
     )
     for val in vals:
-        # remove quote marks from `name`, as they'll screw up Javascript
+        # Remove quote marks from `name`, as they'll screw up Javascript
         name = val["name"].replace('"', "")
         item_id = val["id"]
         parent_id = val["parent_id"]
@@ -878,7 +878,7 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def query_start(request: HttpRequest) -> HttpResponse:
-    """Start query by creating necessary empty data structures."""
+    """Start or reset query by creating or emptying data structures."""
     request.session["page_title"] = "Query Wizard"
     request.session["tables"] = []
     request.session["selected"] = dict()

@@ -104,7 +104,9 @@ class Bodypart(models.Model):
         on_delete=models.PROTECT,
         verbose_name="Parent Bodypart",
     )
+    """Whether the taxon should be expanded in the tree view."""
     expand_in_tree = models.BooleanField(blank=False, null=False, default=False)
+    """Whether the taxon is the root of the tree in the tree view."""
     tree_root = models.BooleanField(blank=False, null=False, default=False)
     comments = models.TextField(blank=True, null=True)
 
