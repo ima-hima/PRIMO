@@ -1,46 +1,31 @@
 import subprocess
-import sys
 from csv import DictWriter
 from datetime import datetime
-from functools import reduce
-from os import mkdir, path, remove
+from os import mkdir, path
+from sys import exc_info
 from typing import Dict, Tuple
-from uuid import uuid1
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.core.files import File
 from django.core.mail import send_mail
 from django.db import connection
-from django.http import (
-    Http404,
-    HttpRequest,
-    HttpResponse,
-    HttpResponseRedirect,
-)
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
-from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
 
-from .forms import *
-from .models import *
+from .forms import EmailForm, LoginForm
+from .models import QueryWizardQuery
 
 # from django_stubs_ext.db.models import TypedModelMeta
-
 
 
 class IndexView(TemplateView):
     template_name = "primo/index.jinja"
 
-
-def entity_relation_diagram(request: HttpRequest) -> HttpResponse:
-    request.session["page_title"] = "Entity Relation Diagram"
-    return render(request, "primo/erd.jinja")
 
 def collate_metadata(request: HttpRequest) -> None:
     """
@@ -159,7 +144,7 @@ def create_tree_javascript(
                 + expand
                 + ", "
             )
-            if item_id not in request.session["selected"][current_table]:
+            if item_id not in request.session["table_var_select_done"][current_table]:
                 javascript += "false );\n"
             else:
                 javascript += "true );\n"
@@ -185,13 +170,14 @@ def download(request: HttpRequest) -> HttpResponse:
 
     if path.exists(filepath):
         if request.session["scalar_or_3d"] == "3D":
-            # Just a s a reminer, c is create a new file; z is gzip it; f is filename;
-            # -C is move to the following directory first; name at end is the directory
-            # to compress.
+            # Just as a reminer, -c is create a new file; -z is gzip it;
+            # -f is filename; -C is move to the following directory first;
+            # name at end is the directory to compress.
             # Using -C here to get rid of prefix of absolute file path.
             # So: tar -czf DOWNLOAD_ROOT/filename.tar.gz -C DOWNLOAD_ROOT directory_name
             # Files should be in request.session['directory_name'], so that directory is
-            # what needs to be compressed, meaning tar needs to operate from DOWNLOAD_ROOT.
+            # what needs to be compressed, meaning tar needs to operate from
+            # DOWNLOAD_ROOT.
             subprocess.run(
                 [
                     "tar",
@@ -228,22 +214,29 @@ def email(request: HttpRequest) -> HttpResponse:
     """Create email form, collect info, send email."""
     request.session["page_title"] = "Email Administrator"
     form = EmailForm(request.POST or None)
-    success = False
     error = None
     if request.method == "POST":
         if form.is_valid():
             # Get crap from POST. I'm using `type: ignore` here because I know
             # the form has already been validated and all of these fields exist.
-            name = request.POST.get("first_name") + "," + request.POST.get("last_name") # type: ignore
-            email = request.POST.get("email") + "," # type: ignore
-            body = name + "," + email + ","
-            body += request.POST.get("affiliation") + "," # type: ignore
-            body += request.POST.get("position") + "," # type: ignore
-            body += request.POST.get("dept") + "," # type: ignore
-            body += request.POST.get("institute") + "," # type: ignore
-            body += request.POST.get("country") + "," # type: ignore
-            body += request.POST.get("body") # type: ignore
-
+            name = f"{request.POST.get('first_name')} {request.POST.get('last_name')}"
+            email = f"{request.POST.get('email')},"
+            body = (
+                f"{name}, {email}\n"
+                f"{request.POST.get('affiliation')},"
+                f"{request.POST.get('position')},"
+                f"{request.POST.get('dept')},"
+                f"{request.POST.get('institute')}/n"
+                f"{request.POST.get('country')}/n"
+                f"{request.POST.get('body')}"
+            )
+            send_mail(
+                "PRIMO access request",
+                body,
+                "primo@nycep.org",
+                ["eric.delson@example.com"],
+                fail_silently=False,
+            )
             return render(
                 request, "primo/email.jinja", {"success": True, "error": error}
             )
@@ -335,7 +328,7 @@ def create_3d_output_string(request: HttpRequest) -> None:
     point_ctr will be used to track which points are missing for a given
     sessiom/specimen.
     """
-    point_ctr = 1
+    missing_point_ctr = 1
     current_specimen = -1  # Keeps track of when new specimen data starts.
     for row in request.session["query_results"]:
         if row["specimen_id"] != current_specimen:
@@ -350,19 +343,19 @@ def create_3d_output_string(request: HttpRequest) -> None:
             else:
                 output_str += newline_char
             missing_pts[row["specimen_id"]] = ""
-            missing_pt_ctr = 1
+            missing_point_ctr = 1
         if (
             str(row["x"]) == "9999.0"
             and str(row["y"]) == "9999.0"
             and str(row["z"]) == "9999.0"
         ):
             output_str += "9999\t9999\t9999" + newline_char
-            missing_pts[row["specimen_id"]] += " " + str(missing_pt_ctr)
+            missing_pts[row["specimen_id"]] += " " + str(missing_point_ctr)
 
         else:
             output_str += f"{row['x']}\t{row['y']}\t{row['z']}{newline_char}"
 
-        missing_pt_ctr += 1
+        missing_point_ctr += 1
     request.session["missing_pts"] = missing_pts
 
     with open(
@@ -431,7 +424,7 @@ def get_3D_data(request: HttpRequest) -> None:
     where = " WHERE session_id IN %s"
     group_by = " GROUP BY session_id"
     ordering = " ORDER BY specimen_id, variable_id, data_3d.datindex ASC"
-    final_sql = base + where + ordering + ";"
+    final_sql = base + where + ordering + group_by + ";"
 
     with connection.cursor() as cursor:
         cursor.execute(final_sql, [request.session["sessions"]])
@@ -499,14 +492,14 @@ def log_in(request: HttpRequest) -> HttpResponse:
     request.session["page_title"] = "Login"
     form = LoginForm(request.POST or None)
 
-    try:
+    if "next" in request.GET:
         next_page = request.GET["next"]
-    except:
+    else:
         next_page = "/"
     if request.method == "POST" and form.is_valid():
         username = request.POST.get("user_name")
         password = request.POST.get("password")
-        next_page = request.POST.get("next") # type: ignore
+        next_page = request.POST.get("next")  # type: ignore
         user = authenticate(username=username, password=password)
 
         if user is not None and user.is_active:
@@ -543,11 +536,11 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-def parameter_selection(request: HttpRequest, current_table: str) -> HttpResponse:
+def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpResponse:
     javascript = ""
     request.session["page_title"] = f"{current_table.capitalize()} Selection"
     if current_table == "variable":
-        if request.session["selected"]["bodypart"]:
+        if request.session["table_var_select_done"]["bodypart"]:
             with connection.cursor() as variable_query:
                 sql = (
                     "SELECT variable.name AS var_name, "
@@ -556,7 +549,8 @@ def parameter_selection(request: HttpRequest, current_table: str) -> HttpRespons
                     "       bps.id AS bodypart_id, "
                     "       bps.name AS bodypart_name "
                     "FROM variable "
-                    "    JOIN bodypart_variable ON variable.id = bodypart_variable.variable_id "
+                    "    JOIN bodypart_variable "
+                    "         ON variable.id = bodypart_variable.variable_id "
                     "    JOIN (SELECT bodypart.id, bodypart.name "
                     "            FROM bodypart "
                     "           WHERE id IN %s) AS bps "
@@ -564,7 +558,9 @@ def parameter_selection(request: HttpRequest, current_table: str) -> HttpRespons
                     "ORDER BY variable.id"
                 )
 
-                variable_query.execute(sql, [request.session["selected"]["bodypart"]])
+                variable_query.execute(
+                    sql, [request.session["table_var_select_done"]["bodypart"]]
+                )
                 columns = [col[0] for col in variable_query.description]
                 vals = [dict(zip(columns, row)) for row in variable_query.fetchall()]
 
@@ -584,8 +580,9 @@ def parameter_selection(request: HttpRequest, current_table: str) -> HttpRespons
 
     elif current_table == "bodypart" or current_table == "taxon":
         vals = []
-        # do original query to get root of tree.
-        # The rest of the tree will be recursively created in `create_tree_javascript()`.
+        # Do original query to get root of tree.
+        # The rest of the tree will be recursively created in
+        # `create_tree_javascript()`.
         value = (
             apps.get_model(
                 app_label="primo",
@@ -608,7 +605,7 @@ def parameter_selection(request: HttpRequest, current_table: str) -> HttpRespons
         javascript = (
             f'tree.add("{item_id}", "{parent_id}", "{name}", "", "", {expand}, '
         )
-        if item_id not in request.session["selected"][current_table]:
+        if item_id not in request.session["table_var_select_done"][current_table]:
             javascript += "false );\n"
         else:
             javascript += "true );\n"
@@ -616,22 +613,19 @@ def parameter_selection(request: HttpRequest, current_table: str) -> HttpRespons
         # Now do follow-up query using root as parent.
         javascript += create_tree_javascript(request, item_id, current_table)
 
+    elif current_table == "fossil" or current_table == "sex":
+        current_model = apps.get_model(
+            app_label="primo",
+            model_name=current_table.capitalize(),
+        )
     else:
-        # For fossil, sex.
-        try:
-            current_table
-            current_model = apps.get_model(
-                app_label="primo",
-                model_name=current_table.capitalize(),
-            )
-        except:
-            # I have to do the set because nlsTree seems to be forcing a
-            # refresh with current_table set to "undefined". The actual
-            # value is unimportant, so I've just chosen one that has a model.
-            current_model = apps.get_model(
-                app_label="primo",
-                model_name="Taxon",
-            )
+        # I have to do the set because nlsTree seems to be forcing a
+        # refresh with current_table set to "undefined". The actual
+        # value is unimportant, so I've just chosen one that has a model.
+        current_model = apps.get_model(
+            app_label="primo",
+            model_name="Taxon",
+        )
 
         vals = current_model.objects.values("id", "name").all()
 
@@ -664,7 +658,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
         current_table = request.POST.get("table")
 
         if request.POST.get("commit") == "Submit checked options":
-            # Otherwise, cancel or select all was chosen.
+            # Otherwise, "cancel" or "select all" was chosen.
             selected_rows: list[int] = []
 
             if (
@@ -682,14 +676,14 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
                         selected_rows.append(int(item[0][7:]))
 
                 if request.POST.get("table") == "bodypart":
-                    request.session["selected"]["variable"] = []
+                    request.session["table_var_select_done"]["variable"] = []
 
             else:  # Return is *not* from nlstree.js, so can just get id values.
-                for item in request.POST.getlist("id"): # type: ignore
+                for item in request.POST.getlist("id"):  # type: ignore
                     # Because .get() returns only last item. Note that getlist()
                     # returns an empty list for any missing key.
-                    selected_rows.append(int(item))
-            request.session["selected"][current_table] = selected_rows
+                    selected_rows.append(int(item))  # type: ignore
+            request.session["table_var_select_done"][current_table] = selected_rows
     if not request.session["tables"]:
         # If tables isn't set, query for all tables and set up both tables and
         # selected lists. Note that "tables" will exist as key either way.
@@ -702,7 +696,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
         """selected will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])."""
         selected = dict()
         request.session["tables"] = []
-        request.session["selected"] = dict()
+        request.session["table_var_select_done"] = dict()
 
         for table in tables:
             # if len(request.session['selected'][table.table_name]) == 0:
@@ -715,23 +709,24 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
 
             if table.preselected:
                 model = apps.get_model(
-                    app_label="primo", model_name=table.filter_table_name.capitalize()
+                    app_label="primo",
+                    model_name=table.filter_table_name.capitalize(),  # type: ignore
                 )
                 values = model.objects.values("id").all()
                 # Because vals is a list of dicts in format 'id': value.
-                request.session["selected"][table.filter_table_name] = [
+                request.session["table_var_select_done"][table.filter_table_name] = [
                     value["id"] for value in values
-                ]
+                ]  # type: ignore
             else:
-                request.session["selected"][table.filter_table_name] = []
+                request.session["table_var_select_done"][table.filter_table_name] = []
                 # So I can use 'if selected[table]' in query_setup.jinja.
 
-    selected = request.session["selected"]
+    selected = request.session["table_var_select_done"]
     # I coudn't figure out any way to do this other than to check each time.
     finished = True
 
     for table in request.session["tables"]:
-        if not selected[table["table_name"]]:
+        if not selected[table["table_name"]]:  # type: ignore
             finished = False
 
     request.session.modified = True
@@ -805,10 +800,8 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
         "          ON specimen.age_class_id = age_class.id "
         "     JOIN locality "
         "          ON specimen.locality_id = locality.id "
-        "     JOIN state_province "
-        "          ON locality.state_province_id = state_province.id "
         "     JOIN country "
-        "          ON state_province.country_id = country.id"
+        "          ON locality.country_id = country.id"
     )
 
     where = (
@@ -828,7 +821,7 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
             " WHERE variable.id "
             "    IN %s "
             "ORDER BY label ASC;",
-            [request.session["selected"]["variable"]],
+            [request.session["table_var_select_done"]["variable"]],
         )
         variable_labels = [label[0] for label in variable_query.fetchall()]
 
@@ -837,11 +830,11 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
         cursor.execute(
             final_sql,
             [
-                request.session["selected"]["sex"],
-                request.session["selected"]["fossil"],
-                request.session["selected"]["taxon"],
+                request.session["table_var_select_done"]["sex"],
+                request.session["table_var_select_done"]["fossil"],
+                request.session["table_var_select_done"]["taxon"],
                 # concat_variable_list(request.session['selected']['bodypart']),
-                request.session["selected"]["variable"],
+                request.session["table_var_select_done"]["variable"],
             ],
         )
         # Now return all rows as a dictionary object. Note that each variable
@@ -857,25 +850,25 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
     try:
         new_query_results = tabulate_scalar(request, query_results, preview_only)
         request.session["query_results"] = new_query_results
-    except:
-        print(sys.exc_info()[0])
+    except Exception:
+        print(exc_info()[0])
         are_results = False
 
     # This is for use in export_csv_file().
     request.session["variable_labels"] = variable_labels
     context = {
         "final_sql": final_sql.replace("%s", "{}").format(
-            request.session["selected"]["sex"],
-            request.session["selected"]["fossil"],
-            request.session["selected"]["taxon"],
+            request.session["table_var_select_done"]["sex"],
+            request.session["table_var_select_done"]["fossil"],
+            request.session["table_var_select_done"]["taxon"],
             # concat_variable_list(request.session['selected']['bodypart']),
-            request.session["selected"]["variable"],
+            request.session["table_var_select_done"]["variable"],
         ),
         "query_results": new_query_results,
         "are_results": are_results,
         "total_specimens": len(new_query_results),
         "variable_labels": variable_labels,
-        "variable_ids": request.session["selected"]["variable"],
+        "variable_ids": request.session["table_var_select_done"]["variable"],
         "preview_only": preview_only,
         "specimen_metadata": get_specimen_metadata(request),
         "user": request.user.username,
@@ -966,10 +959,8 @@ def query_3d(
         "       ON specimen.age_class_id = age_class.id "
         "     JOIN `locality` "
         "       ON specimen.locality_id = locality.id "
-        "     JOIN `state_province` "
-        "       ON locality.state_province_id = state_province.id "
         "     JOIN `country` "
-        "       ON state_province.country_id = country.id "
+        "       ON locality.country_id = country.id "
     )
 
     where = " WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s"
@@ -991,9 +982,9 @@ def query_3d(
         cursor.execute(
             final_sql,
             [
-                request.session["selected"]["sex"],
-                request.session["selected"]["fossil"],
-                request.session["selected"]["taxon"],
+                request.session["table_var_select_done"]["sex"],
+                request.session["table_var_select_done"]["fossil"],
+                request.session["table_var_select_done"]["taxon"],
             ],
         )
         # Now return all rows as a dictionary object. Note that each variable
@@ -1018,9 +1009,9 @@ def query_3d(
     context = {
         "final_sql": final_sql.replace("%s", "{}")
         .format(
-            request.session["selected"]["sex"],
-            request.session["selected"]["fossil"],
-            request.session["selected"]["taxon"],
+            request.session["table_var_select_done"]["sex"],
+            request.session["table_var_select_done"]["fossil"],
+            request.session["table_var_select_done"]["taxon"],
         )
         .replace("[", "(")
         .replace("]", ")"),
@@ -1065,7 +1056,7 @@ def set_up_download(request: HttpRequest) -> None:
     else:
         prefix = "PRIMO_results_"
     request.session["file_to_download"] = (
-        "PRIMO_results_" + datetime.now().strftime("%Y-%m-%d_%H.%M.%S") + ".csv"
+        prefix + datetime.now().strftime("%Y-%m-%d_%H.%M.%S") + ".csv"
     )
     directory_name = ""
     if request.session["scalar_or_3d"] == "3D":
@@ -1077,7 +1068,7 @@ def set_up_download(request: HttpRequest) -> None:
 
 
 def tabulate_scalar(
-    request: HttpRequest, query_results: list[dict[str,str]], preview_only: bool
+    request: HttpRequest, query_results: list[dict[str, str]], preview_only: bool
 ) -> list[Dict[str, str]]:
     """
     Return a list of dictionaries where each dictionary has the keys

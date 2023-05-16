@@ -1,5 +1,3 @@
-from typing import Optional
-
 from django.db import models
 
 
@@ -99,9 +97,7 @@ class Bodypart(models.Model):
     generated in the front end by nlstree.
     """
 
-    name = models.CharField(
-        "Bodypart name", max_length=191, unique=True
-    )
+    name = models.CharField("Bodypart name", max_length=191, unique=True)
     parent = models.ForeignKey(
         "Bodypart",
         null=True,
@@ -421,28 +417,6 @@ class Institute(models.Model):
         ordering = ["name"]
 
 
-class IslandRegion(models.Model):
-    """Stores list of islands or regions. Used in Locality."""
-
-    name = models.CharField(
-        "Region Name",
-        max_length=255,
-        blank=True,
-        null=False,
-        default=10000,
-    )
-    comments = models.TextField(blank=True, null=True)
-
-    def __str__(self) -> str:
-        return self.name
-
-    class Meta:
-        managed = True
-        db_table = "island_region"
-        ordering = ["name"]
-        verbose_name = "Island region"
-
-
 class Laterality(models.Model):
     """Whether two 3D points are lateral, and which kind of laterality."""
 
@@ -476,29 +450,15 @@ class Laterality(models.Model):
 class Locality(models.Model):
     """
     A locality is a small region marked by a latitude and longitude.
-    Foreign keys:
-    state,
-    continent,
-    and island region.
+    Foreign keys: country and continent.
     """
 
     name = models.CharField(
         "Locality",
         max_length=191,
     )
-    state_province = models.ForeignKey(
-        "StateProvince",
-        null=False,
-        on_delete=models.SET_DEFAULT,
-        default=10000,
-    )
     continent = models.ForeignKey("Continent", default=7, on_delete=models.SET_DEFAULT)
-    island_region = models.ForeignKey(
-        "IslandRegion",
-        null=False,
-        on_delete=models.SET_DEFAULT,
-        default=10000,
-    )
+    country = models.ForeignKey("Country", default=10000, on_delete=models.SET_DEFAULT)
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     site_unit = models.CharField(max_length=255, blank=True, null=True)
@@ -644,14 +604,23 @@ class QueryWizardQuery(models.Model):
 
 
 class QueryWizardTable(models.Model):
+    """
+    A list of tables that will be used during query setup parameter selection.
+    """
+
     query_wizard_query = models.ForeignKey(
         "QueryWizardQuery",
         related_name="tables",
         on_delete=models.PROTECT,
     )
+    # How the name of the table will be displayed.
     display_name = models.CharField(max_length=100, blank=True, null=True)
+    # When we're filtering by table name, what string to use.
     filter_table_name = models.CharField(max_length=50, blank=True, null=True)
+    # Which order to display the tables in.
     display_order = models.IntegerField(blank=True, null=True)
+    # If all values from a table (e.g. fossil, sex) will be pre-selected when
+    # calling parameter selection, this is True.
     preselected = models.BooleanField(blank=False, null=False, default=False)
 
     class Meta:
@@ -728,36 +697,6 @@ class Sex(models.Model):
         ordering = ["id"]
 
 
-class StateProvince(models.Model):
-    country = models.ForeignKey(
-        "Country",
-        on_delete=models.SET_DEFAULT,
-        blank=False,
-        null=False,
-        default=10000,
-    )
-    name = models.CharField(
-        "State",
-        max_length=255,
-        blank=False,
-        null=False,
-    )
-    abbr = models.CharField(
-        "Abbreviation",
-        max_length=8,
-        blank=False,
-        null=False,
-    )
-    comments = models.TextField(blank=True, null=True)
-
-    class Meta:
-        managed = True
-        db_table = "state_province"
-        verbose_name = "State/province"
-        verbose_name_plural = "States/provinces"
-        ordering = ["name"]
-
-
 class Taxon(models.Model):
     parent = models.ForeignKey(
         "Taxon",
@@ -787,9 +726,7 @@ class Taxon(models.Model):
         ordering = ["name"]
 
 
-class SpecimenType(
-    models.Model
-):  # wanted to use 'Type', but table already exists, and also `type` is a reserved word.
+class SpecimenType(models.Model):
     CHOICES = (
         ("holotype", "holotype"),
         ("lectotype", "lectotype"),

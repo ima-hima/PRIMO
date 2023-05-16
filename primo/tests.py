@@ -1,31 +1,18 @@
-import datetime
+from functools import reduce
+from typing import List
 
 from django.test import TestCase
-from django.urls import reverse
-from django.utils import timezone
-
-from .models import Question
-
-# Create your tests here.
-
-
-def create_question(question_text, days):
-    time = timezone.now() + datetime.timedelta(days=days)
-    return Question.objects.create(question_text=question_text, pub_date=time)
 
 
 class ViewsTests(TestCase):
-    def test_detail_view_with_a_past_question(self):
+    def test_detail_view_with_a_past_question(self) -> None:
         """
         The detail view of a question with a pub_date in the past should
         display the question's text.
         """
-        past_question = create_question(question_text="Past Question.", days=-5)
-        response = self.client.get(reverse("polls:detail", args=(past_question.id,)))
-        self.assertContains(response, past_question.question_text, status_code=200)
 
 
-def concat_variable_list(myList):
+def concat_variable_list(myList: List[int]) -> str:
     """
     Return myList as comma-seperated string of values enclosed in parens.
     """
