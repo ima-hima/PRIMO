@@ -1,0 +1,14 @@
+#Python
+__init__.py
+__pycache__
+.mypy_cache
+
+# other
+.DS_Store
+*.dSYM
+*.log
+*.prn
+*.xls
+*.xlsx
+*.xml
+.env
