@@ -1,4 +1,5 @@
-exclude: ^migrations
+exclude: ^migrations/|settings.py|manage.py
+exclude_types: jinja
 
 repos:
 
