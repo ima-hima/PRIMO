@@ -1,7 +1,6 @@
 import subprocess
 from csv import DictWriter
 from datetime import datetime
-from functools import reduce
 from os import mkdir, path
 from sys import exc_info
 from typing import Dict, Tuple
@@ -82,11 +81,11 @@ def collate_metadata(request: HttpRequest) -> None:
             writer.writerow(inDict)
 
 
-def concat_variable_list(myList: str) -> str:
-    """
-    Return myList as comma-separated string of values enclosed in parens.
-    """
-    return "(" + reduce((lambda b, c: b + str(c) + ","), myList, "")[:-1] + ")"
+# def concat_variable_list(myList):
+#     """
+#     Return myList as comma-separated string of values enclosed in parens.
+#     """
+#     return "(" + reduce((lambda b, c: b + str(c) + ","), myList, "")[:-1] + ")"
 
 
 def create_tree_javascript(
@@ -123,7 +122,7 @@ def create_tree_javascript(
         .filter(parent_id=parent_id)
     )
     for val in vals:
-        # remove quote marks from `name`, as they'll screw up Javascript
+        # Remove quote marks from `name`, as they'll screw up Javascript
         name = val["name"].replace('"', "")
         item_id = val["id"]
         parent_id = val["parent_id"]
@@ -879,7 +878,7 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def query_start(request: HttpRequest) -> HttpResponse:
-    """Start query by creating necessary empty data structures."""
+    """Start or reset query by creating or emptying data structures."""
     request.session["page_title"] = "Query Wizard"
     request.session["tables"] = []
     request.session["selected"] = dict()
