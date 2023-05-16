@@ -530,49 +530,9 @@ class Original(models.Model):
         ordering = ["id"]
 
 
-class Paired(models.Model):
-    """Whether a 3D point is paired with another point."""
-
-    CHOICES = (
-        ("Paired", "Paired"),
-        ("Unpaired", "Unpaired"),
-    )
-    name = models.CharField(
-        "Type",
-        max_length=64,
-        choices=CHOICES,
-    )
-    abbr = models.CharField(
-        "Abbreviation",
-        max_length=1,
-        blank=True,
-        null=True,
-    )
-    comments = models.TextField(blank=True, null=True)
-
-    def __str__(self) -> str:
-        return self.name
-
-    class Meta:
-        managed = True
-        db_table = "paired"
-        verbose_name_plural = "paired"
-
-
-class ProtocolVariable(models.Model):
-    """Cross table for protocols and variables. Many-to-many."""
-
-    protocol = models.ForeignKey("Protocol", on_delete=models.CASCADE)
-    variable = models.ForeignKey("Variable", on_delete=models.CASCADE)
-
-    class Meta:
-        managed = True
-        db_table = "protocol_variable"
-        verbose_name = "Protocol-variable link"
-        ordering = ["id"]
-
-
 class Protocol(models.Model):
+    """The protocol under which a measurement is made."""
+
     label = models.CharField("Protocol label", max_length=255, blank=True)
     comments = models.TextField(blank=True, null=True)
 
