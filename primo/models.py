@@ -266,6 +266,7 @@ class Datatype(models.Model):
         blank=True,
         choices=TYPES,
         default="scalar",
+        null=False,
     )
     comments = models.TextField(blank=True, null=True)
 
@@ -279,7 +280,7 @@ class Datatype(models.Model):
 class Device(models.Model):
     """The device used to capture 3D points."""
 
-    label = models.CharField(max_length=255)
+    label = models.CharField(max_length=255, null=False)
 
     def __str__(self) -> str:
         return self.label
@@ -344,9 +345,12 @@ class DjangoSession(models.Model):
 class Fossil(models.Model):
     """Type of specimen, fossil or not, including abbreviation."""
 
+    CHOICES = [("fossil", "Fossil"), ("extant", "Extant")]
     label = models.CharField(
         verbose_name="Fossil or Extant",
         max_length=16,
+        choices=CHOICES,
+        default="fossil",
     )
     abbr = models.CharField(
         verbose_name="Abbreviation",
@@ -439,6 +443,7 @@ class Locality(models.Model):
     label = models.CharField(
         verbose_name="Locality",
         max_length=191,
+        null=False,
     )
     continent = models.ForeignKey("Continent", default=7, on_delete=models.SET_DEFAULT)
     country = models.ForeignKey("Country", default=10000, on_delete=models.SET_DEFAULT)
@@ -509,7 +514,7 @@ class Original(models.Model):
 class Protocol(models.Model):
     """The protocol under which a measurement is made."""
 
-    label = models.CharField(verbose_name="Protocol label", max_length=255, blank=True)
+    label = models.CharField(verbose_name="Protocol label", max_length=255)
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
@@ -556,8 +561,30 @@ class QueryWizardTable(models.Model):
 
 
 class TaxonomicRank(models.Model):
-    label = models.CharField(verbose_name="Taxonomic rank", max_length=255, blank=True)
-    comments = models.TextField(blank=True, null=True)
+    label = models.CharField(verbose_name="Taxonomic rank", max_length=255)
+    CHOICES = [
+        ("semisuborder", "Semisuborder"),
+        ("hyporder", "Hyporder"),
+        ("infraorder", "Infraorder"),
+        ("parvorder", "Parvorder"),
+        ("superfamily", "Superfamily"),
+        ("family", "Family"),
+        ("subfamily", "Subfamily"),
+        ("tribe", "Tribe"),
+        ("subtribe", "Subtribe"),
+        ("genus", "Genus"),
+        ("subgenus", "Subgenus"),
+        ("species", "Species"),
+        ("subspecies", "Subspecies"),
+        ("synonym", "Synonym"),
+        ("hybrid", "Hybrid"),
+        ("Site or regional pop.", "Site or regional pop."),
+        ("class", "Class"),
+        ("superorder", "Superorder"),
+        ("order", "Order"),
+        ("semiorder", "Semiorder"),
+    ]
+    comments = models.TextField(blank=True, null=True, choices=CHOICES)
 
     def __str__(self) -> str:
         return self.label
@@ -680,12 +707,12 @@ class Variable(models.Model):
     """
 
     label = models.CharField(
-        max_length=32, blank=True, null=True
+        max_length=32, null=False
     )  # this is the id, set by biologists
     name = models.CharField(max_length=255)
     laterality = models.ForeignKey(
         "Laterality",
-        null=True,
+        null=False,
         on_delete=models.PROTECT,
     )
     datatype = models.ForeignKey("Datatype", on_delete=models.PROTECT)
