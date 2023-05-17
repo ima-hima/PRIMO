@@ -1,4 +1,3 @@
-
 ul, h1, h3, h4, h5, h6, pre, form, body, html, p, blockquote, fieldset {
     margin: 0;
     padding: 0;
@@ -67,6 +66,7 @@ p {
 }
 #main-content {
   margin-left: 20px;
+  margin-right: 20px;
 }
 .dataListTable {
     background-color: #ffcc03;
