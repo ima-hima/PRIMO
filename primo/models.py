@@ -78,12 +78,12 @@ class AuthUserUserPermissions(models.Model):
 class Ageclass(models.Model):
     """Ages, can include Infant, Juvenile, Adult, Unknown."""
 
-    age_class = models.CharField(verbose_name="Age class", max_length=50)
+    label = models.CharField(verbose_name="Age class", max_length=50)
     abbr = models.CharField(verbose_name="Abbreviation", max_length=50)
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.age_class
+        return self.label
 
     class Meta:
         verbose_name_plural = "age classes"
@@ -95,9 +95,7 @@ class Bodypart(models.Model):
     generated in the front end by nlstree.
     """
 
-    body_part_name = models.CharField(
-        verbose_name="Bodypart name", max_length=191, unique=True
-    )
+    label = models.CharField(verbose_name="Bodypart name", max_length=191, unique=True)
     parent = models.ForeignKey(
         "self",
         null=True,
@@ -111,7 +109,7 @@ class Bodypart(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.body_part_name
+        return self.label
 
     class Meta:
         ordering = ["id"]
@@ -137,7 +135,7 @@ class Captive(models.Model):
         ("probably captive", "Probably Captive"),
         ("unknown", "Unknown"),
     )
-    captive_or_wild = models.CharField(
+    label = models.CharField(
         verbose_name="Captive or wild-caught",
         max_length=16,
         blank=True,
@@ -150,10 +148,10 @@ class Captive(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.captive_or_wild
+        return self.label
 
     class Meta:
-        verbose_name_plural = "captive_or_wild"
+        verbose_name_plural = "captive"
         ordering = ["id"]
 
 
@@ -169,7 +167,7 @@ class Continent(models.Model):
         ("south america", "South America"),
         ("unknown", "Unknown"),
     )
-    continent_name = models.CharField(
+    label = models.CharField(
         verbose_name="Continent name",
         max_length=32,
         blank=True,
@@ -180,16 +178,13 @@ class Continent(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.continent_name
-
-    class Meta:
-        ordering = ["continent_name"]
+        return self.label
 
 
 class Country(models.Model):
     """A list of possible countries."""
 
-    country_name = models.CharField(
+    label = models.CharField(
         verbose_name="Country name",
         max_length=191,
         blank=False,
@@ -203,11 +198,11 @@ class Country(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.country_name
+        return self.label
 
     class Meta:
         verbose_name_plural = "countries"
-        ordering = ["country_name"]
+        ordering = ["label"]
 
 
 class Data3D(models.Model):
@@ -264,8 +259,8 @@ class Datatype(models.Model):
         ("data3d", "3D data"),
         ("external", "external"),
     )
-    description = models.CharField(max_length=255, blank=True, null=True)
-    data_type = models.CharField(
+    label = models.CharField(max_length=255, blank=True, null=True)
+    data_table = models.CharField(
         "Data type",
         max_length=32,
         blank=True,
@@ -276,7 +271,7 @@ class Datatype(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.data_type
+        return self.data_table
 
     class Meta:
         ordering = ["id"]
@@ -285,10 +280,10 @@ class Datatype(models.Model):
 class Device(models.Model):
     """The device used to capture 3D points."""
 
-    device = models.CharField(max_length=255, null=False)
+    label = models.CharField(max_length=255, null=False)
 
     def __str__(self) -> str:
-        return self.device
+        return self.label
 
 
 class DjangoAdminLog(models.Model):
@@ -351,7 +346,7 @@ class Fossil(models.Model):
     """Type of specimen, fossil or not, including abbreviation."""
 
     CHOICES = [("fossil", "Fossil"), ("extant", "Extant")]
-    fossil_or_extant = models.CharField(
+    label = models.CharField(
         verbose_name="Fossil or Extant",
         max_length=16,
         choices=CHOICES,
@@ -364,7 +359,7 @@ class Fossil(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.fossil_or_extant
+        return self.label
 
     class Meta:
         ordering = ["id"]
@@ -381,7 +376,7 @@ class Institute(models.Model):
         blank=True,
         null=True,
     )
-    institute_name = models.CharField(
+    label = models.CharField(
         verbose_name="Institute",
         max_length=255,
         blank=False,
@@ -403,10 +398,10 @@ class Institute(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.institute_name
+        return self.label
 
     class Meta:
-        ordering = ["institute_name"]
+        ordering = ["label"]
 
 
 class Laterality(models.Model):
@@ -420,7 +415,7 @@ class Laterality(models.Model):
         ("left", "Left"),
         ("unknown", "Unknown"),
     )
-    laterality = models.CharField(
+    label = models.CharField(
         verbose_name="Laterality",
         max_length=255,
         choices=CHOICES,
@@ -433,7 +428,7 @@ class Laterality(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.laterality
+        return self.label
 
     class Meta:
         verbose_name_plural = "laterality"
@@ -445,7 +440,7 @@ class Locality(models.Model):
     Foreign keys: country and continent.
     """
 
-    locality_name = models.CharField(
+    label = models.CharField(
         verbose_name="Locality",
         max_length=191,
         null=False,
@@ -460,7 +455,7 @@ class Locality(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.locality_name
+        return self.label
 
     class Meta:
         verbose_name_plural = "localities"
@@ -495,7 +490,7 @@ class Original(models.Model):
         ("original", "Original"),
         ("cast", "Cast"),
     )
-    original_or_cast = models.CharField(
+    label = models.CharField(
         verbose_name="Type",
         max_length=16,
         choices=CHOICES,
@@ -510,7 +505,7 @@ class Original(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.original_or_cast
+        return self.label
 
     class Meta:
         ordering = ["id"]
@@ -566,6 +561,7 @@ class QueryWizardTable(models.Model):
 
 
 class TaxonomicRank(models.Model):
+    label = models.CharField(verbose_name="Taxonomic rank", max_length=255)
     CHOICES = [
         ("semisuborder", "Semisuborder"),
         ("hyporder", "Hyporder"),
@@ -588,16 +584,10 @@ class TaxonomicRank(models.Model):
         ("order", "Order"),
         ("semiorder", "Semiorder"),
     ]
-    rank = models.CharField(
-        verbose_name="Taxonomic rank",
-        choices=CHOICES,
-        default="Site or regional pop.",
-        max_length=32,
-    )
-    comments = models.TextField(blank=True, null=True)
+    comments = models.TextField(blank=True, null=True, choices=CHOICES)
 
     def __str__(self) -> str:
-        return self.rank
+        return self.label
 
     class Meta:
         ordering = ["id"]
@@ -634,7 +624,7 @@ class Sex(models.Model):
         ("possibly female", "Possibly female"),
         ("unknown", "Unknown"),
     )
-    sex = models.CharField(
+    label = models.CharField(
         verbose_name="Sex",
         max_length=16,
         choices=CHOICES,
@@ -649,7 +639,7 @@ class Sex(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.sex
+        return self.label
 
     class Meta:
         verbose_name_plural = "sexes"
@@ -664,7 +654,7 @@ class Taxon(models.Model):
         verbose_name="Parent Taxon",
     )
     taxonomic_rank = models.ForeignKey("TaxonomicRank", on_delete=models.PROTECT)
-    taxon_name = models.CharField(
+    label = models.CharField(
         verbose_name="Taxon name",
         max_length=255,
         blank=True,
@@ -676,11 +666,11 @@ class Taxon(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.taxon_name
+        return self.label
 
     class Meta:
         verbose_name_plural = "taxa"
-        ordering = ["taxon_name"]
+        ordering = ["label"]
 
 
 class SpecimenType(models.Model):
@@ -692,7 +682,7 @@ class SpecimenType(models.Model):
         ("future neotype", "Future neotype"),
         ("unknown", "Unknown"),
     )
-    specimen_type = models.CharField(
+    label = models.CharField(
         verbose_name="Type", max_length=16, choices=CHOICES, default="unknown"
     )
     abbr = models.CharField(
@@ -701,7 +691,7 @@ class SpecimenType(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.specimen_type
+        return self.label
 
     class Meta:
         ordering = ["id"]
@@ -717,16 +707,13 @@ class Variable(models.Model):
     """
 
     label = models.CharField(
-        max_length=32,
-        null=False,
-        default="unknown",
+        max_length=32, null=False
     )  # this is the id, set by biologists
-    variable_name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
     laterality = models.ForeignKey(
         "Laterality",
         null=False,
         on_delete=models.PROTECT,
-        default=6,
     )
     datatype = models.ForeignKey("Datatype", on_delete=models.PROTECT)
     paired_with = models.ForeignKey(
@@ -737,7 +724,7 @@ class Variable(models.Model):
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
-        return self.variable_name
+        return self.name
 
 
 class Specimen(models.Model):
