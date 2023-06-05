@@ -12,6 +12,7 @@ from .models import (
     Data3D,
     DataScalar,
     Datatype,
+    Device,
     Fossil,
     Institute,
     Laterality,
@@ -22,9 +23,9 @@ from .models import (
     Session,
     Sex,
     Specimen,
-    SpecimenType,
     Taxon,
     TaxonomicRank,
+    TaxonomicType,
     Variable,
 )
 
@@ -44,7 +45,10 @@ class DataScalarAdmin(admin.ModelAdmin):
         "variable",
         "label",
     )
-    list_filter = (("variable__label", DropdownFilter), ("session__id", DropdownFilter))
+    list_filter = (
+        ("variable__variable_name", DropdownFilter),
+        ("session__id", DropdownFilter),
+    )
     search_fields = [
         "id",
     ]
@@ -56,7 +60,7 @@ class DataScalarAdmin(admin.ModelAdmin):
 class AgeclassAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "age_class",
         "abbr",
         "comments",
     ]
@@ -139,12 +143,12 @@ class BodypartVariableAdmin(admin.ModelAdmin):
 class CaptiveAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "captive_or_wild",
         "abbr",
         "comments",
     ]
     fields = [
-        "label",
+        "captive_or_wild",
         "abbr",
         "comments",
     ]
@@ -154,11 +158,11 @@ class CaptiveAdmin(admin.ModelAdmin):
 class ContinentAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "continent_name",
         "comments",
     ]
     fields = [
-        "label",
+        "continent_name",
         "comments",
     ]
 
@@ -167,22 +171,22 @@ class ContinentAdmin(admin.ModelAdmin):
 class CountryAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "country_name",
         "abbr",
         "comments",
     ]
     fields = [
-        "label",
+        "country_name",
         "abbr",
         "comments",
     ]
     list_filter = (
-        ("label", DropdownFilter),
+        ("country_name", DropdownFilter),
         ("abbr", DropdownFilter),
     )
     search_fields = [
         "id",
-        "label",
+        "country_name",
         "abbr",
     ]
     actions_on_top = True
@@ -193,14 +197,23 @@ class CountryAdmin(admin.ModelAdmin):
 class DatatypeAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
-        "data_table",
+        "description",
+        "data_type",
         "comments",
     ]
     fields = [
-        "label",
-        "data_table",
+        "description",
+        "data_type",
         "comments",
+    ]
+
+
+@admin.register(Device)
+class DeviceAdmin(admin.ModelAdmin):
+    list_display = ["id", "label"]
+    fields = [
+        "id",
+        "label",
     ]
 
 
@@ -208,12 +221,12 @@ class DatatypeAdmin(admin.ModelAdmin):
 class FossilAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "fossil_or_extant",
         "abbr",
         "comments",
     ]
     fields = [
-        "label",
+        "fossil_or_extant",
         "abbr",
         "comments",
     ]
@@ -223,23 +236,28 @@ class FossilAdmin(admin.ModelAdmin):
 class InstituteAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "institute_name",
         "abbr",
         "institute_department",
         "locality",
     ]
     fields = [
-        "label",
+        "institute_name",
         "abbr",
         "institute_department",
         "locality",
     ]
     list_filter = (
-        ("label", DropdownFilter),
+        ("institute_name", DropdownFilter),
         ("abbr", DropdownFilter),
-        ("locality__label", DropdownFilter),
+        ("locality__institute_name", DropdownFilter),
     )
-    search_fields = ["label", "abbr", "institute_department", "locality__label"]
+    search_fields = [
+        "institute_name",
+        "abbr",
+        "institute_department",
+        "locality__locality_name",
+    ]
     actions_on_top = True
     actions_on_bottom = True
 
@@ -248,7 +266,7 @@ class InstituteAdmin(admin.ModelAdmin):
 class LateralityAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "laterality",
         "abbr",
     ]
     fields = [
@@ -261,7 +279,7 @@ class LateralityAdmin(admin.ModelAdmin):
 class LocalityAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "locality_name",
         "continent",
         "country",
         "latitude",
@@ -272,7 +290,7 @@ class LocalityAdmin(admin.ModelAdmin):
         "comments",
     ]
     fields = [
-        "label",
+        "locality_name",
         "continent",
         "country",
         "latitude",
@@ -283,9 +301,9 @@ class LocalityAdmin(admin.ModelAdmin):
         "comments",
     ]
     list_filter = (
-        ("label", DropdownFilter),
-        ("continent__label", DropdownFilter),
-        ("country__label", DropdownFilter),
+        ("locality_name", DropdownFilter),
+        ("continent__continent_name", DropdownFilter),
+        ("country__country_name", DropdownFilter),
         ("age", DropdownFilter),
     )
     search_fields = [
@@ -317,11 +335,11 @@ class ObserverAdmin(admin.ModelAdmin):
 class OriginalAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "original_or_cast",
         "abbr",
     ]
     fields = [
-        "label",
+        "original_or_cast",
         "abbr",
     ]
 
@@ -346,15 +364,15 @@ class ProtocolAdmin(admin.ModelAdmin):
 class TaxonomicRankAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "rank",
         "comments",
     ]
     fields = [
-        "label",
+        "rank",
         "comments",
     ]
-    list_filter = (("label", DropdownFilter),)
-    search_fields = ["label", "comments"]
+    list_filter = (("rank", DropdownFilter),)
+    search_fields = ["rank", "comments"]
     actions_on_top = True
     actions_on_bottom = True
 
@@ -381,12 +399,12 @@ class SessionAdmin(admin.ModelAdmin):
         "filename",
     ]
     list_filter = (
-        ("observer__label", DropdownFilter),
+        ("observer__researcher_name", DropdownFilter),
         ("specimen__hypocode", DropdownFilter),
         ("protocol__label", DropdownFilter),
         ("filename", DropdownFilter),
     )
-    search_fields = ["label", "abbr", "institute_dept", "locality__label"]
+    search_fields = ["label", "abbr", "institute_dept", "locality__locality_name"]
     actions_on_top = True
     actions_on_bottom = True
 
@@ -395,12 +413,12 @@ class SessionAdmin(admin.ModelAdmin):
 class SexAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "sex",
         "abbr",
         "comments",
     ]
     fields = [
-        "label",
+        "sex",
         "abbr",
         "comments",
     ]
@@ -415,7 +433,7 @@ class SpecimenAdmin(admin.ModelAdmin):
         "institute",
         "catalog_number",
         "mass",
-        "specimen_type",
+        "taxonomic_type",
         "locality",
         "sex",
         "age_class",
@@ -429,7 +447,7 @@ class SpecimenAdmin(admin.ModelAdmin):
         "institute",
         "catalog_number",
         "mass",
-        "specimen_type",
+        "taxonomic_type",
         "locality",
         "sex",
         "age_class",
@@ -439,28 +457,28 @@ class SpecimenAdmin(admin.ModelAdmin):
     )
     list_filter = (
         ("taxon__label", DropdownFilter),
-        ("institute__label", DropdownFilter),
-        ("sex__label", DropdownFilter),
-        ("specimen_type__label", DropdownFilter),
-        ("age_class__label", DropdownFilter),
-        ("captive__label", DropdownFilter),
-        ("fossil__label", DropdownFilter),
+        ("institute__institute_name", DropdownFilter),
+        ("sex__sex", DropdownFilter),
+        ("taxonomic_type__taxonomic_type", DropdownFilter),
+        ("age_class__age_class", DropdownFilter),
+        ("captive__captive_or_wild", DropdownFilter),
+        ("fossil__fossil_or_extant", DropdownFilter),
     )
     search_fields = ["id"]
     actions_on_top = True
     actions_on_bottom = True
 
 
-@admin.register(SpecimenType)
-class SpecimenTypeAdmin(admin.ModelAdmin):
+@admin.register(TaxonomicType)
+class TaxonomicTypeAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "label",
+        "taxonomic_type",
         "abbr",
         "comments",
     ]
     fields = [
-        "label",
+        "taxonomic_type",
         "abbr",
         "comments",
     ]
@@ -486,7 +504,7 @@ class TaxonAdmin(admin.ModelAdmin):
     list_filter = (
         ("label", DropdownFilter),
         ("parent__label", DropdownFilter),
-        ("taxonomic_rank__label", DropdownFilter),
+        ("taxonomic_rank__rank", DropdownFilter),
     )
     search_fields = [
         "id",
@@ -502,7 +520,7 @@ class VariableAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "label",
-        "name",
+        "variable_name",
         "laterality",
         "datatype",
         "paired_with",
@@ -510,7 +528,7 @@ class VariableAdmin(admin.ModelAdmin):
     ]
     fields = [
         "label",
-        "name",
+        "variable_name",
         "laterality",
         "datatype",
         "paired_with",
@@ -518,8 +536,8 @@ class VariableAdmin(admin.ModelAdmin):
     ]
     list_filter = (
         ("label", DropdownFilter),
-        ("name", DropdownFilter),
-        ("laterality__label", DropdownFilter),
+        ("variable_name", DropdownFilter),
+        ("laterality__laterality", DropdownFilter),
         ("datatype__data_table", DropdownFilter),
     )
     search_fields = ["id"]

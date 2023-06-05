@@ -115,7 +115,7 @@ def create_tree_javascript(
         )
         .objects.values(
             "id",
-            "name",
+            "label",
             "parent_id",
             "expand_in_tree",
         )
@@ -123,7 +123,7 @@ def create_tree_javascript(
     )
     for val in vals:
         # Remove quote marks from `name`, as they'll screw up Javascript
-        name = val["name"].replace('"', "")
+        name = val["label"].replace('"', "")
         item_id = val["id"]
         parent_id = val["parent_id"]
         expand = "true" if val["expand_in_tree"] else "false"
@@ -543,19 +543,19 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         if request.session["table_var_select_done"]["bodypart"]:
             with connection.cursor() as variable_query:
                 sql = (
-                    "SELECT variable.name AS var_name, "
-                    "       variable.label AS var_label, "
-                    "       variable.id AS var_id, "
+                    "SELECT v.variable_name AS var_name, "
+                    "       v.label AS var_label, "
+                    "       v.id AS var_id, "
                     "       bps.id AS bodypart_id, "
-                    "       bps.name AS bodypart_name "
-                    "FROM variable "
-                    "    JOIN bodypart_variable "
-                    "         ON variable.id = bodypart_variable.variable_id "
-                    "    JOIN (SELECT bodypart.id, bodypart.name "
+                    "       bps.label AS bodypart_name "
+                    "FROM variable v"
+                    "    JOIN bodypart_variable bv"
+                    "         ON v.id = bv.variable_id "
+                    "    JOIN (SELECT bodypart.id, bodypart.label "
                     "            FROM bodypart "
                     "           WHERE id IN %s) AS bps "
-                    "      ON bps.id = bodypart_variable.bodypart_id "
-                    "ORDER BY variable.id"
+                    "      ON bps.id = bv.bodypart_id "
+                    "ORDER BY v.id"
                 )
 
                 variable_query.execute(
@@ -571,9 +571,9 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
                     model_name=current_table.capitalize(),
                 )
                 .objects.values(
-                    "name",
+                    "variable_name",
                     "label",
-                    "bodypartvariable__bodypart_id",
+                    "bodypart_variable__bodypart_id",
                 )
                 .all()
             )
@@ -590,7 +590,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
             )
             .objects.values(
                 "id",
-                "name",
+                "label",
                 "parent_id",
                 "expand_in_tree",
                 "tree_root",
@@ -598,7 +598,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
             .filter(tree_root=1)[0]
         )
 
-        name = value["name"].replace('"', "")
+        name = value["label"].replace('"', "")
         item_id = value["id"]
         parent_id = value["parent_id"]
         expand = "true" if value["expand_in_tree"] else "false"
@@ -627,7 +627,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
             model_name="Taxon",
         )
 
-        vals = current_model.objects.values("id", "name").all()
+        vals = current_model.objects.values("id", "label").all()
 
     return render(
         request,
@@ -752,66 +752,7 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated and request.user.username != "user":
         preview_only = False
 
-    # This is okay to include in publicly-available code (i.e. git), because
-    # the database structure diagram is already published on the website anyway.
-    # TODO: move this back into the DB.
-    base = (
-        "SELECT data_scalar.id AS scalar_id, "
-        "       specimen.id AS specimen_id, "
-        "       specimen.hypocode AS hypocode, "
-        "       institute.abbr AS collection_acronym, "
-        "       specimen.catalog_number AS catalog_number, "
-        "       taxon.name AS taxon_name, "
-        "       specimen.mass AS mass, "
-        "       sex.name AS sex_type, "
-        "       specimen_type.name AS specimen_type, "
-        "       fossil.name AS fossil_or_extant, "
-        "       captive.name AS captive_or_wild, "
-        "       original.name AS original_or_cast, "
-        "       variable.label AS variable_label, "
-        "       data_scalar.value AS scalar_value, "
-        "       age_class.name AS age_class, "
-        "       locality.name AS locality_name, "
-        "       country.name AS country_name, "
-        "       specimen.comments AS specimen_comments, "
-        "       session.comments AS session_comments "
-        "FROM variable "
-        "     JOIN data_scalar"
-        "          ON data_scalar.variable_id = variable.id "
-        "     JOIN session "
-        "          ON data_scalar.session_id = session.id "
-        "     JOIN specimen "
-        "          ON session.specimen_id = specimen.id "
-        "     JOIN original "
-        "          ON session.original_id = original.id "
-        "     JOIN taxon "
-        "          ON specimen.taxon_id = taxon.id "
-        "     JOIN sex "
-        "          ON specimen.sex_id = sex.id "
-        "     JOIN fossil "
-        "          ON specimen.fossil_id = fossil.id "
-        "     JOIN institute "
-        "          ON specimen.institute_id = institute.id "
-        "     JOIN captive "
-        "          ON specimen.captive_id = captive.id "
-        "     JOIN specimen_type "
-        "          ON specimen.specimen_type_id = specimen_type.id "
-        "     JOIN age_class "
-        "          ON specimen.age_class_id = age_class.id "
-        "     JOIN locality "
-        "          ON specimen.locality_id = locality.id "
-        "     JOIN country "
-        "          ON locality.country_id = country.id"
-    )
-
-    where = (
-        " WHERE sex.id IN %s "
-        "AND fossil.id IN %s "
-        "AND taxon.id IN %s "
-        "AND variable.id IN %s "
-    )
-    ordering = " ORDER BY specimen.id, variable.label ASC"
-    final_sql = f"{base} {where} {ordering};"
+    sql_query = set_up_sql_query(True, preview_only)
 
     # We have to query for the variable names separately.
     with connection.cursor() as variable_query:
@@ -828,7 +769,7 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
     # Use cursor here?
     with connection.cursor() as cursor:
         cursor.execute(
-            final_sql,
+            sql_query,
             [
                 request.session["table_var_select_done"]["sex"],
                 request.session["table_var_select_done"]["fossil"],
@@ -857,7 +798,7 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
     # This is for use in export_csv_file().
     request.session["variable_labels"] = variable_labels
     context = {
-        "final_sql": final_sql.replace("%s", "{}").format(
+        "final_sql": sql_query.replace("%s", "{}").format(
             request.session["table_var_select_done"]["sex"],
             request.session["table_var_select_done"]["fossil"],
             request.session["table_var_select_done"]["taxon"],
@@ -889,6 +830,107 @@ def query_start(request: HttpRequest) -> HttpResponse:
     return render(request, "primo/query_start.jinja")
 
 
+def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
+    """Create an SQL query for either 3D or scalar data."""
+
+    # This is okay to include in publicly-available code (i.e. git), because
+    # the database structure diagram is already published on the website anyway.
+    # TODO: maybe move this back into the DB?
+    # Note we skip variables in 3D SELECT: we're getting all of them.
+    select_common = " ".join(
+        [
+            "specimen.id AS specimen_id,",
+            "specimen.hypocode AS hypocode,",
+            "institute.abbr AS collection_acronym,",
+            "specimen.catalog_number AS catalog_number,",
+            "taxon.label,",
+            "specimen.mass AS mass,",
+            "sex.sex AS sex_type,",
+            "specimen_type.specimen_type,",
+            "fossil.fossil_or_extant,",
+            "captive.captive_or_wild,",
+            "original.original_or_cast,",
+            "variable.label AS variable_label,",
+            "data_scalar.value AS scalar_value,",
+            "age_class.age_class,",
+            "locality.locality_name,",
+            "country.country_name,",
+            "specimen.comments AS specimen_comments,",
+            "session.comments AS session_comments,",
+            "observer.researcher_name AS observer_name",
+        ]
+    )
+
+    if is_scalar:
+        select_start = (
+            "SELECT data_scalar.id AS scalar_id, "
+            "       data_scalar.value AS scalar_value, "
+        )
+        from_start = " ".join(
+            [
+                "FROM variable"
+                "     JOIN data_scalar"
+                "       ON data_scalar.variable_id = variable.id"
+                "     JOIN session"
+                "       ON data_scalar.session_id = session.id"
+            ]
+        )
+    else:
+        # Is 3D.
+        from_start = " ".join(
+            [
+                "FROM data_3d",
+                "     JOIN session",
+                "       ON data_3d.session_id = session.id",
+            ]
+        )
+        select_start = "SELECT DISTINCT specimen.id AS specimen_id,"
+
+    joins = " ".join(
+        [
+            "JOIN specimen",
+            "  ON session.specimen_id = specimen.id",
+            "JOIN original",
+            "  ON session.original_id = original.id",
+            "JOIN taxon",
+            "  ON specimen.taxon_id = taxon.id",
+            "JOIN sex",
+            "  ON specimen.sex_id = sex.id",
+            "JOIN fossil",
+            "  ON specimen.fossil_id = fossil.id",
+            "JOIN institute",
+            "  ON specimen.institute_id = institute.id",
+            "JOIN captive",
+            "  ON specimen.captive_id = captive.id",
+            "JOIN specimen_type",
+            "  ON specimen.specimen_type_id = specimen_type.id",
+            "JOIN age_class",
+            "  ON specimen.age_class_id = age_class.id",
+            "JOIN locality",
+            "  ON specimen.locality_id = locality.id",
+            "JOIN country",
+            "  ON locality.country_id = country.id",
+        ]
+    )
+
+    where = (
+        "WHERE sex.id IN %s AND fossil.id IN %s AND taxon.id IN %s and "
+        "variable.id in %s"
+    )
+    ordering = "ORDER BY `specimen_id` ASC"
+    limit = ""
+    if preview_only:  # TODO: This could be a little more nicer.
+        limit = "LIMIT 5"
+    print(
+        f"{select_start} {select_common} {from_start} {joins} {where} "
+        f"{ordering} {limit};"
+    )
+    return (
+        f"{select_start} {select_common} {from_start} {joins} {where} "
+        f"{ordering} {limit};"
+    )
+
+
 def query_3d(
     request: HttpRequest, which_3d_output_type: str, preview_only: bool
 ) -> HttpResponse:
@@ -914,63 +956,7 @@ def query_3d(
     # the database structure diagram is already published on the website anyway.
     # We'll only do metadata search first.
 
-    # Note
-    base = (
-        "SELECT DISTINCT specimen.id AS specimen_id, "
-        "                specimen.hypocode AS hypocode, "
-        "                institute.abbr AS collection_acronym, "
-        "                specimen.catalog_number AS catalog_number, "
-        "                taxon.name AS taxon_name, "
-        "                specimen.mass AS mass, "
-        "                sex.name AS sex_type, "
-        "                specimen_type.name AS specimen_type, "
-        "                fossil.name AS fossil_or_extant, "
-        "                captive.name AS captive_or_wild, "
-        "                original.name AS original_or_cast, "
-        "                protocol.label AS protocol, "
-        "                age_class.name AS age_class, "
-        "                locality.name AS locality_name, "
-        "                country.name AS country_name, "
-        "                session.comments AS session_comments, "
-        "                session.id AS session_id, "
-        "                specimen.comments AS specimen_comments "
-        "FROM data_3d "
-        "     JOIN `session` "
-        "       ON data_3d.session_id = session.id "
-        "     JOIN `specimen` "
-        "       ON session.specimen_id = specimen.id "
-        "     JOIN `taxon` "
-        "       ON specimen.taxon_id = taxon.id "
-        "     JOIN `sex` "
-        "       ON specimen.sex_id = sex.id "
-        "     JOIN `specimen_type` "
-        "       ON specimen.specimen_type_id = specimen_type.id "
-        "     JOIN `fossil` "
-        "       ON specimen.fossil_id = fossil.id "
-        "     JOIN `institute` "
-        "       ON specimen.institute_id = institute.id "
-        "     JOIN `protocol` "
-        "       ON session.protocol_id = protocol.id "
-        "     JOIN `captive` "
-        "       ON specimen.captive_id = captive.id "
-        "     JOIN `original` "
-        "       ON session.original_id = original.id "
-        "     JOIN `age_class` "
-        "       ON specimen.age_class_id = age_class.id "
-        "     JOIN `locality` "
-        "       ON specimen.locality_id = locality.id "
-        "     JOIN `country` "
-        "       ON locality.country_id = country.id "
-    )
-
-    where = " WHERE `sex`.`id` IN %s AND `fossil`.`id` IN %s AND `taxon`.`id` IN %s"
-    ordering = " ORDER BY `specimen_id` ASC"
-    limit = ""
-    if preview_only:  # TODO: This could be a little more nicer.
-        limit = " LIMIT 5"
-    final_sql = base + where + ordering + limit + ";"
-
-    # We skip variables in 3D: we're getting all of them.
+    sql_query = set_up_sql_query(False, preview_only)
 
     # This is a list of all the session that will be returned from the query
     # so I can send it to `get_3D_data()` for a second query to get the actual data.
@@ -980,7 +966,7 @@ def query_3d(
 
     with connection.cursor() as cursor:
         cursor.execute(
-            final_sql,
+            sql_query,
             [
                 request.session["table_var_select_done"]["sex"],
                 request.session["table_var_select_done"]["fossil"],
@@ -1002,12 +988,12 @@ def query_3d(
         for item in query_results:
             sessions.add(item["session_id"])
 
-    request.session["query"] = final_sql
+    request.session["query"] = sql_query
     request.session["sessions"] = list(sessions)
     request.session["3d_metadata"] = query_results
 
     context = {
-        "final_sql": final_sql.replace("%s", "{}")
+        "final_sql": sql_query.replace("%s", "{}")
         .format(
             request.session["table_var_select_done"]["sex"],
             request.session["table_var_select_done"]["fossil"],
