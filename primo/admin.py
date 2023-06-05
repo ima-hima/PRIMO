@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.db import models
+from django.forms import Textarea
 
 # because filters.py is at top level, import from .filters
 from .filters import DropdownFilter
@@ -31,9 +33,11 @@ from .models import (
 
 # Register your models here.
 
+COMMENT_FIELD_OVERRIDE = {"widget": Textarea(attrs={"rows": 3})}
+
 
 @admin.register(DataScalar)
-class DataScalarAdmin(admin.ModelAdmin):
+class DataScalarGdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "session",
@@ -69,9 +73,17 @@ class AgeclassAdmin(admin.ModelAdmin):
         "abbr",
         "comments",
     ]
+    list_editable = [
+        "age_class",
+        "abbr",
+        "comments",
+    ]
     search_fields = [
         "id",
     ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
 
 
 @admin.register(Data3D)
@@ -152,6 +164,12 @@ class CaptiveAdmin(admin.ModelAdmin):
         "abbr",
         "comments",
     ]
+    list_editable = [
+        "comments",
+    ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
 
 
 @admin.register(Continent)
@@ -165,6 +183,12 @@ class ContinentAdmin(admin.ModelAdmin):
         "continent_name",
         "comments",
     ]
+    list_editable = [
+        "comments",
+    ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
 
 
 @admin.register(Country)
@@ -189,6 +213,12 @@ class CountryAdmin(admin.ModelAdmin):
         "country_name",
         "abbr",
     ]
+    list_editable = [
+        "comments",
+    ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
     actions_on_top = True
     actions_on_bottom = True
 
@@ -206,6 +236,21 @@ class DatatypeAdmin(admin.ModelAdmin):
         "data_type",
         "comments",
     ]
+    list_editable = [
+        "description",
+        "data_type",
+        "comments",
+    ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
+    list_editable = [
+        "data_type",
+        "comments",
+    ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
 
 
 @admin.register(Device)
@@ -231,10 +276,11 @@ class FossilAdmin(admin.ModelAdmin):
         "comments",
     ]
     list_editable = [
-        "fossil_or_extant",
-        "abbr",
         "comments",
     ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
 
 
 @admin.register(Institute)
@@ -255,7 +301,7 @@ class InstituteAdmin(admin.ModelAdmin):
     list_filter = (
         ("institute_name", DropdownFilter),
         ("abbr", DropdownFilter),
-        ("locality__institute_name", DropdownFilter),
+        ("locality__locality_name", DropdownFilter),
     )
     search_fields = [
         "institute_name",
@@ -289,9 +335,6 @@ class LocalityAdmin(admin.ModelAdmin):
         "country",
         "latitude",
         "longitude",
-        "site_unit",
-        "plus_minus",
-        "age",
         "comments",
     ]
     fields = [
@@ -300,20 +343,20 @@ class LocalityAdmin(admin.ModelAdmin):
         "country",
         "latitude",
         "longitude",
-        "site_unit",
-        "plus_minus",
-        "age",
         "comments",
     ]
     list_filter = (
         ("locality_name", DropdownFilter),
         ("continent__continent_name", DropdownFilter),
         ("country__country_name", DropdownFilter),
-        ("age", DropdownFilter),
     )
-    search_fields = [
-        "id",
+    search_fields = ["locality_name", "continent", "country"]
+    list_editable = [
+        "comments",
     ]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
     actions_on_top = True
     actions_on_bottom = True
 
@@ -332,6 +375,10 @@ class ObserverAdmin(admin.ModelAdmin):
         "comments",
     ]
     list_filter = (("researcher_name", DropdownFilter), ("initials", DropdownFilter))
+    list_editable = ["researcher_name", "initials", "comments"]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
     actions_on_top = True
     actions_on_bottom = True
 
@@ -347,6 +394,7 @@ class OriginalAdmin(admin.ModelAdmin):
         "original_or_cast",
         "abbr",
     ]
+    list_editable = ["original_or_cast", "abbr"]
 
 
 @admin.register(Protocol)
@@ -487,6 +535,10 @@ class TaxonomicTypeAdmin(admin.ModelAdmin):
         "abbr",
         "comments",
     ]
+    list_editable = ["taxonomic_type", "abbr", "comments"]
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }
 
 
 @admin.register(Taxon)
@@ -531,6 +583,14 @@ class VariableAdmin(admin.ModelAdmin):
         "paired_with",
         "comments",
     ]
+    list_editable = [
+        "label",
+        "variable_name",
+        "laterality",
+        "datatype",
+        "paired_with",
+        "comments",
+    ]
     fields = [
         "label",
         "variable_name",
@@ -543,8 +603,11 @@ class VariableAdmin(admin.ModelAdmin):
         ("label", DropdownFilter),
         ("variable_name", DropdownFilter),
         ("laterality__laterality", DropdownFilter),
-        ("datatype__data_table", DropdownFilter),
+        ("datatype__data_type", DropdownFilter),
     )
     search_fields = ["id"]
     actions_on_top = True
     actions_on_bottom = True
+    formfield_overrides = {
+        models.TextField: COMMENT_FIELD_OVERRIDE,
+    }

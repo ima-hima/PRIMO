@@ -174,13 +174,13 @@ class Continent(models.Model):
     """A list of the continents"""
 
     CHOICES = (
-        ("africa", "Africa"),
-        ("asia", "Asia"),
-        ("europe", "Europe"),
-        ("australia", "Australia"),
-        ("north america", "North America"),
-        ("south america", "South America"),
-        ("unknown", "Unknown"),
+        ("Africa", "Africa"),
+        ("Asia", "Asia"),
+        ("Europe", "Europe"),
+        ("Australia", "Australia"),
+        ("North America", "North America"),
+        ("South America", "South America"),
+        ("Unknown", "Unknown"),
     )
     continent_name = models.CharField(
         verbose_name="Continent name",
@@ -276,9 +276,9 @@ class Datatype(models.Model):
     """Whether it's scalar, 3D or from an external data source."""
 
     TYPES = (
-        ("scalar", "scalar"),
+        ("scalar", "Scalar"),
         ("data3d", "3D data"),
-        ("external", "external"),
+        ("external", "External"),
     )
     description = models.CharField(max_length=255, blank=True, null=True)
     data_type = models.CharField(
@@ -297,6 +297,7 @@ class Datatype(models.Model):
     class Meta:
         db_table = "data_type"
         ordering = ["id"]
+        verbose_name = "data type"
 
 
 class Device(models.Model):
@@ -476,9 +477,6 @@ class Locality(models.Model):
     country = models.ForeignKey("Country", default=10000, on_delete=models.SET_DEFAULT)
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
-    site_unit = models.CharField(max_length=255, blank=True, null=True)
-    plus_minus = models.FloatField(blank=True, null=True)
-    age = models.FloatField(blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
@@ -487,6 +485,7 @@ class Locality(models.Model):
     class Meta:
         db_table = "locality"
         verbose_name_plural = "localities"
+        ordering = ["locality_name"]
 
 
 class Observer(models.Model):
@@ -524,10 +523,12 @@ class Original(models.Model):
         max_length=16,
         choices=CHOICES,
         default="original",
+        unique=True,
     )
     abbr = models.CharField(
         verbose_name="Abbreviation",
         max_length=2,
+        unique=True,
         blank=True,
         null=True,
     )
@@ -715,6 +716,7 @@ class TaxonomicType(models.Model):
         ("syntype", "Syntype"),
         ("neotype", "Neotype"),
         ("future neotype", "Future neotype"),
+        ("future lectotype", "Future lectotype"),
         ("unknown", "Unknown"),
     )
     taxonomic_type = models.CharField(
