@@ -78,8 +78,19 @@ class AuthUserUserPermissions(models.Model):
 class Ageclass(models.Model):
     """Ages, can include Infant, Juvenile, Adult, Unknown."""
 
-    age_class = models.CharField(verbose_name="Age class", max_length=50)
-    abbr = models.CharField(verbose_name="Abbreviation", max_length=50)
+    CLASS_CHOICES = (
+        ("infant", "Infant"),
+        ("juvenile", "Juvenile"),
+        ("adult", "Adult"),
+        ("unknown", "Unknown"),
+    )
+    ABBR_CHOICES = (("i", "I"), ("j", "J"), ("a", "A"), ("u", "U"))
+    age_class = models.CharField(
+        verbose_name="Age class", max_length=50, unique=True, choices=CLASS_CHOICES
+    )
+    abbr = models.CharField(
+        verbose_name="Abbreviation", max_length=2, unique=True, choices=ABBR_CHOICES
+    )
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:
@@ -356,16 +367,18 @@ class DjangoSession(models.Model):
 class Fossil(models.Model):
     """Type of specimen, fossil or not, including abbreviation."""
 
-    CHOICES = [("fossil", "Fossil"), ("extant", "Extant")]
+    CHOICES = [("fossil", "Fossil"), ("extant", "Extant"), ("unknown", "Unknown")]
     fossil_or_extant = models.CharField(
         verbose_name="Fossil or Extant",
         max_length=16,
         choices=CHOICES,
         default="fossil",
+        unique=True,
     )
     abbr = models.CharField(
         verbose_name="Abbreviation",
         max_length=2,
+        unique=True,
     )
     comments = models.TextField(blank=True, null=True)
 

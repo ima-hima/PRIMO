@@ -230,6 +230,11 @@ class FossilAdmin(admin.ModelAdmin):
         "abbr",
         "comments",
     ]
+    list_editable = [
+        "fossil_or_extant",
+        "abbr",
+        "comments",
+    ]
 
 
 @admin.register(Institute)
