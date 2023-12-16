@@ -37,7 +37,7 @@ COMMENT_FIELD_OVERRIDE = {"widget": Textarea(attrs={"rows": 3})}
 
 
 @admin.register(DataScalar)
-class DataScalarGdmin(admin.ModelAdmin):
+class DataScalarAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "session",
