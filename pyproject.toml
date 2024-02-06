@@ -10,7 +10,6 @@ ensure_newline_before_comments = true
 [tool.black]
 
 
-
 [tool.flake8]
 exclude = ["__pycache__", "pyproject.toml",]
 max-line-length = 88
@@ -20,7 +19,7 @@ ignore = [
     "W503", # Line break occurred before a binary operator. Ignored for black compatibility
     "D100", # Missing docstring in public module
     "D104", # Missing docstring in public package
-    "D105",# Missing docstring in magic method
+    "D105", # Missing docstring in magic method
     "D107", # Missing docstring in __init__
     "SC200", # Spelling error in name (e.g. variable, function, class)
     ]
@@ -35,7 +34,7 @@ disallow_untyped_defs = true
 
 
 [tool.django-stubs]
-django_settings_module = "primo.settings"
+django_settings_module = "config.settings"
 
 
 # mypy may eventually need this or something similar.
