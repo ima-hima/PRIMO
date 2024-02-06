@@ -459,9 +459,9 @@ def get_specimen_metadata(request: HttpRequest) -> list[Tuple[str, str]]:
         ("hypocode", "Hypocode"),
         ("collection_acronym", "Collection Acronym"),
         ("catalog_number", "Catalog No."),
-        ("taxon_name", "Taxon name"),
+        ("taxon_label", "Taxon name"),
         ("sex_type", "Sex"),
-        ("specimen_type", "Type Status"),
+        ("taxonomic_type", "Type Status"),
         ("mass", "Mass"),
         ("fossil_or_extant", "Fossil or Extant"),
         ("captive_or_wild", "Captive or Wild"),
@@ -843,10 +843,10 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
             "specimen.hypocode AS hypocode,",
             "institute.abbr AS collection_acronym,",
             "specimen.catalog_number AS catalog_number,",
-            "taxon.label,",
+            "taxon.label AS taxon_label,",
             "specimen.mass AS mass,",
             "sex.sex AS sex_type,",
-            "specimen_type.specimen_type,",
+            "taxonomic_type.taxonomic_type,",
             "fossil.fossil_or_extant,",
             "captive.captive_or_wild,",
             "original.original_or_cast,",
@@ -902,14 +902,16 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
             "  ON specimen.institute_id = institute.id",
             "JOIN captive",
             "  ON specimen.captive_id = captive.id",
-            "JOIN specimen_type",
-            "  ON specimen.specimen_type_id = specimen_type.id",
+            "JOIN taxonomic_type",
+            "  ON specimen.taxonomic_type_id = taxonomic_type.id",
             "JOIN age_class",
             "  ON specimen.age_class_id = age_class.id",
             "JOIN locality",
             "  ON specimen.locality_id = locality.id",
             "JOIN country",
             "  ON locality.country_id = country.id",
+            "JOIN observer",
+            "  ON session.observer_id = observer.id",
         ]
     )
 
@@ -921,10 +923,11 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     limit = ""
     if preview_only:  # TODO: This could be a little more nicer.
         limit = "LIMIT 5"
-    print(
-        f"{select_start} {select_common} {from_start} {joins} {where} "
-        f"{ordering} {limit};"
-    )
+    # print(
+    #     "**set_up_query_scalar\n",
+    #     f"{select_start} {select_common} {from_start} {joins} {where} "
+    #     f"{ordering} {limit};"
+    # )
     return (
         f"{select_start} {select_common} {from_start} {joins} {where} "
         f"{ordering} {limit};"
@@ -1073,7 +1076,6 @@ def tabulate_scalar(
 
     All requested variables
     """
-
     current_specimen = query_results[0]["hypocode"]
     output = []
     current_dict = init_query_table(request, query_results[0])
