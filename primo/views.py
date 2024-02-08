@@ -3,7 +3,7 @@ from csv import DictWriter
 from datetime import datetime
 from os import mkdir, path
 from sys import exc_info
-from typing import Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 from django.apps import apps
 from django.conf import settings
@@ -259,16 +259,20 @@ def export_scalar(request: HttpRequest) -> HttpResponse:
     return download(request)
 
 
-def export_3d(request: HttpRequest) -> HttpResponse:
-    #     request.session["which_3d_output_type"] = which_3d_output_type
+def export_3d(
+    request: HttpRequest, query_results: List[Dict[Any, Any]], output_file_type: str
+) -> HttpResponse:
+    #     request.session["output_file_type"] = output_file_type
     request.session["scalar_or_3d"] = "3D"
     set_up_download(request)
-    create_3d_output_string(request)
+    create_3d_output_string(request, query_results, output_file_type)
     collate_metadata(request)
     return download(request)
 
 
-def create_3d_output_string(request: HttpRequest) -> None:
+def create_3d_output_string(
+    request: HttpRequest, query_results: List[Dict[Any, Any]], output_file_type: str
+) -> None:
     """
     Collate data returned from 3D SQL query.
     Print out two files: a csv of metadata and a GRFND file. Fields
@@ -283,9 +287,9 @@ def create_3d_output_string(request: HttpRequest) -> None:
     missing_pts = {}
 
     # Header is different, otherwise files are nearly identical.
-    num_query_results = len(request.session["query_results"])
+    num_query_results = len(query_results)
     num_sessions = len(request.session["sessions"])
-    if request.session["which_3d_output_type"] == "Morphologika":
+    if output_file_type == "morpho":
         # Morphologika file format:
         # [individuals]
         # number of individuals
@@ -319,10 +323,10 @@ def create_3d_output_string(request: HttpRequest) -> None:
             f"DIM=3{newline_char}"
         )
 
-    for row in request.session["query_results"]:
+    for row in query_results:
         output_str += f"{row['specimen_id']}{newline_char}"
     # data points
-    if request.session["which_3d_output_type"] == "Morphologika":
+    if output_file_type == "morpho":
         output_str += f"{newline_char}[rawpoints]{newline_char}"
     """
     point_ctr will be used to track which points are missing for a given
@@ -330,10 +334,10 @@ def create_3d_output_string(request: HttpRequest) -> None:
     """
     missing_point_ctr = 1
     current_specimen = -1  # Keeps track of when new specimen data starts.
-    for row in request.session["query_results"]:
+    for row in query_results:
         if row["specimen_id"] != current_specimen:
             current_specimen = row["specimen_id"]
-            if request.session["which_3d_output_type"] == "Morphologika":
+            if output_file_type == "morpho":
                 output_str += (
                     newline_char
                     + "'"
@@ -403,7 +407,7 @@ def fixQuotes(inStr: str) -> str:
     return inStr
 
 
-def get_3D_data(request: HttpRequest) -> None:
+def get_3D_data(request: HttpRequest) -> List[Dict[Any, Any]]:
     """Execute query for actual 3D points, i.e. not metadata."""
 
     base = (
@@ -414,17 +418,19 @@ def get_3D_data(request: HttpRequest) -> None:
         "                data_3d.y, "
         "                data_3d.z, "
         "                data_3d.datindex, "
-        "                data_3d.variable_id "
+        "                data_3d.variable_id, "
+        "                observer.researcher_name AS researcher_name "
         "FROM data_3d "
-        "     JOIN variable ON data_3d.variable_id = variable.id "
-        "     JOIN session ON data_3d.session_id = session.id "
+        "     JOIN variable ON data_3d.variable_id = variable.id"
+        "     JOIN session ON data_3d.session_id = session.id"
         "     JOIN specimen ON session.specimen_id = specimen.id"
+        "     JOIN observer ON session.observer_id = observer.id"
     )
 
     where = " WHERE session_id IN %s"
-    group_by = " GROUP BY session_id"
+    # group_by = " GROUP BY session_id"
     ordering = " ORDER BY specimen_id, variable_id, data_3d.datindex ASC"
-    final_sql = base + where + ordering + group_by + ";"
+    final_sql = f"{base} {where} {ordering};"
 
     with connection.cursor() as cursor:
         cursor.execute(final_sql, [request.session["sessions"]])
@@ -437,7 +443,7 @@ def get_3D_data(request: HttpRequest) -> None:
         columns = [col[0] for col in cursor.description]
         query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
     # Not a session variable because it's a dictionary.
-    request.session["query_results"] = query_results
+    return query_results
 
 
 def get_specimen_metadata(request: HttpRequest) -> list[Tuple[str, str]]:
@@ -471,6 +477,7 @@ def get_specimen_metadata(request: HttpRequest) -> list[Tuple[str, str]]:
         ("age_class", "Age Class"),
         ("locality_name", "Locality"),
         ("country_name", "Country"),
+        ("researcher_name", "Observer"),
     ] + three_d_list
 
 
@@ -841,6 +848,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
         [
             "specimen.id AS specimen_id,",
             "specimen.hypocode AS hypocode,",
+            "session.id AS session_id,",
             "institute.abbr AS collection_acronym,",
             "specimen.catalog_number AS catalog_number,",
             "taxon.label AS taxon_label,",
@@ -850,20 +858,20 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
             "fossil.fossil_or_extant,",
             "captive.captive_or_wild,",
             "original.original_or_cast,",
-            "variable.label AS variable_label,",
-            "data_scalar.value AS scalar_value,",
             "age_class.age_class,",
             "locality.locality_name,",
             "country.country_name,",
             "specimen.comments AS specimen_comments,",
             "session.comments AS session_comments,",
-            "observer.researcher_name AS observer_name",
+            "observer.researcher_name AS researcher_name",
         ]
     )
+    where = "WHERE sex.id IN %s AND fossil.id IN %s AND taxon.id IN %s"
 
     if is_scalar:
         select_start = (
             "SELECT data_scalar.id AS scalar_id, "
+            "       variable.variable_name AS variable_label, "
             "       data_scalar.value AS scalar_value, "
         )
         from_start = " ".join(
@@ -875,6 +883,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
                 "       ON data_scalar.session_id = session.id"
             ]
         )
+        where += " and variable.id in %s"
     else:
         # Is 3D.
         from_start = " ".join(
@@ -915,10 +924,6 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
         ]
     )
 
-    where = (
-        "WHERE sex.id IN %s AND fossil.id IN %s AND taxon.id IN %s and "
-        "variable.id in %s"
-    )
     ordering = "ORDER BY `specimen_id` ASC"
     limit = ""
     if preview_only:  # TODO: This could be a little more nicer.
@@ -934,21 +939,20 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     )
 
 
-def query_3d(
-    request: HttpRequest, which_3d_output_type: str, preview_only: bool
-) -> HttpResponse:
+def query_3d(request: HttpRequest, output_file_type: str) -> HttpResponse:
     """
-    Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D points.
-    Send results to either Morphologika or GRFND creator and downloader.
+    Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D
+    points. Send results to either Morphologika or GRFND creator and downloader.
     If preview_only, ignore which_output_type and show metadata preview for top
     five taxa.
     """
 
+    preview_only = False
     if not request.user.is_authenticated or request.user.username == "user":
         preview_only = True
 
     request.session["scalar_or_3d"] = "3D"
-    request.session["which_3d_output_type"] = which_3d_output_type
+    # request.session["output_file_type"] = output_file_type
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Move all of this and 3D into db. As it was before, dammit.
 
@@ -1018,8 +1022,8 @@ def query_3d(
     # If it's not a preview I need to get actual data and then send to Morphologika
     # or GRFND.
     if not preview_only:
-        get_3D_data(request)
-        export_3d(request)
+        query_results = get_3D_data(request)
+        export_3d(request, query_results, output_file_type)
         # return render(request, 'primo/download_success.jinja')
 
     return render(request, "primo/query_results.jinja", context)
@@ -1091,8 +1095,8 @@ def tabulate_scalar(
             # TODO: do I need this del here?
             del current_dict
             current_dict = init_query_table(request, row)
-            # This next so we can look up values quickly in view rather than having
-            # to do constant conditionals.
+            # This next so we can look up values quickly in view rather than
+            # having to do constant conditionals.
             current_dict[row["variable_label"]] = row["scalar_value"]
             current_specimen = row["hypocode"]
         # TODO: Figure out SQL so we don't have to do entire query and cull it here.

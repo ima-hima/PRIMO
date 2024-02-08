@@ -23,13 +23,15 @@
     <br />
 
     <p><a href="{% url 'query_start' %}">Reset Query </a>
-
     {% if finished %}
         &nbsp;&nbsp; | &nbsp;&nbsp;
         {% if scalar_or_3d == "scalar" %}
             <a href="{% url 'query_scalar' %}">Preview and download results  &raquo;</a>
+            {# <a href="{% url 'query_'|add:scalar_or_3d %}">Preview and download results  &raquo;</a> #}
         {% else %}
-            <a href="{% url 'query_3d' %}">Preview and download results  &raquo;</a>
+            {# <a href="{% url 'query_3d' %}">Preview and download results  &raquo;</a> #}
+            <a href="{% url 'query_3d' 'morpho' %}">Download Morphologika file »</a>&nbsp;&nbsp; | &nbsp;&nbsp;
+            <a href="{% url 'query_3d' 'grfnd' %}">Download GRFND file  &raquo;</a>
         {% endif %}
     </p>
     {% endif %}

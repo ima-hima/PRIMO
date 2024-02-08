@@ -17,9 +17,9 @@
             <p>Also, please note that some browsers may change the extension of the resultant file.
             If this is the case, please rename it to .csv.</p>
             {% if request.session.scalar_or_3d|title == '3d' %}
-            <a href="{% url 'query_3d' 'Morphologika' False %}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+            <a href="{% url 'query_3d' 'morpho' %}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
             &nbsp;&nbsp; | &nbsp;&nbsp;
-            <a href="{% url 'query_3d' 'GRFND' False %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
+            <a href="{% url 'query_3d' 'grfnd' %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
             {% elif request.session.scalar_or_3d|title == 'scalar' %}
             <p><a href="{% url 'export_scalar' %}" class="waitAndRedirect">Download CSV file</a></p>
             {% endif %} {# end scalar or 3d #}
