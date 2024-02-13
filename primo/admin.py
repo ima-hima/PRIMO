@@ -40,24 +40,26 @@ COMMENT_FIELD_OVERRIDE = {"widget": Textarea(attrs={"rows": 3})}
 class DataScalarAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "session",
-        "variable",
+        "session_id",
+        "variable_id",
         "value",
     )
     fields = (
         "session",
         "variable",
-        "label",
-    )
-    list_filter = (
-        ("variable__variable_name", DropdownFilter),
-        ("session__id", DropdownFilter),
+        "value",
     )
     search_fields = [
         "id",
     ]
     actions_on_top = True
     actions_on_bottom = True
+
+    def variable_id(self, model_instance: DataScalar) -> Variable:
+        return model_instance.variable
+
+    def session_id(self, model_instance: DataScalar) -> Session:
+        return model_instance.session
 
 
 @admin.register(Ageclass)
@@ -69,7 +71,7 @@ class AgeclassAdmin(admin.ModelAdmin):
         "comments",
     ]
     fields = [
-        "ageclass",
+        "age_class",
         "abbr",
         "comments",
     ]
@@ -90,13 +92,14 @@ class AgeclassAdmin(admin.ModelAdmin):
 class Data3DAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "session",
-        "variable",
+        "session_id",
+        "variable_id",
         "datindex",
         "x",
         "y",
         "z",
     ]
+    list_filter = ["variable", "datindex"]
     fields = [
         "session",
         "variable",
@@ -110,6 +113,12 @@ class Data3DAdmin(admin.ModelAdmin):
     ]
     actions_on_top = True
     actions_on_bottom = True
+
+    def variable_id(self, model_instance: Data3D) -> Variable:
+        return model_instance.variable
+
+    def session_id(self, model_instance: Data3D) -> Session:
+        return model_instance.session
 
 
 @admin.register(Bodypart)
@@ -184,6 +193,7 @@ class ContinentAdmin(admin.ModelAdmin):
         "comments",
     ]
     list_editable = [
+        "continent_name",
         "comments",
     ]
     formfield_overrides = {
@@ -241,6 +251,7 @@ class DatatypeAdmin(admin.ModelAdmin):
         "data_type",
         "comments",
     ]
+    list_filter = ["data_type"]
     formfield_overrides = {
         models.TextField: COMMENT_FIELD_OVERRIDE,
     }
@@ -276,6 +287,8 @@ class FossilAdmin(admin.ModelAdmin):
         "comments",
     ]
     list_editable = [
+        "fossil_or_extant",
+        "abbr",
         "comments",
     ]
     formfield_overrides = {
@@ -333,8 +346,8 @@ class LocalityAdmin(admin.ModelAdmin):
         "locality_name",
         "continent",
         "country",
-        "latitude",
-        "longitude",
+        # "latitude",
+        # "longitude",
         "comments",
     ]
     fields = [
@@ -584,11 +597,11 @@ class VariableAdmin(admin.ModelAdmin):
         "comments",
     ]
     list_editable = [
-        "label",
-        "variable_name",
+        # "label",
+        # "variable_name",
         "laterality",
         "datatype",
-        "paired_with",
+        # "paired_with",
         "comments",
     ]
     fields = [

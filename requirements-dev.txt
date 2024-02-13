@@ -1,6 +1,6 @@
 black
 django-debug-toolbar==4.0.0
-django-stubs>=4.2,<4.3
+django-stubs>=4.2,<4.8
 flake8==6.0.0
 flake8-pyproject==1.2.3
 isort
