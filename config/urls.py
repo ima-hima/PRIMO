@@ -6,6 +6,12 @@ from django.urls import include, path
 
 from primo import views
 
+admin.site.site_header = "PRIMO Adminstration"
+# Next default: "Django site admin"
+# admin.site.index_title = 'Features area'
+# Next default: "Django site admin"
+# admin.site.site_title = 'HTML title from adminsitration'
+
 urlpatterns = [
     path("", views.IndexView.as_view(), name="index"),
     path("admin/", admin.site.urls, name="admin"),
@@ -15,7 +21,7 @@ urlpatterns = [
     path("accounts/login/", views.log_in, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("download_success/", views.download_success, name="download_success"),
-    path("export_scalar/", views.export_scalar, name="export_scalar"),
+    # path("export_scalar/", views.export_scalar, name="export_scalar"),
     path("export_3d/<str:which_3d_output_type>", views.export_3d, name="export_3d"),
     # If none given, defaults to Morphologika.
     # path("export_3d/", views.export_3d, name="export_3d"),

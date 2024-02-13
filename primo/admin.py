@@ -41,7 +41,7 @@ class DataScalarAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "session_id",
-        "variable_id",
+        "variable_label",
         "value",
     )
     fields = (
@@ -55,7 +55,7 @@ class DataScalarAdmin(admin.ModelAdmin):
     actions_on_top = True
     actions_on_bottom = True
 
-    def variable_id(self, model_instance: DataScalar) -> Variable:
+    def variable_label(self, model_instance: DataScalar) -> Variable:
         return model_instance.variable
 
     def session_id(self, model_instance: DataScalar) -> Session:
@@ -93,7 +93,7 @@ class Data3DAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "session_id",
-        "variable_id",
+        "variable_label",
         "datindex",
         "x",
         "y",
@@ -114,7 +114,7 @@ class Data3DAdmin(admin.ModelAdmin):
     actions_on_top = True
     actions_on_bottom = True
 
-    def variable_id(self, model_instance: Data3D) -> Variable:
+    def variable_label(self, model_instance: Data3D) -> Variable:
         return model_instance.variable
 
     def session_id(self, model_instance: Data3D) -> Session:
