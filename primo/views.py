@@ -622,10 +622,11 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "Scalar") -> HttpRespo
     do a second query for all possible values and fill those values in.
     """
     request.session["page_title"] = f"{scalar_or_3d} Query Wizard"
-    request.session["scalar_or_3d"] = scalar_or_3d
+    print(request.session["scalar_or_3d"], scalar_or_3d, request.session["tables"])
     if request.method == "POST":
         # If there's a POST, then parameter_selection has been called and some
-        # values have been sent back.
+        # values have been sent back. But there's a possibility that we've changed
+        # query types in the meantime, so check for that as well.
         current_table = request.POST.get("table")
 
         if request.POST.get("commit") == "Submit checked options":
@@ -655,10 +656,11 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "Scalar") -> HttpRespo
                     # returns an empty list for any missing key.
                     selected_rows.append(int(item))  # type: ignore
             request.session["table_var_select_done"][current_table] = selected_rows
-    if not request.session["tables"]:
+    if not request.session["tables"] or request.session["scalar_or_3d"] != scalar_or_3d:
         # If tables isn't set, query for all tables and set up both tables and
         # selected lists. Note that "tables" will exist as key either way.
         # Note for this query that "tables" is set as the related name in Models.py.
+        request.session["scalar_or_3d"] = scalar_or_3d
         tables = QueryWizardQuery.objects.get(
             data_table=scalar_or_3d.capitalize()
         ).tables.all()
@@ -793,7 +795,10 @@ def preview(request: HttpRequest) -> HttpResponse:
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
-    sql_query = set_up_sql_query(True, True)
+    if request.session["scalar_or_3d"] == "Scalar":
+        sql_query = set_up_sql_query(True, True)
+    else:
+        sql_query = set_up_sql_query(False, True)
 
     # We have to query for the variable names separately.
     with connection.cursor() as variable_query:
@@ -994,7 +999,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
 
 #     # This is a list of all the session that will be returned from the query
 #     # so I can send it to `get_3D_data()` for a second query to get the actual data.
-#     # I'm using a set because each point is it's own line in the output. A list
+#     # I'm using a set because each point is its own line in the output. A list
 #     # would have repeated data.
 #     sessions = set()
 
