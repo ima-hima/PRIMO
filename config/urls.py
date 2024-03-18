@@ -21,7 +21,7 @@ urlpatterns = [
     path("accounts/login/", views.log_in, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("download_success/", views.download_success, name="download_success"),
-    # path("export_scalar/", views.export_scalar, name="export_scalar"),
+    path("export_scalar/", views.export_scalar, name="export_scalar"),
     path("export_3d/<str:which_3d_output_type>", views.export_3d, name="export_3d"),
     # If none given, defaults to Morphologika.
     # path("export_3d/", views.export_3d, name="export_3d"),
@@ -30,8 +30,16 @@ urlpatterns = [
         views.parameter_selection,
         name="parameter_selection",
     ),
-    path("query_3d/<str:output_file_type>", views.query_3d, name="query_3d"),
-    path("query_scalar/", views.query_scalar, name="query_scalar"),
+    path(
+        "execute_query/<str:which_3d_output_type>",
+        views.execute_query,
+        name="execute_query",
+    ),
+    path(
+        "execute_query/", views.execute_query, name="execute_query"
+    ),  # for scalar queries
+    # path("query_scalar/", views.query_scalar, name="query_scalar"),
+    path("preview", views.preview, name="preview"),
     path("query_setup/<str:scalar_or_3d>", views.query_setup, name="query_setup"),
     # If there's no GET, it defaults to scalar.
     path("query_setup/", views.query_setup, name="query_setup"),

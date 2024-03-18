@@ -371,42 +371,6 @@ def create_3d_output_string(
         outfile.write(output_str)
 
 
-def fixQuotes(inStr: str) -> str:
-    """Quote all the things that need to be quoted in a csv row."""
-
-    needQuote = False
-
-    # -----------------------------------------------------------------
-    #  Quotes in the value must be escaped.
-    # -----------------------------------------------------------------
-    if inStr.find('"') >= 0:
-        inStr = inStr.replace('"', '""')
-        needQuote = True
-
-    # -----------------------------------------------------------------
-    #  The value separater must be quoted ("," in this case.)
-    # -----------------------------------------------------------------
-    elif inStr.find(",") >= 0:
-        needQuote = True
-
-    # -----------------------------------------------------------------
-    #  Quote line breaks if they are present.
-    # -----------------------------------------------------------------
-    elif (inStr.find("\n") >= 0) or (inStr.find("\r") >= 0):  # \r is for Mac
-        needQuote = True
-
-    # -----------------------------------------------------------------
-    #  Quote equal sign (Excel interprets this as a formula).
-    # -----------------------------------------------------------------
-    elif inStr.find("=") >= 0:
-        needQuote = True
-
-    if needQuote:
-        inStr = '"' + inStr + '"'
-
-    return inStr
-
-
 def get_3D_data(request: HttpRequest) -> List[Dict[Any, Any]]:
     """Execute query for actual 3D points, i.e. not metadata."""
 
@@ -490,8 +454,6 @@ def init_query_table(
     dictionary.
     """
     output = {key[0]: query_result[key[0]] for key in get_specimen_metadata(request)}
-    output["variable_label"] = query_result["variable_label"]
-    output["scalar_value"] = query_result["scalar_value"]
     return output
 
 
@@ -544,6 +506,7 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpResponse:
+    """Select all parameters for current_table."""
     javascript = ""
     request.session["page_title"] = f"{current_table.capitalize()} Selection"
     if current_table == "variable":
@@ -648,17 +611,18 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
 
 
 @login_required
-def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpResponse:
+def query_setup(request: HttpRequest, scalar_or_3d: str = "Scalar") -> HttpResponse:
     """
-    For scalar queries send parameter_selection to frontend. Once all
+    For scalar queries send parameter_selection to front end. Once all
     parameters are set, give option to call results, e.g. query_scalar().
 
     Tables will be all of the tables that are available to search on for a
-    particular search type (e.g. scalar or 3D). Of those tables sex and
+    particular search type (e.g. scalar or 3D). Of those tables, sex and
     fossil will be pre-filled with all values selected. In that case,
     do a second query for all possible values and fill those values in.
     """
-    request.session["page_title"] = f"{scalar_or_3d.title()} Query Wizard"
+    request.session["page_title"] = f"{scalar_or_3d} Query Wizard"
+    request.session["scalar_or_3d"] = scalar_or_3d
     if request.method == "POST":
         # If there's a POST, then parameter_selection has been called and some
         # values have been sent back.
@@ -694,8 +658,6 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
     if not request.session["tables"]:
         # If tables isn't set, query for all tables and set up both tables and
         # selected lists. Note that "tables" will exist as key either way.
-        request.session["scalar_or_3d"] = scalar_or_3d
-
         # Note for this query that "tables" is set as the related name in Models.py.
         tables = QueryWizardQuery.objects.get(
             data_table=scalar_or_3d.capitalize()
@@ -749,16 +711,17 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "scalar") -> HttpRespo
     )
 
 
-def query_scalar(request: HttpRequest) -> HttpResponse:
+def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpResponse:
     """Set up the scalar query SQL. Do query. Call result table display."""
-    request.session["page_title"] = "Scalar Results"
-    # TODO: Look into doing this all with built-ins, rather than with .raw()
-    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
+    if not which_3d_output_type:
+        request.session["page_title"] = "Scalar Results"
     request.session["scalar_or_3d"] = "scalar"
     preview_only = True
     if request.user.is_authenticated and request.user.username != "user":
         preview_only = False
 
+    # TODO: Look into doing this all with built-ins, rather than with .raw()
+    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
     sql_query = set_up_sql_query(True, preview_only)
 
     # We have to query for the variable names separately.
@@ -821,7 +784,79 @@ def query_scalar(request: HttpRequest) -> HttpResponse:
         "specimen_metadata": get_specimen_metadata(request),
         "user": request.user.username,
     }
-    return render(request, "primo/query_results.jinja", context)
+    return render(request, "primo/preview.jinja", context)
+
+
+def preview(request: HttpRequest) -> HttpResponse:
+    """Set up the scalar query SQL. Do query. Call result table display."""
+    request.session["page_title"] = f"{request.session['scalar_or_3d']} Results Preview"
+
+    # TODO: Look into doing this all with built-ins, rather than with .raw()
+    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
+    sql_query = set_up_sql_query(True, True)
+
+    # We have to query for the variable names separately.
+    with connection.cursor() as variable_query:
+        # Recall that variable label is abbreviation, name is full name.
+        variable_query.execute(
+            "SELECT label  "
+            "  FROM variable "
+            " WHERE variable.id "
+            "    IN %s "
+            "ORDER BY label ASC;",
+            [request.session["table_var_select_done"]["variable"]],
+        )
+        variable_labels = [label[0] for label in variable_query.fetchall()]
+
+    # Use cursor here?
+    with connection.cursor() as cursor:
+        cursor.execute(
+            sql_query,
+            [
+                request.session["table_var_select_done"]["sex"],
+                request.session["table_var_select_done"]["fossil"],
+                request.session["table_var_select_done"]["taxon"],
+                # concat_variable_list(request.session['selected']['bodypart']),
+                request.session["table_var_select_done"]["variable"],
+            ],
+        )
+        # Now return all rows as a dictionary object. Note that each variable
+        # name will have its own row, so I'm going to have to jump through some
+        # hoops to get the names out correctly for the table headers in the view.
+        # TODO: There has to be a better way to do this.
+
+        # Note nice list comprehensions from the Django docs here:
+        columns = [col[0] for col in cursor.description]
+        query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    are_results = True
+    try:
+        new_query_results = tabulate_scalar(request, query_results, True)
+        request.session["query_results"] = new_query_results
+    except Exception:
+        print(exc_info()[0])
+        are_results = False
+
+    # This is for use in export_csv_file().
+    request.session["variable_labels"] = variable_labels
+    context = {
+        "final_sql": sql_query.replace("%s", "{}").format(
+            request.session["table_var_select_done"]["sex"],
+            request.session["table_var_select_done"]["fossil"],
+            request.session["table_var_select_done"]["taxon"],
+            # concat_variable_list(request.session['selected']['bodypart']),
+            request.session["table_var_select_done"]["variable"],
+        ),
+        "query_results": new_query_results,
+        "are_results": are_results,
+        "total_specimens": len(new_query_results),
+        "variable_labels": variable_labels,
+        "variable_ids": request.session["table_var_select_done"]["variable"],
+        "preview_only": True,
+        "specimen_metadata": get_specimen_metadata(request),
+        "user": request.user.username,
+    }
+    return render(request, "primo/preview.jinja", context)
 
 
 @login_required
@@ -871,7 +906,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     if is_scalar:
         select_start = (
             "SELECT data_scalar.id AS scalar_id, "
-            "       variable.variable_name AS variable_label, "
+            "       variable.label AS variable_label, "
             "       data_scalar.value AS scalar_value, "
         )
         from_start = " ".join(
@@ -925,108 +960,100 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     )
 
     ordering = "ORDER BY `specimen_id` ASC"
-    limit = ""
-    if preview_only:  # TODO: This could be a little more nicer.
-        limit = "LIMIT 5"
-    # print(
-    #     "**set_up_query_scalar\n",
-    #     f"{select_start} {select_common} {from_start} {joins} {where} "
-    #     f"{ordering} {limit};"
-    # )
     return (
-        f"{select_start} {select_common} {from_start} {joins} {where} "
-        f"{ordering} {limit};"
+        f"{select_start} {select_common} {from_start} {joins} {where} " f"{ordering};"
     )
 
 
-def query_3d(request: HttpRequest, output_file_type: str) -> HttpResponse:
-    """
-    Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D
-    points. Send results to either Morphologika or GRFND creator and downloader.
-    If preview_only, ignore which_output_type and show metadata preview for top
-    five taxa.
-    """
+# def query_3d(request: HttpRequest, output_file_type: str) -> HttpResponse:
+#     """
+#     Set up the 3D query SQL. Do query for metadata. Call get_3D_data to get 3D
+#     points. Send results to either Morphologika or GRFND creator and downloader.
+#     If preview_only, ignore which_output_type and show metadata preview for top
+#     five taxa.
+#     Is this used?
+#     """
 
-    preview_only = False
-    if not request.user.is_authenticated or request.user.username == "user":
-        preview_only = True
+#     preview_only = False
+#     if not request.user.is_authenticated or request.user.username == "user":
+#         preview_only = True
 
-    request.session["scalar_or_3d"] = "3D"
-    # request.session["output_file_type"] = output_file_type
-    # TODO: Look into doing this all with built-ins, rather than with .raw()
-    # TODO: Move all of this and 3D into db. As it was before, dammit.
+#     request.session["scalar_or_3d"] = "3D"
+#     # request.session["output_file_type"] = output_file_type
+#     # TODO: Look into doing this all with built-ins, rather than with .raw()
+#     # TODO: Move all of this and 3D into db. As it was before, dammit.
 
-    # This is for cleaner code when composing header row for metadata csv.
-    # First value is field name in DB, second is header name for metadata csv.
+#     # This is for cleaner code when composing header row for metadata csv.
+#     # First value is field name in DB, second is header name for metadata csv.
 
-    # This is okay to include in publicly-available code (i.e. git), because
-    # the database structure diagram is already published on the website anyway.
-    # We'll only do metadata search first.
+#     # This is okay to include in publicly-available code (i.e. git), because
+#     # the database structure diagram is already published on the website anyway.
+#     # We'll only do metadata search first.
 
-    sql_query = set_up_sql_query(False, preview_only)
+#     sql_query = set_up_sql_query(False, preview_only)
 
-    # This is a list of all the session that will be returned from the query
-    # so I can send it to `get_3D_data()` for a second query to get the actual data.
-    # I'm using a set because each point is it's own line in the output. A list
-    # would have repeated data.
-    sessions = set()
+#     # This is a list of all the session that will be returned from the query
+#     # so I can send it to `get_3D_data()` for a second query to get the actual data.
+#     # I'm using a set because each point is it's own line in the output. A list
+#     # would have repeated data.
+#     sessions = set()
 
-    with connection.cursor() as cursor:
-        cursor.execute(
-            sql_query,
-            [
-                request.session["table_var_select_done"]["sex"],
-                request.session["table_var_select_done"]["fossil"],
-                request.session["table_var_select_done"]["taxon"],
-            ],
-        )
-        # Now return all rows as a dictionary object. Note that each variable
-        # name will have its own row, so I'm going to have to jump through some
-        # hoops to get the names out correctly for the table headers in the view.
+#     with connection.cursor() as cursor:
+#         cursor.execute(
+#             sql_query,
+#             [
+#                 request.session["table_var_select_done"]["sex"],
+#                 request.session["table_var_select_done"]["fossil"],
+#                 request.session["table_var_select_done"]["taxon"],
+#             ],
+#         )
+#         # Now return all rows as a dictionary object. Note that each variable
+#         # name will have its own row, so I'm going to have to jump through some
+#         # hoops to get the names out correctly for the table headers in the view.
 
-        # TODO: There has to be a better way to do that.
+#         # TODO: There has to be a better way to do that.
 
-        # Note nice list comprehensions from the Django docs here:
-        columns = [col[0] for col in cursor.description]
-        query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        # Need to get session ids in case file will be downloaded.
-        # Single specimen per session is enforced at DB level.
-        # This won't be used for preview.
-        for item in query_results:
-            sessions.add(item["session_id"])
+#         # Note nice list comprehensions from the Django docs here:
+#         columns = [col[0] for col in cursor.description]
+#         query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+#         # Need to get session ids in case file will be downloaded.
+#         # Single specimen per session is enforced at DB level.
+#         # This won't be used for preview.
+#         for item in query_results:
+#             sessions.add(item["session_id"])
 
-    request.session["query"] = sql_query
-    request.session["sessions"] = list(sessions)
-    request.session["3d_metadata"] = query_results
+#     request.session["query"] = sql_query
+#     request.session["sessions"] = list(sessions)
+#     request.session["3d_metadata"] = query_results
 
-    context = {
-        "final_sql": sql_query.replace("%s", "{}")
-        .format(
-            request.session["table_var_select_done"]["sex"],
-            request.session["table_var_select_done"]["fossil"],
-            request.session["table_var_select_done"]["taxon"],
-        )
-        .replace("[", "(")
-        .replace("]", ")"),
-        "groups": request.user.get_group_permissions(),
-        "preview_only": preview_only,
-        "query_results": query_results,
-        "scalar_or_3d": request.session["scalar_or_3d"],
-        "specimen_metadata": get_specimen_metadata(request),
-        "total_specimens": len(
-            query_results
-        ),  # This should be the same as len(request.session['sessions'])
-        "user": request.user.username,
-    }
+#     context = {
+#         "final_sql": sql_query.replace("%s", "{}")
+#         .format(
+#             request.session["table_var_select_done"]["sex"],
+#             request.session["table_var_select_done"]["fossil"],
+#             request.session["table_var_select_done"]["taxon"],
+#         )
+#         .replace("[", "(")
+#         .replace("]", ")"),
+#         "groups": request.user.get_group_permissions(),
+#         "preview_only": preview_only,
+#         "query_results": query_results,
+#         "scalar_or_3d": request.session["scalar_or_3d"],
+#         "specimen_metadata": get_specimen_metadata(request),
+#         "total_specimens": len(
+#             query_results
+#         ),  # This should be the same as len(request.session['sessions'])
+#         "user": request.user.username,
+#     }
 
-    # If it's not a preview I need to get actual data and then send to Morphologika
-    # or GRFND.
-    if not preview_only:
-        query_results = get_3D_data(request)
-        export_3d(request, query_results, output_file_type)
-        # return render(request, 'primo/download_success.jinja')
+#     # If it's not a preview I need to get actual data and then send to Morphologika
+#     # or GRFND.
+#     if not preview_only:
+#         query_results = get_3D_data(request)
+#         export_3d(request, query_results, output_file_type)
+#         # return render(request, 'primo/download_success.jinja')
 
-    return render(request, "primo/query_results.jinja", context)
+#     return render(request, "primo/preview.jinja", context)
 
 
 def set_up_download(request: HttpRequest) -> None:
