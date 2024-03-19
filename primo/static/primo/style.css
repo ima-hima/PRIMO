@@ -384,3 +384,10 @@ table.tablesorter thead tr .headerSortDown {
 table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSortUp {
 background-color: #8dbdd8;
 }
+.highlight {
+  background-color: #ffec9f;
+  padding: 0.1em;
+}
+.result_directions {
+  max-width: 750px;
+}

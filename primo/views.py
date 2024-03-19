@@ -622,7 +622,6 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "Scalar") -> HttpRespo
     do a second query for all possible values and fill those values in.
     """
     request.session["page_title"] = f"{scalar_or_3d} Query Wizard"
-    print(request.session["scalar_or_3d"], scalar_or_3d, request.session["tables"])
     if request.method == "POST":
         # If there's a POST, then parameter_selection has been called and some
         # values have been sent back. But there's a possibility that we've changed
@@ -770,7 +769,7 @@ def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpR
     # This is for use in export_csv_file().
     request.session["variable_labels"] = variable_labels
     context = {
-        "final_sql": sql_query.replace("%s", "{}").format(
+        "final_sql": sql_query.format(
             request.session["table_var_select_done"]["sex"],
             request.session["table_var_select_done"]["fossil"],
             request.session["table_var_select_done"]["taxon"],
@@ -795,72 +794,75 @@ def preview(request: HttpRequest) -> HttpResponse:
 
     # TODO: Look into doing this all with built-ins, rather than with .raw()
     # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
+    submission_values = [
+        request.session["table_var_select_done"]["sex"],
+        request.session["table_var_select_done"]["fossil"],
+        request.session["table_var_select_done"]["taxon"],
+    ]
     if request.session["scalar_or_3d"] == "Scalar":
         sql_query = set_up_sql_query(True, True)
+        submission_values.append(request.session["table_var_select_done"]["variable"])
+        # We have to query for the variable names separately.
+        with connection.cursor() as variable_query:
+            # Recall that variable label is abbreviation, name is full name.
+            variable_query.execute(
+                "SELECT label  "
+                "  FROM variable "
+                " WHERE variable.id "
+                "    IN %s "
+                "ORDER BY label ASC;",
+                [request.session["table_var_select_done"]["variable"]],
+            )
+            request.session["variable_labels"] = [
+                label[0] for label in variable_query.fetchall()
+            ]
     else:
         sql_query = set_up_sql_query(False, True)
-
-    # We have to query for the variable names separately.
-    with connection.cursor() as variable_query:
-        # Recall that variable label is abbreviation, name is full name.
-        variable_query.execute(
-            "SELECT label  "
-            "  FROM variable "
-            " WHERE variable.id "
-            "    IN %s "
-            "ORDER BY label ASC;",
-            [request.session["table_var_select_done"]["variable"]],
-        )
-        variable_labels = [label[0] for label in variable_query.fetchall()]
 
     # Use cursor here?
     with connection.cursor() as cursor:
         cursor.execute(
             sql_query,
-            [
-                request.session["table_var_select_done"]["sex"],
-                request.session["table_var_select_done"]["fossil"],
-                request.session["table_var_select_done"]["taxon"],
-                # concat_variable_list(request.session['selected']['bodypart']),
-                request.session["table_var_select_done"]["variable"],
-            ],
+            submission_values,
         )
         # Now return all rows as a dictionary object. Note that each variable
         # name will have its own row, so I'm going to have to jump through some
         # hoops to get the names out correctly for the table headers in the view.
         # TODO: There has to be a better way to do this.
 
-        # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
         query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     are_results = True
-    try:
-        new_query_results = tabulate_scalar(request, query_results, True)
-        request.session["query_results"] = new_query_results
-    except Exception:
-        print(exc_info()[0])
-        are_results = False
+    if request.session["scalar_or_3d"] == "Scalar":
+        try:
+            tabulated_query_results = tabulate_scalar(request, query_results, True)
+            request.session["query_results"] = tabulated_query_results
+        except Exception:
+            print(exc_info()[0])
+            are_results = False
 
     # This is for use in export_csv_file().
-    request.session["variable_labels"] = variable_labels
     context = {
-        "final_sql": sql_query.replace("%s", "{}").format(
-            request.session["table_var_select_done"]["sex"],
-            request.session["table_var_select_done"]["fossil"],
-            request.session["table_var_select_done"]["taxon"],
-            # concat_variable_list(request.session['selected']['bodypart']),
-            request.session["table_var_select_done"]["variable"],
-        ),
-        "query_results": new_query_results,
+        "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,
-        "total_specimens": len(new_query_results),
-        "variable_labels": variable_labels,
-        "variable_ids": request.session["table_var_select_done"]["variable"],
-        "preview_only": True,
+        "total_specimens": len(tabulated_query_results),
+        "preview_only": request.user.username == "user",
         "specimen_metadata": get_specimen_metadata(request),
         "user": request.user.username,
     }
+    if request.session["scalar_or_3d"] == "Scalar":
+        context["variable_labels"] = request.session["variable_labels"]
+        context["variable_ids"] = request.session["table_var_select_done"]["variable"]
+        context["query_results"] = tabulated_query_results
+    else:
+        # This is a list of all the session that will be returned from the query
+        # so I can send it to `get_3D_data()` for a second query to get the actual data.
+        # I'm using a set because each point is its own line in the output. A list
+        # would have repeated data.
+        sessions = set()
+        for item in query_results:
+            sessions.add(item["session_id"])
     return render(request, "primo/preview.jinja", context)
 
 
@@ -928,46 +930,44 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
         # Is 3D.
         from_start = " ".join(
             [
-                "FROM data_3d",
-                "     JOIN session",
-                "       ON data_3d.session_id = session.id",
+                "FROM session",
+                "     JOIN data_3d",
+                "       ON session.id = data_3d.session_id",
             ]
         )
         select_start = "SELECT DISTINCT specimen.id AS specimen_id,"
 
     joins = " ".join(
         [
-            "JOIN specimen",
-            "  ON session.specimen_id = specimen.id",
             "JOIN original",
             "  ON session.original_id = original.id",
+            "JOIN specimen",
+            "  ON session.specimen_id = specimen.id",
             "JOIN taxon",
-            "  ON specimen.taxon_id = taxon.id",
+            "  ON taxon.id = specimen.taxon_id",
             "JOIN sex",
-            "  ON specimen.sex_id = sex.id",
+            "  ON sex.id = specimen.sex_id",
             "JOIN fossil",
-            "  ON specimen.fossil_id = fossil.id",
+            "  ON fossil.id = specimen.fossil_id",
             "JOIN institute",
-            "  ON specimen.institute_id = institute.id",
+            "  ON institute.id = specimen.institute_id",
             "JOIN captive",
-            "  ON specimen.captive_id = captive.id",
+            "  ON captive.id = specimen.captive_id",
             "JOIN taxonomic_type",
-            "  ON specimen.taxonomic_type_id = taxonomic_type.id",
+            "  ON taxonomic_type.id = specimen.taxonomic_type_id",
             "JOIN age_class",
-            "  ON specimen.age_class_id = age_class.id",
+            "  ON age_class.id = specimen.age_class_id",
             "JOIN locality",
-            "  ON specimen.locality_id = locality.id",
+            "  ON locality.id = specimen.locality_id",
             "JOIN country",
-            "  ON locality.country_id = country.id",
+            "  ON country.id = locality.country_id",
             "JOIN observer",
-            "  ON session.observer_id = observer.id",
+            "  ON observer.id = session.observer_id",
         ]
     )
 
     ordering = "ORDER BY `specimen_id` ASC"
-    return (
-        f"{select_start} {select_common} {from_start} {joins} {where} " f"{ordering};"
-    )
+    return f"{select_start} {select_common} {from_start} {joins} {where} {ordering};"
 
 
 # def query_3d(request: HttpRequest, output_file_type: str) -> HttpResponse:
