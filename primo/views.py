@@ -288,7 +288,7 @@ def export(
 
 
 def export_scalar(request: HttpRequest) -> HttpResponse:
-    request.session["scalar_or_3d"] = "scalar"
+    request.session["scalar_or_3d"] = "Scalar"
     directory_name, file_to_download = set_up_download(request)
     collate_metadata(request, directory_name, file_to_download)
     return download(request)
@@ -480,17 +480,14 @@ def get_specimen_metadata(scalar_or_3d: str) -> list[Tuple[str, str]]:
     ] + three_d_list
 
 
-def init_query_table(
-    request: HttpRequest, query_result: Dict[str, str]
-) -> Dict[str, str]:
+def init_query_table(scalar_or_3d: str, query_result: Dict[str, str]) -> Dict[str, str]:
     """
     Initialize query table (actually a dictionary) that is to be used for data
     that will be pushed out to view. A single query row is received and put into
     dictionary.
     """
     output = {
-        key[0]: query_result[key[0]]
-        for key in get_specimen_metadata(request.session["scalar_or_3d"])
+        key[0]: query_result[key[0]] for key in get_specimen_metadata(scalar_or_3d)
     }
     return output
 
@@ -754,7 +751,7 @@ def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpR
     """Set up the scalar query SQL. Do query. Call result table display."""
     if not which_3d_output_type:
         request.session["page_title"] = "Scalar Results"
-    request.session["scalar_or_3d"] = "scalar"
+    request.session["scalar_or_3d"] = "Scalar"
     preview_only = True
     if request.user.is_authenticated and request.user.username != "user":
         preview_only = False
@@ -783,7 +780,6 @@ def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpR
                 request.session["table_var_select_done"]["sex"],
                 request.session["table_var_select_done"]["fossil"],
                 request.session["table_var_select_done"]["taxon"],
-                # concat_variable_list(request.session['selected']['bodypart']),
                 request.session["table_var_select_done"]["variable"],
             ],
         )
@@ -798,8 +794,8 @@ def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpR
 
     are_results = True
     try:
-        new_query_results = tabulate_scalar(request, query_results, preview_only)
-        request.session["query_results"] = new_query_results
+        tabulated_query_results = tabulate_scalar(query_results, preview_only)
+        request.session["query_results"] = tabulated_query_results
     except Exception:
         print(exc_info()[0])
         are_results = False
@@ -811,12 +807,11 @@ def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpR
             request.session["table_var_select_done"]["sex"],
             request.session["table_var_select_done"]["fossil"],
             request.session["table_var_select_done"]["taxon"],
-            # concat_variable_list(request.session['selected']['bodypart']),
             request.session["table_var_select_done"]["variable"],
         ),
-        "query_results": new_query_results,
+        "query_results": tabulated_query_results,
         "are_results": are_results,
-        "total_specimens": len(new_query_results),
+        "total_specimens": len(tabulated_query_results),
         "variable_labels": variable_labels,
         "variable_ids": request.session["table_var_select_done"]["variable"],
         "preview_only": preview_only,
@@ -874,7 +869,7 @@ def preview(request: HttpRequest) -> HttpResponse:
     are_results = True
     if request.session["scalar_or_3d"] == "Scalar":
         try:
-            tabulated_query_results = tabulate_scalar(request, query_results, True)
+            tabulated_query_results = tabulate_scalar(query_results, True)
             request.session["query_results"] = tabulated_query_results
         except Exception:
             print(exc_info()[0])
@@ -1130,7 +1125,7 @@ def set_up_download(request: HttpRequest) -> Tuple[str, str]:
 
 
 def tabulate_scalar(
-    request: HttpRequest, query_results: list[dict[str, str]], preview_only: bool
+    query_results: list[dict[str, str]], preview_only: bool
 ) -> list[Dict[str, str]]:
     """
     Return a list of dictionaries where each dictionary has the keys
@@ -1151,7 +1146,7 @@ def tabulate_scalar(
     """
     current_specimen = query_results[0]["hypocode"]
     output = []
-    current_dict = init_query_table(request, query_results[0])
+    current_dict = init_query_table("Scalar", query_results[0])
     num_specimens = 1
     for row in query_results:
         # Is this a new specimen? If so need to set up new empty dictionary and
@@ -1161,9 +1156,7 @@ def tabulate_scalar(
         else:
             num_specimens += 1
             output.append(current_dict)
-            # TODO: do I need this del here?
-            del current_dict
-            current_dict = init_query_table(request, row)
+            current_dict = init_query_table("Scalar", row)
             # This next so we can look up values quickly in view rather than
             # having to do constant conditionals.
             current_dict[row["variable_label"]] = row["scalar_value"]
