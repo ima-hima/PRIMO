@@ -21,8 +21,12 @@ urlpatterns = [
     path("accounts/login/", views.log_in, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("download_success/", views.download_success, name="download_success"),
-    path("export_scalar/", views.export_scalar, name="export_scalar"),
-    path("export_3d/<str:which_3d_output_type>", views.export_3d, name="export_3d"),
+    path("export/<str:scalar_or_3d>/", views.export_scalar, name="export"),
+    path(
+        "export/<str:scalar_or_3d>/<str:which_3d_output_type>",
+        views.export_3d,
+        name="export",
+    ),
     # If none given, defaults to Morphologika.
     # path("export_3d/", views.export_3d, name="export_3d"),
     path(

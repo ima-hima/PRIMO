@@ -27,15 +27,17 @@ class IndexView(TemplateView):
     template_name = "primo/index.jinja"
 
 
-def collate_metadata(request: HttpRequest) -> None:
+def collate_metadata(
+    request: HttpRequest, directory_name: str, file_to_download: str
+) -> None:
     """
     Collate data returned from SQL query, render into csv, save csv to tmp
     directory. For scalar write all data. For 3D write only metadata.
     """
     output_file_name = path.join(
         settings.DOWNLOAD_ROOT,
-        request.session["directory_name"],
-        request.session["file_to_download"],
+        directory_name,
+        file_to_download,
     )
     with open(
         output_file_name,
@@ -44,7 +46,9 @@ def collate_metadata(request: HttpRequest) -> None:
         # For some reason request.session['newline_char'] added a newline on each row
     ) as f:
         csv_file = File(f)
-        meta_names = [m[0] for m in get_specimen_metadata(request)]
+        meta_names = [
+            m[0] for m in get_specimen_metadata(request.session["scalar_or_3d"])
+        ]
         if request.session["scalar_or_3d"] == "3D":
             meta_names.append("missing points (indexed by specimen starting at 1)")
             variable_names = []
@@ -58,7 +62,9 @@ def collate_metadata(request: HttpRequest) -> None:
         # Note to self: since I'm using DictWriter I don't have to worry about
         # the ordering of the header being different from the order of the subsequent
         # rows: it takes care of that.
-        row = {m[0]: m[1] for m in get_specimen_metadata(request)}
+        row = {
+            m[0]: m[1] for m in get_specimen_metadata(request.session["scalar_or_3d"])
+        }
         # row.update( { v: v for v in request.session.keys() } )
         row.update({v: v for v in variable_names})
         writer.writerow(row)
@@ -252,10 +258,39 @@ def entity_relation_diagram(request: HttpRequest) -> HttpResponse:
     return render(request, "primo/entity_relation_diagram.jinja", {})
 
 
+def export(
+    request: HttpRequest, scalar_or_3d: str, which_3d_output_type: str
+) -> HttpResponse:
+    if scalar_or_3d == "Scalar":
+        request.session["scalar_or_3d"] = "Scalar"
+        set_up_sql_query(True, True)
+        # We have to query for the variable names separately.
+        with connection.cursor() as variable_query:
+            # Recall that variable label is abbreviation, name is full name.
+            variable_query.execute(
+                "SELECT label  "
+                "  FROM variable "
+                " WHERE variable.id "
+                "    IN %s "
+                "ORDER BY label ASC;",
+                [request.session["table_var_select_done"]["variable"]],
+            )
+            request.session["variable_labels"] = [
+                label[0] for label in variable_query.fetchall()
+            ]
+    else:
+        request.session["scalar_or_3d"] = "3D"
+        set_up_sql_query(False, True)
+
+    directory_name, file_to_download = set_up_download(request)
+    collate_metadata(request, directory_name, file_to_download)
+    return download(request)
+
+
 def export_scalar(request: HttpRequest) -> HttpResponse:
     request.session["scalar_or_3d"] = "scalar"
-    set_up_download(request)
-    collate_metadata(request)
+    directory_name, file_to_download = set_up_download(request)
+    collate_metadata(request, directory_name, file_to_download)
     return download(request)
 
 
@@ -264,9 +299,9 @@ def export_3d(
 ) -> HttpResponse:
     #     request.session["output_file_type"] = output_file_type
     request.session["scalar_or_3d"] = "3D"
-    set_up_download(request)
+    directory_name, file_to_download = set_up_download(request)
     create_3d_output_string(request, query_results, output_file_type)
-    collate_metadata(request)
+    collate_metadata(request, directory_name, file_to_download)
     return download(request)
 
 
@@ -410,13 +445,13 @@ def get_3D_data(request: HttpRequest) -> List[Dict[Any, Any]]:
     return query_results
 
 
-def get_specimen_metadata(request: HttpRequest) -> list[Tuple[str, str]]:
+def get_specimen_metadata(scalar_or_3d: str) -> list[Tuple[str, str]]:
     """
     Return a list of tuples with SQL column name:csv column name as key:value.
     Created a fn because this was called all over the place.
     """
 
-    if request.session["scalar_or_3d"] == "3D":
+    if scalar_or_3d == "3D":
         three_d_list = [
             ("protocol", "Protocol"),
             ("session_id", "Session ID"),
@@ -453,7 +488,10 @@ def init_query_table(
     that will be pushed out to view. A single query row is received and put into
     dictionary.
     """
-    output = {key[0]: query_result[key[0]] for key in get_specimen_metadata(request)}
+    output = {
+        key[0]: query_result[key[0]]
+        for key in get_specimen_metadata(request.session["scalar_or_3d"])
+    }
     return output
 
 
@@ -782,7 +820,7 @@ def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpR
         "variable_labels": variable_labels,
         "variable_ids": request.session["table_var_select_done"]["variable"],
         "preview_only": preview_only,
-        "specimen_metadata": get_specimen_metadata(request),
+        "specimen_metadata": get_specimen_metadata(request.session["scalar_or_3d"]),
         "user": request.user.username,
     }
     return render(request, "primo/preview.jinja", context)
@@ -841,20 +879,21 @@ def preview(request: HttpRequest) -> HttpResponse:
         except Exception:
             print(exc_info()[0])
             are_results = False
-
     # This is for use in export_csv_file().
     context = {
         "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,
-        "total_specimens": len(tabulated_query_results),
+        "total_specimens": len(query_results),
         "preview_only": request.user.username == "user",
-        "specimen_metadata": get_specimen_metadata(request),
+        "specimen_metadata": get_specimen_metadata(request.session["scalar_or_3d"]),
         "user": request.user.username,
+        "query_results": query_results,
     }
     if request.session["scalar_or_3d"] == "Scalar":
         context["variable_labels"] = request.session["variable_labels"]
         context["variable_ids"] = request.session["table_var_select_done"]["variable"]
         context["query_results"] = tabulated_query_results
+        context["total_specimens"] = len(tabulated_query_results)
     else:
         # This is a list of all the session that will be returned from the query
         # so I can send it to `get_3D_data()` for a second query to get the actual data.
@@ -1061,7 +1100,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
 #     return render(request, "primo/preview.jinja", context)
 
 
-def set_up_download(request: HttpRequest) -> None:
+def set_up_download(request: HttpRequest) -> Tuple[str, str]:
     """
     Set the newline character, set name of file based on current time.
     Put both in session variable. If it's 3D make 3D output directory.
@@ -1080,16 +1119,14 @@ def set_up_download(request: HttpRequest) -> None:
         prefix = "PRIMO_metadata_"
     else:
         prefix = "PRIMO_results_"
-    request.session["file_to_download"] = (
-        prefix + datetime.now().strftime("%Y-%m-%d_%H.%M.%S") + ".csv"
-    )
+    file_to_download = prefix + datetime.now().strftime("%Y-%m-%d_%H.%M.%S") + ".csv"
     directory_name = ""
     if request.session["scalar_or_3d"] == "3D":
         directory_name = "PRIMO_3D_" + datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
-        request.session["file_to_download"] = "specimen_metadata.csv"
+        file_to_download = "specimen_metadata.csv"
         mkdir(path.join(settings.DOWNLOAD_ROOT, directory_name))
 
-    request.session["directory_name"] = directory_name
+    return directory_name, file_to_download
 
 
 def tabulate_scalar(
