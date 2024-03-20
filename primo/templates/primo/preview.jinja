@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load get_item %}
-{% block subtitle %} {{ request.session.scalar_or_3d|title  }} Query Sample Results {% endblock %}
+{% block subtitle %} {{ request.session.scalar_or_3d  }} Query Sample Results {% endblock %}
 {% block content %}
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script type="text/javascript" src="{% static 'primo/js/tablesorter-master/jquery.tablesorter.min.js' %}"></script>
@@ -9,23 +9,22 @@
     {% if query_results %}
       <div class="result_directions">
         <p>The first five specimens are shown below.</p>
-        {% if not preview_only %}
-            <p>If these data are what you desired, please
-            <a href="{% url 'export' 'Scalar' %}" class="waitAndRedirect">download a CSV
-            file</a> to get the entire result. <span class="highlight">Please note that some browsers may
-            change the extension of the resultant file.</span> If this is the case, please
-            change the extension to “.csv”.</p>
+        {% if request.session.scalar_or_3d == 'Scalar' %}
+            {% if not preview_only %}
+                <p>If these data are what you desired, please
+                <a href="{% url 'export' 'Scalar' %}" class="waitAndRedirect">download a CSV
+                file</a> to get the entire result. <span class="highlight">Please note that some browsers may
+                change the extension of the resultant file.</span> If this is the case, please
+                change the extension to “.csv”.</p>
+            {% else %}
+                <p>If you do not have a user ID, please return to  the
+                <a href="{% url 'index' %}" class="waitAndRedirect">front page</a> for
+                instructions on how to get one.</p>
+            {% endif %}
         {% else %}
-            <p>If you do not have a user ID, please return to  the
-            <a href="{% url 'index' %}" class="waitAndRedirect">front page</a> for
-            instructions on how to get one.</p>
-        {% endif %}
-        {% if request.session.scalar_or_3d|title == '3d' %}
-        <a href="{% url 'export' '3D' 'morpho' %}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
-        &nbsp;&nbsp; | &nbsp;&nbsp;
-        <a href="{% url 'export' '3D' 'grfnd' %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
-        {% elif request.session.scalar_or_3d|title == 'scalar' %}
-        <p><a href="{% url 'export' 'Scalar' %}" class="waitAndRedirect">Download CSV file</a></p>
+            <a href="{% url 'export' '3D' 'morpho' %}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+            &nbsp;&nbsp; | &nbsp;&nbsp;
+            <a href="{% url 'export' '3D' 'grfnd' %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
         {% endif %} {# end scalar or 3d #}
 
         <script type="text/javascript" >

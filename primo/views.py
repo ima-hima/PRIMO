@@ -28,7 +28,10 @@ class IndexView(TemplateView):
 
 
 def collate_metadata(
-    request: HttpRequest, directory_name: str, file_to_download: str
+    request: HttpRequest,
+    query_results: List[Dict[Any, Any]],
+    directory_name: str,
+    file_to_download: str,
 ) -> None:
     """
     Collate data returned from SQL query, render into csv, save csv to tmp
@@ -43,7 +46,7 @@ def collate_metadata(
         output_file_name,
         "w",
         newline="",
-        # For some reason request.session['newline_char'] added a newline on each row
+        # request.session['newline_char'] added a newline on each row
     ) as f:
         csv_file = File(f)
         meta_names = [
@@ -62,18 +65,17 @@ def collate_metadata(
         # Note to self: since I'm using DictWriter I don't have to worry about
         # the ordering of the header being different from the order of the subsequent
         # rows: it takes care of that.
-        row = {
+        headers = {
             m[0]: m[1] for m in get_specimen_metadata(request.session["scalar_or_3d"])
         }
-        # row.update( { v: v for v in request.session.keys() } )
-        row.update({v: v for v in variable_names})
-        writer.writerow(row)
+        headers.update({v: v for v in variable_names})
+        writer.writerow(headers)
 
         if request.session["scalar_or_3d"] == "3D":
             meta_names.append("missing points (indexed by specimen starting at 1)")
             rows = request.session["3d_metadata"]
         else:
-            rows = request.session["query_results"]
+            rows = query_results
         for row in rows:
             inDict = {
                 k: row[k]
@@ -84,6 +86,7 @@ def collate_metadata(
                 inDict.update(
                     {"missing_pts": request.session["missing_pts"][row["specimen_id"]]}
                 )
+            print("\n\n*** inDict", inDict)
             writer.writerow(inDict)
 
 
@@ -260,49 +263,34 @@ def entity_relation_diagram(request: HttpRequest) -> HttpResponse:
 
 
 def export(
-    request: HttpRequest, scalar_or_3d: str, which_3d_output_type: str
+    request: HttpRequest, scalar_or_3d: str, which_3d_output_type: str = ""
 ) -> HttpResponse:
-    if scalar_or_3d == "Scalar":
-        request.session["scalar_or_3d"] = "Scalar"
-        set_up_sql_query(True, True)
-        # We have to query for the variable names separately.
-        with connection.cursor() as variable_query:
-            # Recall that variable label is abbreviation, name is full name.
-            variable_query.execute(
-                "SELECT label  "
-                "  FROM variable "
-                " WHERE variable.id "
-                "    IN %s "
-                "ORDER BY label ASC;",
-                [request.session["table_var_select_done"]["variable"]],
-            )
-            request.session["variable_labels"] = [
-                label[0] for label in variable_query.fetchall()
-            ]
-    else:
-        request.session["scalar_or_3d"] = "3D"
-        set_up_sql_query(False, True)
+    _, query_results = execute_query(request, scalar_or_3d)
 
     directory_name, file_to_download = set_up_download(request)
-    collate_metadata(request, directory_name, file_to_download)
+    print("\n\n***query results", query_results)
+    collate_metadata(request, query_results, directory_name, file_to_download)
     return download(request)
 
 
 def export_scalar(request: HttpRequest) -> HttpResponse:
     request.session["scalar_or_3d"] = "Scalar"
     directory_name, file_to_download = set_up_download(request)
-    collate_metadata(request, directory_name, file_to_download)
+    _, query_results = execute_query(request, "Scalar")
+    collate_metadata(request, query_results, directory_name, file_to_download)
     return download(request)
 
 
 def export_3d(
     request: HttpRequest, query_results: List[Dict[Any, Any]], output_file_type: str
 ) -> HttpResponse:
+    """Is this used?"""
     #     request.session["output_file_type"] = output_file_type
     request.session["scalar_or_3d"] = "3D"
     directory_name, file_to_download = set_up_download(request)
+    _, query_results = execute_query(request, "3D")
     create_3d_output_string(request, query_results, output_file_type)
-    collate_metadata(request, directory_name, file_to_download)
+    collate_metadata(request, query_results, directory_name, file_to_download)
     return download(request)
 
 
@@ -750,92 +738,16 @@ def initialize_query(
     )
 
 
-def execute_query(request: HttpRequest, which_3d_output_type: str = "") -> HttpResponse:
-    """Set up the scalar query SQL. Do query. Call result table display."""
-    if not which_3d_output_type:
-        request.session["page_title"] = "Scalar Results"
-    request.session["scalar_or_3d"] = "Scalar"
-    preview_only = True
-    if request.user.is_authenticated and request.user.username != "user":
-        preview_only = False
-
-    # TODO: Look into doing this all with built-ins, rather than with .raw()
-    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
-    sql_query = set_up_sql_query(True, preview_only)
-
-    # We have to query for the variable names separately.
-    with connection.cursor() as variable_query:
-        variable_query.execute(
-            "SELECT label "
-            "  FROM variable "
-            " WHERE variable.id "
-            "    IN %s "
-            "ORDER BY label ASC;",
-            [request.session["table_var_select_done"]["variable"]],
-        )
-        variable_labels = [label[0] for label in variable_query.fetchall()]
-
-    # Use cursor here?
-    with connection.cursor() as cursor:
-        cursor.execute(
-            sql_query,
-            [
-                request.session["table_var_select_done"]["sex"],
-                request.session["table_var_select_done"]["fossil"],
-                request.session["table_var_select_done"]["taxon"],
-                request.session["table_var_select_done"]["variable"],
-            ],
-        )
-        # Now return all rows as a dictionary object. Note that each variable
-        # name will have its own row, so I'm going to have to jump through some
-        # hoops to get the names out correctly for the table headers in the view.
-        # TODO: There has to be a better way to do this.
-
-        # Note nice list comprehensions from the Django docs here:
-        columns = [col[0] for col in cursor.description]
-        query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-    are_results = True
-    try:
-        tabulated_query_results = tabulate_scalar(query_results, preview_only)
-        request.session["query_results"] = tabulated_query_results
-    except Exception:
-        print(exc_info()[0])
-        are_results = False
-
-    # This is for use in export_csv_file().
-    request.session["variable_labels"] = variable_labels
-    context = {
-        "final_sql": sql_query.format(
-            request.session["table_var_select_done"]["sex"],
-            request.session["table_var_select_done"]["fossil"],
-            request.session["table_var_select_done"]["taxon"],
-            request.session["table_var_select_done"]["variable"],
-        ),
-        "query_results": tabulated_query_results,
-        "are_results": are_results,
-        "total_specimens": len(tabulated_query_results),
-        "variable_labels": variable_labels,
-        "variable_ids": request.session["table_var_select_done"]["variable"],
-        "preview_only": preview_only,
-        "specimen_metadata": get_specimen_metadata(request.session["scalar_or_3d"]),
-        "user": request.user.username,
-    }
-    return render(request, "primo/preview.jinja", context)
-
-
-def preview(request: HttpRequest) -> HttpResponse:
-    """Set up the scalar query SQL. Do query. Call result table display."""
-    request.session["page_title"] = f"{request.session['scalar_or_3d']} Results Preview"
-
-    # TODO: Look into doing this all with built-ins, rather than with .raw()
-    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
+def execute_query(
+    request: HttpRequest, scalar_or_3d: str
+) -> Tuple[str, List[Dict[Any, Any]]]:
+    """Set up the query SQL. Do query. Call result table display."""
     submission_values = [
         request.session["table_var_select_done"]["sex"],
         request.session["table_var_select_done"]["fossil"],
         request.session["table_var_select_done"]["taxon"],
     ]
-    if request.session["scalar_or_3d"] == "Scalar":
+    if scalar_or_3d.lower() == "scalar":
         sql_query = set_up_sql_query(True, True)
         submission_values.append(request.session["table_var_select_done"]["variable"])
         # We have to query for the variable names separately.
@@ -867,10 +779,60 @@ def preview(request: HttpRequest) -> HttpResponse:
         # TODO: There has to be a better way to do this.
 
         columns = [col[0] for col in cursor.description]
-        query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    preview_only = True
+    if request.user.is_authenticated and request.user.username != "user":
+        preview_only = False
+
+    # TODO: Look into doing this all with built-ins, rather than with .raw()
+    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
+    sql_query = set_up_sql_query(True, preview_only)
+
+    # We have to query for the variable names separately.
+    with connection.cursor() as variable_query:
+        variable_query.execute(
+            "SELECT label "
+            "  FROM variable "
+            " WHERE variable.id "
+            "    IN %s "
+            "ORDER BY label ASC;",
+            [request.session["table_var_select_done"]["variable"]],
+        )
+        [label[0] for label in variable_query.fetchall()]
+
+    # Use cursor here?
+    with connection.cursor() as cursor:
+        cursor.execute(
+            sql_query,
+            [
+                request.session["table_var_select_done"]["sex"],
+                request.session["table_var_select_done"]["fossil"],
+                request.session["table_var_select_done"]["taxon"],
+                request.session["table_var_select_done"]["variable"],
+            ],
+        )
+        # Now return all rows as a dictionary object. Note that each variable
+        # name will have its own row, so I'm going to have to jump through some
+        # hoops to get the names out correctly for the table headers in the view.
+        # TODO: There has to be a better way to do this.
+
+        # Note nice list comprehensions from the Django docs here:
+        columns = [col[0] for col in cursor.description]
+        return sql_query, [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def preview(request: HttpRequest) -> HttpResponse:
+    """Set up the scalar query SQL. Do query. Call result table display."""
+    request.session["page_title"] = f"{request.session['scalar_or_3d']} Results Preview"
+
+    # TODO: Look into doing this all with built-ins, rather than with .raw()
+    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
+
+    sql_query, query_results = execute_query(request, request.session["scalar_or_3d"])
 
     are_results = True
-    if request.session["scalar_or_3d"] == "Scalar":
+    if request.session["scalar_or_3d"].title() == "Scalar":
         try:
             tabulated_query_results = tabulate_scalar(query_results, True)
             request.session["query_results"] = tabulated_query_results
@@ -878,6 +840,13 @@ def preview(request: HttpRequest) -> HttpResponse:
             print(exc_info()[0])
             are_results = False
     # This is for use in export_csv_file().
+    submission_values = [
+        request.session["table_var_select_done"]["sex"],
+        request.session["table_var_select_done"]["fossil"],
+        request.session["table_var_select_done"]["taxon"],
+    ]
+    if request.session["scalar_or_3d"] == "Scalar":
+        submission_values.append(request.session["table_var_select_done"]["variable"])
     context = {
         "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,

@@ -21,7 +21,7 @@ urlpatterns = [
     path("accounts/login/", views.log_in, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("download_success/", views.download_success, name="download_success"),
-    path("export/<str:scalar_or_3d>/", views.export_scalar, name="export"),
+    path("export/<str:scalar_or_3d>/", views.export, name="export"),
     path(
         "export/<str:scalar_or_3d>/<str:which_3d_output_type>",
         views.export_3d,
@@ -32,15 +32,6 @@ urlpatterns = [
         views.parameter_selection,
         name="parameter_selection",
     ),
-    path(
-        "execute_query/<str:which_3d_output_type>",
-        views.execute_query,
-        name="execute_query",
-    ),
-    path(
-        "execute_query/", views.execute_query, name="execute_query"
-    ),  # for scalar queries
-    # path("query_scalar/", views.query_scalar, name="query_scalar"),
     path("preview", views.preview, name="preview"),
     path(
         "initialize_query/<str:scalar_or_3d>",
