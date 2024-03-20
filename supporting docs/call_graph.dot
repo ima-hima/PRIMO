@@ -1,0 +1,32 @@
+digraph call_graph {
+	api_query_start [shape="rectangle" label="API: query_start"]
+	collate_metadata [nojustify=true label="collate_metadata(\l    request,\l    directory_name,\l    file_to_download)\l"]
+	tabulate_scalar [nojustify=true label="tabulate_scalar(\l    query_results,\l    preview_only)"]
+	get_specimen_metadata [nojustify=true label="get_specimen_metadata(\l    directory_name,\l    file_to_download)\l"]
+	set_up_sql_query [nojustify=true label="set_up_sql_query(\l    is_scalar,\l   preview_only\l)"]
+	api_preview [shape="rectangle" nojustify=true label="API: preview"]
+	api_parameter_selection [shape="rectangle" nojustify=true label="API: parameter_selection/current_table"]
+	api_initialize_query [shape="rectangle" label="API: initialize_query/scalar_or_3d"]
+	api_index [shape="rectangle" label="API: index"]
+	export [shape="rectangle" label="API: export/scalar_or_3d/which_3d_output_type"]
+	api_execute_query [shape="rectangle" label="API: execute_query(request, which_3d_output_type)"]
+	render_initialize_query [label="RENDER: initialize_query" shape="diamond"]
+	render_preview [shape="diamond" label="RENDER: preview"]
+	render_parameter_selection [shape="diamond" label="RENDER: parameter_selection"]
+	create_tree_javascript [nojustify=true label="create_tree_javascript(\n    request,\l    parent_id,\l    current_table)\l"]
+	api_index -> api_query_start;
+	api_query_start -> api_initialize_query;
+ 	api_initialize_query -> render_initialize_query; 
+ 	render_initialize_query -> {api_parameter_selection api_preview};
+    api_preview -> {tabulate_scalar set_up_sql_query get_specimen_metadata render_preview}; 
+ 	render_preview -> export;
+ 	api_parameter_selection -> {render_parameter_selection create_tree_javascript};
+ 	render_parameter_selection -> api_parameter_selection;
+    create_tree_javascript -> create_tree_javascript;
+    export -> {set_up_sql_query collate_metadata "set_up_download(request)" "download(request)"};
+    collate_metadata -> get_specimen_metadata;
+	/*"query_3d(request, which_3d_output_type)" -> "get_3D_data(request)";
+	"query_3d(request, which_3d_output_type)" -> get_specimen_metadata */
+    tabulate_scalar -> "init_query_table(scalar_or_3d, query_result)";
+	"init_query_table(scalar_or_3d, query_result)" -> get_specimen_metadata;
+}

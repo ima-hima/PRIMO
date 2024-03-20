@@ -212,6 +212,7 @@ def download(request: HttpRequest) -> HttpResponse:
 
 
 def download_success(request: HttpRequest) -> HttpResponse:
+    """Is this in use?"""
     request.session["page_title"] = "Download Success"
     return render(request, "primo/download_success.jinja", {})
 
@@ -646,7 +647,9 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
 
 
 @login_required
-def query_setup(request: HttpRequest, scalar_or_3d: str = "Scalar") -> HttpResponse:
+def initialize_query(
+    request: HttpRequest, scalar_or_3d: str = "Scalar"
+) -> HttpResponse:
     """
     For scalar queries send parameter_selection to front end. Once all
     parameters are set, give option to call results, e.g. query_scalar().
@@ -724,7 +727,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "Scalar") -> HttpRespo
                 ]  # type: ignore
             else:
                 request.session["table_var_select_done"][table.filter_table_name] = []
-                # So I can use 'if selected[table]' in query_setup.jinja.
+                # So I can use 'if selected[table]' in initialize_query.jinja.
 
     selected = request.session["table_var_select_done"]
     # I coudn't figure out any way to do this other than to check each time.
@@ -737,7 +740,7 @@ def query_setup(request: HttpRequest, scalar_or_3d: str = "Scalar") -> HttpRespo
     request.session.modified = True
     return render(
         request,
-        "primo/query_setup.jinja",
+        "primo/initialize_query.jinja",
         {
             "scalar_or_3d": scalar_or_3d,
             "tables": request.session["tables"],

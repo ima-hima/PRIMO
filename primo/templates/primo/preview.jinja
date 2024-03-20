@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load get_item %}
+{% block subtitle %} {{ request.session.scalar_or_3d|title  }} Query Sample Results {% endblock %}
+{% block content %}
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script type="text/javascript" src="{% static 'primo/js/tablesorter-master/jquery.tablesorter.min.js' %}"></script>
+<div id="main-content">
+    {% if query_results %}
+      <div class="result_directions">
+        <p>The first five specimens are shown below.</p>
+        {% if not preview_only %}
+            <p>If these data are what you desired, please
+            <a href="{% url 'export' 'Scalar' %}" class="waitAndRedirect">download a CSV
+            file</a> to get the entire result. <span class="highlight">Please note that some browsers may
+            change the extension of the resultant file.</span> If this is the case, please
+            change the extension to “.csv”.</p>
+        {% else %}
+            <p>If you do not have a user ID, please return to  the
+            <a href="{% url 'index' %}" class="waitAndRedirect">front page</a> for
+            instructions on how to get one.</p>
+        {% endif %}
+        {% if request.session.scalar_or_3d|title == '3d' %}
+        <a href="{% url 'export' '3D' 'morpho' %}"  class="waitAndRedirect">Download Morphologika file  &raquo;</a>
+        &nbsp;&nbsp; | &nbsp;&nbsp;
+        <a href="{% url 'export' '3D' 'grfnd' %}"  class="waitAndRedirect">Download GRFND file  &raquo;</a>
+        {% elif request.session.scalar_or_3d|title == 'scalar' %}
+        <p><a href="{% url 'export' 'Scalar' %}" class="waitAndRedirect">Download CSV file</a></p>
+        {% endif %} {# end scalar or 3d #}
+
+        <script type="text/javascript" >
+        $(document).ready(function()
+            {
+                // delay three seconds then redirect to success page
+                $(".waitAndRedirect").click(function(){
+                    setTimeout(function() {
+                        //redirect to success page
+                        window.location = "/download_success/";
+                    }, 3000);
+                });
+
+                $("#resultsTable").tablesorter();
+            }
+        );
+        </script>
+
+        <p>Click on column headers to sort results by column. Columns can be deleted
+        or reordered in your spreadsheet after download.</p>
+        <p id="specimen-count"><strong>{{total_specimens}} specimens
+        found{% if total_specimens > 5 %}, first five are displayed{% endif %}.</strong></p>
+        </div>
+        <div id="table-scroll">
+        <table id="resultsTable" class="tablesorter">
+        <thead>
+        <tr>
+            {% for metadata in specimen_metadata %}
+                <th>{{ metadata.1 }}</th>
+            {% endfor %}
+            {% for label in variable_labels %}
+                <th>{{label}}</th>
+            {% endfor %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for row in query_results %}
+            {% if forloop.counter0 < 5 %} {# index0 because it's 0 indexed #}
+                <tr>
+                    {% for metadata in specimen_metadata %}
+                        <td>{{ row|get_item:metadata.0 }}</td>
+                    {% endfor %}
+
+                    {% for label in variable_labels %}
+                        <td>{{ row|get_item:label }}</td>
+                    {% endfor %} {# loop over labels (columns) #}
+                </tr>
+            {% endif %}
+        {% endfor %} {# End loop over rows. #}
+        </tbody>
+        </table>
+        </div>
+    {% else %}
+        <h3>No results were returned.</h3>
+    {% endif %} {# Are/aren't results #}
+    {% if request.user.username == 'superadmin' %}
+        <div id="sql">
+            <button class="submit" onclick="
+              var x = document.getElementById('sql');
+              if (x.style.display === 'none') {
+                x.style.display = 'block';
+              } else {
+                x.style.display = 'none';
+              }
+            ">Hide query and results</button>
+
+            <br /><br />
+            {{ final_sql }}
+            <br /><br /><br />
+            <strong>First three query results:<br /></strong>
+            {{ query_results.1 }}<br /><br />
+            {{ query_results.2 }}<br /><br />
+            {{ query_results.3 }}<br /><br />
+            <strong>Variable labels from request session variable:<br /></strong>
+            {{ request.session.variable_labels }}
+            <br /><br /><br />
+            Is preview: {{ preview_only }}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
