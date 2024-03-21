@@ -45,8 +45,7 @@ def collate_metadata(
     with open(
         output_file_name,
         "w",
-        newline="",
-        # request.session['newline_char'] added a newline on each row
+        newline="",  # request.session['newline_char'] added a newline on each row
     ) as f:
         csv_file = File(f)
         meta_names = [
@@ -58,7 +57,7 @@ def collate_metadata(
         else:
             # variable_names = [ v[0] for v in request.session.keys() ]
             variable_names = request.session["variable_labels"]
-
+        # print("\n\n***VARIABLE NAMES", variable_names)
         writer = DictWriter(csv_file, fieldnames=meta_names + variable_names)
 
         # This so I can replace default header, i.e. fieldnames, with custom header.
@@ -86,7 +85,6 @@ def collate_metadata(
                 inDict.update(
                     {"missing_pts": request.session["missing_pts"][row["specimen_id"]]}
                 )
-            print("\n\n*** inDict", inDict)
             writer.writerow(inDict)
 
 
@@ -162,29 +160,29 @@ def create_tree_javascript(
     return javascript
 
 
-def download(request: HttpRequest) -> HttpResponse:
+def download(
+    scalar_or_3d: str, directory_name: str, file_to_download: str
+) -> HttpResponse:
     """
     Download one of csv, Morphologika, GRFND. File has been written to path
     before this is called.
     """
-    request.session[
-        "page_title"
-    ] = f"PRIMO Download {request.session['scalar_or_3d']} Data"
-    if request.session["scalar_or_3d"] == "3D":
-        filepath = path.join(settings.DOWNLOAD_ROOT, request.session["directory_name"])
+    # request.session[
+    #     "page_title"
+    # ] = f"PRIMO Download {scalar_or_3d} Data"
+    if scalar_or_3d == "3D":
+        filepath = path.join(settings.DOWNLOAD_ROOT, directory_name)
     else:
-        filepath = path.join(
-            settings.DOWNLOAD_ROOT, request.session["file_to_download"]
-        )
+        filepath = path.join(settings.DOWNLOAD_ROOT, file_to_download)
 
     if path.exists(filepath):
-        if request.session["scalar_or_3d"] == "3D":
+        if scalar_or_3d == "3D":
             # Just as a reminer, -c is create a new file; -z is gzip it;
             # -f is filename; -C is move to the following directory first;
             # name at end is the directory to compress.
             # Using -C here to get rid of prefix of absolute file path.
             # So: tar -czf DOWNLOAD_ROOT/filename.tar.gz -C DOWNLOAD_ROOT directory_name
-            # Files should be in request.session['directory_name'], so that directory is
+            # Files should be in directory_name, so that directory is
             # what needs to be compressed, meaning tar needs to operate from
             # DOWNLOAD_ROOT.
             subprocess.run(
@@ -193,21 +191,19 @@ def download(request: HttpRequest) -> HttpResponse:
                     "-czf",
                     path.join(
                         settings.DOWNLOAD_ROOT,
-                        request.session["directory_name"] + ".tar.gz",
+                        directory_name + ".tar.gz",
                     ),
                     "-C",
                     settings.DOWNLOAD_ROOT,
-                    request.session["directory_name"],
+                    directory_name,
                 ]
             )
             # We have to reset filepath here because now we've tarred it.
-            filepath = path.join(
-                settings.DOWNLOAD_ROOT, request.session["directory_name"] + ".tar.gz"
-            )
+            filepath = path.join(settings.DOWNLOAD_ROOT, directory_name + ".tar.gz")
         with open(filepath, "rb") as fh:
             response = HttpResponse(fh.read(), content_type="text/csv")
             response["Content-Disposition"] = "inline; filename=%s" % smart_str(
-                path.basename(request.session["file_to_download"])
+                path.basename(file_to_download)
             )
             response["X-Sendfile"] = smart_str(filepath)
             return response
@@ -268,30 +264,31 @@ def export(
     _, query_results = execute_query(request, scalar_or_3d)
 
     directory_name, file_to_download = set_up_download(request)
-    print("\n\n***query results", query_results)
+    # print("\n\n***query results", query_results)
     collate_metadata(request, query_results, directory_name, file_to_download)
-    return download(request)
+    request.session["page_title"] = f"PRIMO Download {scalar_or_3d} Data"
+    return download(scalar_or_3d, directory_name, file_to_download)
 
 
-def export_scalar(request: HttpRequest) -> HttpResponse:
-    request.session["scalar_or_3d"] = "Scalar"
-    directory_name, file_to_download = set_up_download(request)
-    _, query_results = execute_query(request, "Scalar")
-    collate_metadata(request, query_results, directory_name, file_to_download)
-    return download(request)
+# def export_scalar(request: HttpRequest) -> HttpResponse:
+#     request.session["scalar_or_3d"] = "Scalar"
+#     directory_name, file_to_download = set_up_download(request)
+#     _, query_results = execute_query(request, "Scalar")
+#     collate_metadata(request, query_results, directory_name, file_to_download)
+#     return download(request, scalar_or_3d, directory_name, file_to_download)
 
 
-def export_3d(
-    request: HttpRequest, query_results: List[Dict[Any, Any]], output_file_type: str
-) -> HttpResponse:
-    """Is this used?"""
-    #     request.session["output_file_type"] = output_file_type
-    request.session["scalar_or_3d"] = "3D"
-    directory_name, file_to_download = set_up_download(request)
-    _, query_results = execute_query(request, "3D")
-    create_3d_output_string(request, query_results, output_file_type)
-    collate_metadata(request, query_results, directory_name, file_to_download)
-    return download(request)
+# def export_3d(
+#     request: HttpRequest, query_results: List[Dict[Any, Any]], output_file_type: str
+# ) -> HttpResponse:
+#     """Is this used?"""
+#     #     request.session["output_file_type"] = output_file_type
+#     request.session["scalar_or_3d"] = "3D"
+#     directory_name, file_to_download = set_up_download(request)
+#     _, query_results = execute_query(request, "3D")
+#     create_3d_output_string(request, query_results, output_file_type)
+#     collate_metadata(request, query_results, directory_name, file_to_download)
+#     return download(request, scalar_or_3d, directory_name, file_to_download)
 
 
 def create_3d_output_string(
@@ -443,12 +440,13 @@ def get_specimen_metadata(scalar_or_3d: str) -> list[Tuple[str, str]]:
     if scalar_or_3d == "3D":
         three_d_list = [
             ("protocol", "Protocol"),
-            ("session_id", "Session ID"),
             ("missing_pts", "Missing points (indexed by specimen starting at 1)"),
         ]
     else:
         three_d_list = []
     return [
+        ("scalar_id", "Scalar ID"),
+        ("session_id", "Session ID"),
         ("specimen_id", "Specimen ID"),
         ("hypocode", "Hypocode"),
         ("collection_acronym", "Collection Acronym"),

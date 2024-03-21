@@ -24,7 +24,7 @@ urlpatterns = [
     path("export/<str:scalar_or_3d>/", views.export, name="export"),
     path(
         "export/<str:scalar_or_3d>/<str:which_3d_output_type>",
-        views.export_3d,
+        views.export,
         name="export",
     ),
     path(
