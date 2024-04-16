@@ -51,14 +51,16 @@ def collate_metadata(
         meta_names = [
             m[0] for m in get_specimen_metadata(request.session["scalar_or_3d"])
         ]
-        if request.session["scalar_or_3d"] == "3D":
+        if request.session["scalar_or_3d"].lower() == "3d":
             meta_names.append("missing points (indexed by specimen starting at 1)")
             variable_names = []
         else:
             # variable_names = [ v[0] for v in request.session.keys() ]
             variable_names = request.session["variable_labels"]
         # print("\n\n***VARIABLE NAMES", variable_names)
-        writer = DictWriter(csv_file, fieldnames=meta_names + variable_names)
+        writer = DictWriter(
+            csv_file, fieldnames=meta_names + variable_names, extrasaction="ignore"
+        )
 
         # This so I can replace default header, i.e. fieldnames, with custom header.
         # Note to self: since I'm using DictWriter I don't have to worry about
@@ -70,7 +72,7 @@ def collate_metadata(
         headers.update({v: v for v in variable_names})
         writer.writerow(headers)
 
-        if request.session["scalar_or_3d"] == "3D":
+        if request.session["scalar_or_3d"].lower() == "3d":
             meta_names.append("missing points (indexed by specimen starting at 1)")
             rows = request.session["3d_metadata"]
         else:
@@ -81,7 +83,7 @@ def collate_metadata(
                 for k in row.keys()
                 if k != "scalar_value" and k != "variable_label"
             }
-            if request.session["scalar_or_3d"] == "3D":
+            if request.session["scalar_or_3d"].lower() == "3d":
                 inDict.update(
                     {"missing_pts": request.session["missing_pts"][row["specimen_id"]]}
                 )
@@ -170,13 +172,13 @@ def download(
     # request.session[
     #     "page_title"
     # ] = f"PRIMO Download {scalar_or_3d} Data"
-    if scalar_or_3d == "3D":
+    if scalar_or_3d.lower() == "3d":
         filepath = path.join(settings.DOWNLOAD_ROOT, directory_name)
     else:
         filepath = path.join(settings.DOWNLOAD_ROOT, file_to_download)
 
     if path.exists(filepath):
-        if scalar_or_3d == "3D":
+        if scalar_or_3d.lower() == "3d":
             # Just as a reminer, -c is create a new file; -z is gzip it;
             # -f is filename; -C is move to the following directory first;
             # name at end is the directory to compress.
@@ -437,16 +439,15 @@ def get_specimen_metadata(scalar_or_3d: str) -> list[Tuple[str, str]]:
     Created a fn because this was called all over the place.
     """
 
-    if scalar_or_3d == "3D":
+    if scalar_or_3d.lower() == "3d":
         three_d_list = [
             ("protocol", "Protocol"),
             ("missing_pts", "Missing points (indexed by specimen starting at 1)"),
+            ("session_id", "Session ID"),
         ]
     else:
         three_d_list = []
     return [
-        ("scalar_id", "Scalar ID"),
-        ("session_id", "Session ID"),
         ("specimen_id", "Specimen ID"),
         ("hypocode", "Hypocode"),
         ("collection_acronym", "Collection Acronym"),
@@ -476,6 +477,8 @@ def init_query_table(scalar_or_3d: str, query_result: Dict[str, str]) -> Dict[st
     output = {
         key[0]: query_result[key[0]] for key in get_specimen_metadata(scalar_or_3d)
     }
+    output["variable_label"] = query_result["variable_label"]
+    output["scalar_value"] = query_result["scalar_value"]
     return output
 
 
@@ -833,7 +836,7 @@ def preview(request: HttpRequest) -> HttpResponse:
     if request.session["scalar_or_3d"].title() == "Scalar":
         try:
             tabulated_query_results = tabulate_scalar(query_results, True)
-            request.session["query_results"] = tabulated_query_results
+            # request.session["query_results"] = tabulated_query_results
         except Exception:
             print(exc_info()[0])
             are_results = False
@@ -843,18 +846,18 @@ def preview(request: HttpRequest) -> HttpResponse:
         request.session["table_var_select_done"]["fossil"],
         request.session["table_var_select_done"]["taxon"],
     ]
-    if request.session["scalar_or_3d"] == "Scalar":
+    if request.session["scalar_or_3d"].lower() == "scalar":
         submission_values.append(request.session["table_var_select_done"]["variable"])
     context = {
         "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,
-        "total_specimens": len(query_results),
+        "total_specimens": len(tabulated_query_results),
         "preview_only": request.user.username == "user",
         "specimen_metadata": get_specimen_metadata(request.session["scalar_or_3d"]),
         "user": request.user.username,
-        "query_results": query_results,
+        "query_results": tabulated_query_results,
     }
-    if request.session["scalar_or_3d"] == "Scalar":
+    if request.session["scalar_or_3d"].lower() == "scalar":
         context["variable_labels"] = request.session["variable_labels"]
         context["variable_ids"] = request.session["table_var_select_done"]["variable"]
         context["query_results"] = tabulated_query_results

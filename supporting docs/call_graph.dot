@@ -3,7 +3,7 @@ digraph call_graph {
 	collate_metadata [nojustify=true label="collate_metadata(\l    request,\l    query_results,\l    directory_name,\l    file_to_download)\l"]
 	tabulate_scalar [nojustify=true label="tabulate_scalar(\l    query_results,\l    preview_only)"]
 	get_specimen_metadata [nojustify=true label="get_specimen_metadata(\l    directory_name,\l    file_to_download)\l"]
-	set_up_sql_query [nojustify=true label="set_up_sql_query(\l    is_scalar,\l   preview_only\l)"]
+	set_up_sql_query [nojustify=true label="set_up_sql_query(\l    is_scalar,\l   preview_only)"]
 	api_preview [shape="rectangle" nojustify=true label="API: preview"]
 	api_parameter_selection [shape="rectangle" nojustify=true label="API: parameter_selection/current_table"]
 	api_initialize_query [shape="rectangle" label="API: initialize_query/scalar_or_3d"]
