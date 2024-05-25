@@ -15,7 +15,7 @@ pycodestyle==2.10.0
 pyflakes==3.0.1
 python-dotenv==1.0.0
 PyYAML==6.0
-requests==2.31.0
+requests==2.32.0
 tomli==2.0.1
 types-pytz==2023.3.0.0
 types-PyYAML==6.0.12.9
