@@ -833,7 +833,8 @@ def preview(request: HttpRequest) -> HttpResponse:
     sql_query, query_results = execute_query(request, request.session["scalar_or_3d"])
 
     are_results = True
-    if request.session["scalar_or_3d"].title() == "Scalar":
+    if request.session["scalar_or_3d"].lower() == "scalar":
+        tabulated_query_results = []
         try:
             tabulated_query_results = tabulate_scalar(query_results, True)
             # request.session["query_results"] = tabulated_query_results
