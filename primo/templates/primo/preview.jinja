@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load get_item %}
-{% block subtitle %} {{ request.session.scalar_or_3d  }} Query Sample Results {% endblock %}
+{% block subtitle %} {{ request.session.scalar_or_3d }} Query Sample Results {% endblock %}
 {% block content %}
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script type="text/javascript" src="{% static 'primo/js/tablesorter-master/jquery.tablesorter.min.js' %}"></script>
@@ -77,6 +77,9 @@
         </tbody>
         </table>
         </div>
+        </br>
+        <button onclick="location.href='{% url 'export' 'request.session.scalar_or_3d' %}'">Download CSV</button>
+        <button onclick="location.href='{% url 'initialize_query' request.session.scalar_or_3d %}'">New Query</button>
     {% else %}
         <h3>No results were returned.</h3>
     {% endif %} {# Are/aren't results #}
