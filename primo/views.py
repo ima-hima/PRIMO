@@ -78,16 +78,16 @@ def collate_metadata(
         else:
             rows = query_results
         for row in rows:
-            inDict = {
+            in_dict = {
                 k: row[k]
                 for k in row.keys()
-                if k != "scalar_value" and k != "variable_label"
+                if k not in ("scalar_value", "variable_label")
             }
             if request.session["scalar_or_3d"].lower() == "3d":
-                inDict.update(
+                in_dict.update(
                     {"missing_pts": request.session["missing_pts"][row["specimen_id"]]}
                 )
-            writer.writerow(inDict)
+            writer.writerow(in_dict)
 
 
 # def concat_variable_list(myList):
@@ -130,6 +130,7 @@ def create_tree_javascript(
         )
         .filter(parent_id=parent_id)
     )
+
     for val in vals:
         # Remove quote marks from `name`, as they'll screw up Javascript
         name = val["label"].replace('"', "")
@@ -198,7 +199,8 @@ def download(
                     "-C",
                     settings.DOWNLOAD_ROOT,
                     directory_name,
-                ]
+                ],
+                check=False,
             )
             # We have to reset filepath here because now we've tarred it.
             filepath = path.join(settings.DOWNLOAD_ROOT, directory_name + ".tar.gz")
@@ -228,9 +230,9 @@ def email(request: HttpRequest) -> HttpResponse:
             # Get crap from POST. I'm using `type: ignore` here because I know
             # the form has already been validated and all of these fields exist.
             name = f"{request.POST.get('first_name')} {request.POST.get('last_name')}"
-            email = f"{request.POST.get('email')},"
+            address = f"{request.POST.get('email')},"
             body = (
-                f"{name}, {email}\n"
+                f"{name}, {address}\n"
                 f"{request.POST.get('affiliation')},"
                 f"{request.POST.get('position')},"
                 f"{request.POST.get('dept')},"
@@ -303,10 +305,9 @@ def create_3d_output_string(
     """
 
     newline_char = request.session["newline_char"]
-    """
-    missing_pts will be output in metadata csv file. key is specimen id,
-    value is string of missing points for specimen.
-    """
+    # missing_pts will be output in metadata csv file. key is specimen id,
+    # value is string of missing points for specimen.
+
     missing_pts = {}
 
     # Header is different, otherwise files are nearly identical.
@@ -351,10 +352,8 @@ def create_3d_output_string(
     # data points
     if output_file_type == "morpho":
         output_str += f"{newline_char}[rawpoints]{newline_char}"
-    """
-    point_ctr will be used to track which points are missing for a given
-    sessiom/specimen.
-    """
+    # point_ctr will be used to track which points are missing for a given
+    # sessiom/specimen.
     missing_point_ctr = 1
     current_specimen = -1  # Keeps track of when new specimen data starts.
     for row in query_results:
@@ -499,27 +498,25 @@ def log_in(request: HttpRequest) -> HttpResponse:
         if user is not None and user.is_active:
             login(request, user)
             return redirect(next_page)
-        else:
-            return render(
-                request,
-                "primo/login.jinja",
-                {
-                    "form": form,
-                    "error": """Your username/password combination
-                                didn’t match. Please try again.""",
-                    "next": next_page,
-                },
-            )
-    else:
         return render(
             request,
             "primo/login.jinja",
             {
                 "form": form,
+                "error": """Your username/password combination
+                            didn’t match. Please try again.""",
                 "next": next_page,
-                "error": None,
             },
         )
+    return render(
+        request,
+        "primo/login.jinja",
+        {
+            "form": form,
+            "next": next_page,
+            "error": None,
+        },
+    )
 
 
 @login_required
@@ -573,7 +570,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
                 .all()
             )
 
-    elif current_table == "bodypart" or current_table == "taxon":
+    elif current_table in ("bodypart", "taxon"):
         vals = []
         # Do original query to get root of tree.
         # The rest of the tree will be recursively created in
@@ -608,7 +605,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         # Now do follow-up query using root as parent.
         javascript += create_tree_javascript(request, item_id, current_table)
 
-    elif current_table == "fossil" or current_table == "sex":
+    elif current_table in ("fossil", "sex"):
         current_model = apps.get_model(
             app_label="primo",
             model_name=current_table.capitalize(),
@@ -690,10 +687,10 @@ def initialize_query(
         tables = QueryWizardQuery.objects.get(
             data_table=scalar_or_3d.capitalize()
         ).tables.all()
-        """selected will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9])."""
-        selected = dict()
+        # selected will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9]).
+        selected = {}
         request.session["tables"] = []
-        request.session["table_var_select_done"] = dict()
+        request.session["table_var_select_done"] = {}
 
         for table in tables:
             # if len(request.session['selected'][table.table_name]) == 0:
@@ -780,7 +777,7 @@ def execute_query(
         # TODO: There has to be a better way to do this.
 
         columns = [col[0] for col in cursor.description]
-        [dict(zip(columns, row)) for row in cursor.fetchall()]
+        # TODO: what was this? [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     preview_only = True
     if request.user.is_authenticated and request.user.username != "user":
@@ -800,7 +797,7 @@ def execute_query(
             "ORDER BY label ASC;",
             [request.session["table_var_select_done"]["variable"]],
         )
-        [label[0] for label in variable_query.fetchall()]
+        # TODO: what was this for? [label[0] for label in variable_query.fetchall()]
 
     # Use cursor here?
     with connection.cursor() as cursor:
@@ -879,7 +876,7 @@ def query_start(request: HttpRequest) -> HttpResponse:
     """Start or reset query by creating or emptying data structures."""
     request.session["page_title"] = "Query Wizard"
     request.session["tables"] = []
-    request.session["selected"] = dict()
+    request.session["selected"] = {}
     request.session["selected"]["table"] = []
     request.session["scalar_or_3d"] = ""
     request.session["variable_labels"] = []

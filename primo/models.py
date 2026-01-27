@@ -720,12 +720,10 @@ class TaxonomicType(models.Model):
         ("unknown", "Unknown"),
     )
     taxonomic_type = models.CharField(
-        verbose_name="Type", max_length=16, choices=CHOICES, default="unknown"
+        verbose_name="Type", max_length=16, choices=CHOICES
     )
-    abbr = models.CharField(
-        verbose_name="Abbreviation", max_length=2, blank=True, null=True
-    )
-    comments = models.TextField(blank=True, null=True)
+    abbr = models.CharField(verbose_name="Abbreviation", max_length=2, blank=True)
+    comments = models.TextField(blank=True)
 
     def __str__(self) -> str:
         return self.taxonomic_type
