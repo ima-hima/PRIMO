@@ -717,7 +717,6 @@ class TaxonomicType(models.Model):
         ("neotype", "Neotype"),
         ("future neotype", "Future neotype"),
         ("future lectotype", "Future lectotype"),
-        ("unknown", "Unknown"),
     )
     taxonomic_type = models.CharField(
         verbose_name="Type", max_length=16, choices=CHOICES

@@ -10,7 +10,7 @@ admin.site.site_header = "PRIMO Adminstration"
 # Next default: "Django site admin"
 # admin.site.index_title = 'Features area'
 # Next default: "Django site admin"
-# admin.site.site_title = 'HTML title from adminsitration'
+# admin.site.site_title = 'HTML title from administration'
 
 urlpatterns = [
     path("", views.IndexView.as_view(), name="index"),

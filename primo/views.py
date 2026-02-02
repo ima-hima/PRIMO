@@ -215,7 +215,7 @@ def download(
 
 
 def download_success(request: HttpRequest) -> HttpResponse:
-    """Is this in use?"""
+    """TODO: Is this in use?"""
     request.session["page_title"] = "Download Success"
     return render(request, "primo/download_success.jinja", {})
 
@@ -503,8 +503,10 @@ def log_in(request: HttpRequest) -> HttpResponse:
             "primo/login.jinja",
             {
                 "form": form,
-                "error": """Your username/password combination
-                            didn’t match. Please try again.""",
+                "error": (
+                    "Your username/password combination"
+                    " didn’t match. Please try again."
+                ),
                 "next": next_page,
             },
         )
