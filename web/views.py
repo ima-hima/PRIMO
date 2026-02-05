@@ -24,7 +24,7 @@ from .models import QueryWizardQuery
 
 
 class IndexView(TemplateView):
-    template_name = "primo/index.jinja"
+    template_name = "web/index.jinja"
 
 
 def collate_metadata(
@@ -119,7 +119,7 @@ def create_tree_javascript(
     js_item_delimiter = '", "'
     vals = (
         apps.get_model(
-            app_label="primo",
+            app_label="web",
             model_name=current_table.capitalize(),
         )
         .objects.values(
@@ -217,7 +217,7 @@ def download(
 def download_success(request: HttpRequest) -> HttpResponse:
     """TODO: Is this in use?"""
     request.session["page_title"] = "Download Success"
-    return render(request, "primo/download_success.jinja", {})
+    return render(request, "web/download_success.jinja", {})
 
 
 def email(request: HttpRequest) -> HttpResponse:
@@ -247,19 +247,17 @@ def email(request: HttpRequest) -> HttpResponse:
                 ["eric.delson@example.com"],
                 fail_silently=False,
             )
-            return render(
-                request, "primo/email.jinja", {"success": True, "error": error}
-            )
+            return render(request, "web/email.jinja", {"success": True, "error": error})
         # Form is not valid, so errors should print.
-        return render(request, "primo/email.jinja", {"form": form})
+        return render(request, "web/email.jinja", {"form": form})
     # There is no POST data, page hasn't loaded previously,
-    return render(request, "primo/email.jinja", {"form": form})
+    return render(request, "web/email.jinja", {"form": form})
 
 
 def entity_relation_diagram(request: HttpRequest) -> HttpResponse:
     """Retrieve relational database table pdf."""
     request.session["page_title"] = "Database Structure"
-    return render(request, "primo/entity_relation_diagram.jinja", {})
+    return render(request, "web/entity_relation_diagram.jinja", {})
 
 
 def export(
@@ -500,7 +498,7 @@ def log_in(request: HttpRequest) -> HttpResponse:
             return redirect(next_page)
         return render(
             request,
-            "primo/login.jinja",
+            "web/login.jinja",
             {
                 "form": form,
                 "error": (
@@ -512,7 +510,7 @@ def log_in(request: HttpRequest) -> HttpResponse:
         )
     return render(
         request,
-        "primo/login.jinja",
+        "web/login.jinja",
         {
             "form": form,
             "next": next_page,
@@ -525,7 +523,7 @@ def log_in(request: HttpRequest) -> HttpResponse:
 def logout_view(request: HttpRequest) -> HttpResponse:
     request.session["page_title"] = "Logout"
     logout(request)
-    return render(request, "primo/logout.jinja")
+    return render(request, "web/logout.jinja")
 
 
 @login_required
@@ -561,7 +559,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         else:
             vals = (
                 apps.get_model(
-                    app_label="primo",
+                    app_label="web",
                     model_name=current_table.capitalize(),
                 )
                 .objects.values(
@@ -579,7 +577,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         # `create_tree_javascript()`.
         value = (
             apps.get_model(
-                app_label="primo",
+                app_label="web",
                 model_name=current_table.capitalize(),
             )
             .objects.values(
@@ -609,7 +607,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
 
     elif current_table in ("fossil", "sex"):
         current_model = apps.get_model(
-            app_label="primo",
+            app_label="web",
             model_name=current_table.capitalize(),
         )
     else:
@@ -617,7 +615,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         # refresh with current_table set to "undefined". The actual
         # value is unimportant, so I've just chosen one that has a model.
         current_model = apps.get_model(
-            app_label="primo",
+            app_label="web",
             model_name="Taxon",
         )
 
@@ -625,7 +623,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
 
     return render(
         request,
-        "primo/parameter_selection.jinja",
+        "web/parameter_selection.jinja",
         {
             "current_table": current_table,
             "values": vals,
@@ -705,7 +703,7 @@ def initialize_query(
 
             if table.preselected:
                 model = apps.get_model(
-                    app_label="primo",
+                    app_label="web",
                     model_name=table.filter_table_name.capitalize(),  # type: ignore
                 )
                 values = model.objects.values("id").all()
@@ -728,7 +726,7 @@ def initialize_query(
     request.session.modified = True
     return render(
         request,
-        "primo/initialize_query.jinja",
+        "web/initialize_query.jinja",
         {
             "scalar_or_3d": scalar_or_3d,
             "tables": request.session["tables"],
@@ -870,7 +868,7 @@ def preview(request: HttpRequest) -> HttpResponse:
         sessions = set()
         for item in query_results:
             sessions.add(item["session_id"])
-    return render(request, "primo/preview.jinja", context)
+    return render(request, "web/preview.jinja", context)
 
 
 @login_required
@@ -883,7 +881,7 @@ def query_start(request: HttpRequest) -> HttpResponse:
     request.session["scalar_or_3d"] = ""
     request.session["variable_labels"] = []
     # request.session['query_results'] = []
-    return render(request, "primo/query_start.jinja")
+    return render(request, "web/query_start.jinja")
 
 
 def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
@@ -1063,9 +1061,9 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
 #     if not preview_only:
 #         query_results = get_3D_data(request)
 #         export_3d(request, query_results, output_file_type)
-#         # return render(request, 'primo/download_success.jinja')
+#         # return render(request, 'web/download_success.jinja')
 
-#     return render(request, "primo/preview.jinja", context)
+#     return render(request, "web/preview.jinja", context)
 
 
 def set_up_download(request: HttpRequest) -> Tuple[str, str]:

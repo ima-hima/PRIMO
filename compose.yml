@@ -14,11 +14,24 @@ services:
       - ./db:/var/lib/mysql
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    container_name: django-docker
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-      - /tmp/app/mysqld:/run/mysqld
     depends_on:
       - db
+    environment:
+      DJANGO_SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG}
+      DJANGO_LOGLEVEL: ${DJANGO_LOGLEVEL}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DATABASE_ENGINE: ${DATABASE_ENGINE}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+    env_file:
+       - .env
+volumes:
+   postgres_data:

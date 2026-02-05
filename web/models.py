@@ -29,10 +29,8 @@ class AuthGroupPermissions(models.Model):
 
     class Meta:
         managed = False
-
-
-#         db_table = 'auth_group_permissions'
-#         # unique_together = (('group', 'permission'),)
+        db_table = "auth_group_permissions"
+        # unique_together = (('group', 'permission'),)
 
 
 class AuthUser(models.Model):
@@ -58,7 +56,7 @@ class AuthUserGroups(models.Model):
 
     class Meta:
         managed = False
-        # db_table = 'auth_user_groups'
+        db_table = "auth_user_groups"
         unique_together = (("user", "group"),)
 
 
@@ -68,7 +66,8 @@ class AuthUserUserPermissions(models.Model):
 
     class Meta:
         managed = True
-        # db_table = 'auth_user_user_permissions'
+        # db_table = "authuserpermissions"
+        db_table = "authuseruserpermissions"
         # unique_together = (('user', 'permission'),)
 
 
@@ -307,6 +306,9 @@ class Device(models.Model):
 
     def __str__(self) -> str:
         return self.label
+
+    class Meta:
+        db_table = "device"
 
 
 class DjangoAdminLog(models.Model):
@@ -570,6 +572,9 @@ class QueryWizardQuery(models.Model):
     query = models.TextField(blank=True, null=True)
     query_suffix = models.TextField(blank=True, null=True)
 
+    class Meta:
+        db_table = "query_wizard_query"
+
 
 class QueryWizardTable(models.Model):
     """
@@ -590,6 +595,9 @@ class QueryWizardTable(models.Model):
     # If all values from a table (e.g. fossil, sex) will be pre-selected when
     # calling parameter selection, this is True.
     preselected = models.BooleanField(blank=False, null=False, default=False)
+
+    class Meta:
+        db_table = "query_wizard_table"
 
 
 class TaxonomicRank(models.Model):

@@ -1,10 +1,10 @@
-exclude: ^migrations/|settings.py|manage.py
+exclude: ^primo/migrations/|settings.py|manage.py
 exclude_types: jinja
 
 repos:
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v6.0.0
     hooks:
       - id: check-merge-conflict
 
@@ -14,7 +14,7 @@ repos:
       - id: setup-cfg-fmt
 
   - repo: https://github.com/myint/autoflake
-    rev: v1.4
+    rev: v2.3.1
     hooks:
       - id: autoflake
         args:
@@ -26,12 +26,12 @@ repos:
           - --remove-unused-variables
 
   - repo: https://github.com/PyCQA/isort
-    rev: 5.12.0
+    rev: 7.0.0
     hooks:
       - id: isort
 
   - repo: https://github.com/psf/black
-    rev: 22.3.0
+    rev: 26.1.0
     hooks:
       - id: black
 

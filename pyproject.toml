@@ -34,7 +34,7 @@ disallow_untyped_defs = true
 
 
 [tool.django-stubs]
-django_settings_module = "config.settings"
+django_settings_module = "primo.settings"
 
 
 # mypy may eventually need this or something similar.
