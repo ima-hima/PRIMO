@@ -4,8 +4,7 @@ from django.forms import Textarea
 
 # because filters.py is at top level, import from .filters
 from .filters import DropdownFilter
-from .models import (
-    Ageclass,
+from .models import (  # Ageclass,
     Bodypart,
     BodypartVariable,
     Captive,
@@ -62,30 +61,30 @@ class DataScalarAdmin(admin.ModelAdmin):
         return model_instance.session
 
 
-@admin.register(Ageclass)
-class AgeclassAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "age_class",
-        "abbr",
-        "comments",
-    ]
-    fields = [
-        "age_class",
-        "abbr",
-        "comments",
-    ]
-    list_editable = [
-        "age_class",
-        "abbr",
-        "comments",
-    ]
-    search_fields = [
-        "id",
-    ]
-    formfield_overrides = {
-        models.TextField: COMMENT_FIELD_OVERRIDE,
-    }
+# @admin.register(Ageclass)
+# class AgeclassAdmin(admin.ModelAdmin):
+#     list_display = [
+#         "id",
+#         "age_class",
+#         "abbr",
+#         "comments",
+#     ]
+#     fields = [
+#         "age_class",
+#         "abbr",
+#         "comments",
+#     ]
+#     list_editable = [
+#         "age_class",
+#         "abbr",
+#         "comments",
+#     ]
+#     search_fields = [
+#         "id",
+#     ]
+#     formfield_overrides = {
+#         models.TextField: COMMENT_FIELD_OVERRIDE,
+#     }
 
 
 @admin.register(Data3D)
@@ -431,14 +430,12 @@ class TaxonomicRankAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "rank",
-        "comments",
     ]
     fields = [
         "rank",
-        "comments",
     ]
     list_filter = (("rank", DropdownFilter),)
-    search_fields = ["rank", "comments"]
+    search_fields = ["rank"]
     actions_on_top = True
     actions_on_bottom = True
 
@@ -502,7 +499,7 @@ class SpecimenAdmin(admin.ModelAdmin):
         "taxonomic_type",
         "locality",
         "sex",
-        "age_class",
+        # "age_class",
         "fossil",
         "captive",
         "comments",
@@ -516,7 +513,7 @@ class SpecimenAdmin(admin.ModelAdmin):
         "taxonomic_type",
         "locality",
         "sex",
-        "age_class",
+        # "age_class",
         "fossil",
         "captive",
         "comments",
@@ -526,7 +523,7 @@ class SpecimenAdmin(admin.ModelAdmin):
         ("institute__institute_name", DropdownFilter),
         ("sex__sex", DropdownFilter),
         ("taxonomic_type__taxonomic_type", DropdownFilter),
-        ("age_class__age_class", DropdownFilter),
+        # ("age_class__age_class", DropdownFilter),
         ("captive__captive_or_wild", DropdownFilter),
         ("fossil__fossil_or_extant", DropdownFilter),
     )

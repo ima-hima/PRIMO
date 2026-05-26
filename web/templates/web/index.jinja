@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block subtitle %} Introduction to NYCEP Morphometrics Database {% endblock %}
 {% block content %}
 <div id="main-content" style="max-width: 1000px;">
@@ -14,12 +15,15 @@ access. </p>
     login (see below); to determine if PRIMO will be useful to you, it is possible
     to see its major components:</strong> <br />
 <ol>
-    <li>Download <a href="{% url 'erd' %}">excel file</a> information for users
-    which lists the number of specimens in the database by genus, to give an idea
-    of coverage; and presents lists of variables, institutions, individuals who
-    collected data and taxa recognized; also download pdfs of Delson’s examples
-    of <a href="">wear stages</a> and <a href="">terminology figure</a> if using
-    dental data.</li>
+    <li>Download <a href="{% static 'primo/images/PRIMO_database_info.xls' %}">Excel file</a>
+        information for users which lists the approximate number of
+        specimens in the database by genus, to give an idea of coverage; variables by
+        name and definition; institutions housing specimens; individuals who collected
+        data; and definitions for sex and type specimen variants.</li>
+    <li>Also download pdfs of Delson’s examples of
+        <a href="{% static 'primo/images/Cercopithecid_dental_wear_from_Delson_1973_dissertation.pdf' %}">wear stages</a>
+        and <a href="{% static 'primo/images/Cercopithecid_dental_terminology_from_Szalay_and_Delson_1979.pdf' %}">terminology figure</a>
+        if using dental data.</li>
     <li>Login with username user and password primouser.</li>
     <li>If desired, click Database Structure to see the layout of tables.</li>
     <li>Click Query Wizard to seek data.</li>
