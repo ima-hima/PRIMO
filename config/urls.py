@@ -4,7 +4,7 @@ from django.contrib import admin
 # from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from primo import views
+from web import views
 
 admin.site.site_header = "PRIMO Adminstration"
 # Next default: "Django site admin"
