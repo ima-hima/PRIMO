@@ -57,7 +57,6 @@ def collate_metadata(
         else:
             # variable_names = [ v[0] for v in request.session.keys() ]
             variable_names = request.session["variable_labels"]
-        # print("\n\n***VARIABLE NAMES", variable_names)
         writer = DictWriter(
             csv_file, fieldnames=meta_names + variable_names, extrasaction="ignore"
         )
@@ -266,7 +265,6 @@ def export(
     _, query_results = execute_query(request, scalar_or_3d)
 
     directory_name, file_to_download = set_up_download(request)
-    # print("\n\n***query results", query_results)
     collate_metadata(request, query_results, directory_name, file_to_download)
     request.session["page_title"] = f"PRIMO Download {scalar_or_3d} Data"
     return download(scalar_or_3d, directory_name, file_to_download)
