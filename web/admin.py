@@ -276,17 +276,17 @@ class DeviceAdmin(admin.ModelAdmin):
 class FossilAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "fossil_or_extant",
+        "label",
         "abbr",
         "comments",
     ]
     fields = [
-        "fossil_or_extant",
+        "label",
         "abbr",
         "comments",
     ]
     list_editable = [
-        "fossil_or_extant",
+        "label",
         "abbr",
         "comments",
     ]
@@ -476,12 +476,12 @@ class SessionAdmin(admin.ModelAdmin):
 class SexAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "sex",
+        "label",
         "abbr",
         "comments",
     ]
     fields = [
-        "sex",
+        "label",
         "abbr",
         "comments",
     ]

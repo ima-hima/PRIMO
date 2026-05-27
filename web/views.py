@@ -610,6 +610,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
             app_label="web",
             model_name=current_table.capitalize(),
         )
+        vals = current_model.objects.values("id", "label").all()
     else:
         # I have to do the set because nlsTree seems to be forcing a
         # refresh with current_table set to "undefined". The actual
@@ -900,9 +901,9 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
             "specimen.catalog_number AS catalog_number,",
             "taxon.label AS taxon_label,",
             "specimen.mass AS mass,",
-            "sex.sex AS sex_type,",
+            "sex.label AS sex_type,",
             "taxonomic_type.taxonomic_type,",
-            "fossil.fossil_or_extant,",
+            "fossil.label AS fossil_or_extant,",
             "captive.captive_or_wild,",
             "original.original_or_cast,",
             # "age_class.age_class,",
