@@ -127,6 +127,9 @@ DATABASES = {
         #     },
         # },
     },
+    "TEST": {
+        "NAME": "test_nyceporg_primo3",
+    },
 }
 
 
