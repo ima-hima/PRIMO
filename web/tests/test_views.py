@@ -69,6 +69,18 @@ class TabulateScalarTest(TestCase):
         result = tabulate_scalar(rows, True)
         self.assertEqual(len(result), 15)
 
+    def test_tabulate_single_specimen_single_variable(self) -> None:
+        rows = [self._make_row("X1", "Length", "99")]
+        result = tabulate_scalar(rows, False)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["hypocode"], "X1")
+        self.assertEqual(result[0]["Length"], "99")
+
+    def test_tabulate_preview_limit_exactly_15(self) -> None:
+        rows = [self._make_row(f"H{i}", "V", str(i)) for i in range(15)]
+        result = tabulate_scalar(rows, True)
+        self.assertEqual(len(result), 15)
+
 
 class ViewsHelpersTest(TestCase):
     def test_get_specimen_metadata_scalar_and_3d(self) -> None:
@@ -81,6 +93,11 @@ class ViewsHelpersTest(TestCase):
         three_keys = [k for k, _ in three_meta]
         self.assertIn("missing_pts", three_keys)
 
+    def test_get_specimen_metadata_unknown_type_matches_scalar(self) -> None:
+        unknown = views.get_specimen_metadata("unknown")
+        scalar = views.get_specimen_metadata("Scalar")
+        self.assertEqual(unknown, scalar)
+
     def test_set_up_sql_query_scalar_and_3d(self) -> None:
         scalar_sql = views.set_up_sql_query(True, True)
         self.assertIn("variable.id in %s", scalar_sql)
@@ -89,6 +106,16 @@ class ViewsHelpersTest(TestCase):
         three_sql = views.set_up_sql_query(False, True)
         self.assertIn("FROM session", three_sql)
         self.assertNotIn("variable.id in %s", three_sql)
+
+    def test_set_up_sql_query_preview_only_does_not_affect_output(self) -> None:
+        self.assertEqual(
+            views.set_up_sql_query(True, True),
+            views.set_up_sql_query(True, False),
+        )
+        self.assertEqual(
+            views.set_up_sql_query(False, True),
+            views.set_up_sql_query(False, False),
+        )
 
     def test_init_query_table_and_tabulate_preview_limit(self) -> None:
         keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
@@ -169,6 +196,50 @@ class DownloadAnd3DTest(TestCase):
             out_file = os.path.join(dst, "3d_data.txt")
             self.assertTrue(os.path.exists(out_file))
             self.assertIn(2, req.session["missing_pts"])
+
+    def test_create_3d_output_string_morpho_format(self) -> None:
+        req = self.factory.get("/")
+        _add_session(req)
+        req.session["newline_char"] = "\n"
+        req.session["sessions"] = [1]
+        req.session["directory_name"] = "PRIMO_3D_morpho"
+        dst = os.path.join(self.tmpdir, req.session["directory_name"])
+        os.makedirs(dst, exist_ok=True)
+
+        query_results = [
+            {"specimen_id": 1, "hypocode": "A", "x": 1.0, "y": 2.0, "z": 3.0},
+        ]
+
+        with self.settings(DOWNLOAD_ROOT=self.tmpdir):
+            views.create_3d_output_string(req, query_results, output_file_type="morpho")
+            out_file = os.path.join(dst, "3d_data.txt")
+            self.assertTrue(os.path.exists(out_file))
+            content = open(out_file).read()
+            self.assertIn("[individuals]", content)
+            self.assertIn("[landmarks]", content)
+            self.assertIn("[rawpoints]", content)
+            self.assertNotIn(req.session["missing_pts"][1], [" 1"])
+
+    def test_collate_metadata_scalar_writes_csv(self) -> None:
+        req = self.factory.get("/")
+        _add_session(req)
+        req.session["scalar_or_3d"] = "Scalar"
+        req.session["variable_labels"] = ["Weight", "Height"]
+
+        keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
+        row = {k: f"val_{k}" for k in keys}
+        row.update({"variable_label": "Weight", "scalar_value": "42", "hypocode": "H1"})
+        query_results = [row]
+
+        out_file = "test_collate_scalar.csv"
+        with self.settings(DOWNLOAD_ROOT=self.tmpdir):
+            views.collate_metadata(req, query_results, "", out_file)
+            full_path = os.path.join(self.tmpdir, out_file)
+            self.assertTrue(os.path.exists(full_path))
+            content = open(full_path).read()
+            self.assertIn("Specimen ID", content)
+            self.assertIn("Weight", content)
+            self.assertIn("H1", content)
 
 
 class DownloadViewTest(TestCase):

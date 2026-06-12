@@ -887,25 +887,25 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     # the database structure diagram is already published on the website anyway.
     # TODO: maybe move this back into the DB?
     # Note we skip variables in 3D SELECT: we're getting all of them.
-    select_common = " ".join(
+    select_common = ", ".join(
         [
-            "specimen.id AS specimen_id,",
-            "specimen.hypocode AS hypocode,",
-            "session.id AS session_id,",
-            "institute.abbr AS collection_acronym,",
-            "specimen.catalog_number AS catalog_number,",
-            "taxon.label AS taxon_label,",
-            "specimen.mass AS mass,",
-            "sex.label AS sex_type,",
-            "taxonomic_type.taxonomic_type,",
-            "fossil.label AS fossil_or_extant,",
-            "captive.captive_or_wild,",
-            "original.original_or_cast,",
-            # "age_class.age_class,",
-            "locality.locality_name,",
-            "country.country_name,",
-            "specimen.comments AS specimen_comments,",
-            "session.comments AS session_comments,",
+            "specimen.id AS specimen_id",
+            "specimen.hypocode AS hypocode",
+            "session.id AS session_id",
+            "institute.abbr AS collection_acronym",
+            "specimen.catalog_number AS catalog_number",
+            "taxon.label AS taxon_label",
+            "specimen.mass AS mass",
+            "sex.label AS sex_type",
+            "taxonomic_type.taxonomic_type",
+            "fossil.label AS fossil_or_extant",
+            "captive.captive_or_wild",
+            "original.original_or_cast",
+            # "age_class.age_class",
+            "locality.locality_name",
+            "country.country_name",
+            "specimen.comments AS specimen_comments",
+            "session.comments AS session_comments",
             "observer.researcher_name AS researcher_name",
         ]
     )
