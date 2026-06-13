@@ -26,7 +26,8 @@ DB_HOST = os.getenv("DB_HOST")
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG = os.getenv("DEBUG").lower() in ("1", "true", "yes", "on")
+
+DEBUG = str(os.getenv("DEBUG")).lower() in ("1", "true", "yes", "on")
 
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS","localhost,127.0.0.1").split(",")
@@ -125,6 +126,9 @@ DATABASES = {
         #         # 'cipher': 'DHE-RSA-AES256-SHA',
         #     },
         # },
+    },
+    "TEST": {
+        "NAME": "test_nyceporg_primo3",
     },
 }
 

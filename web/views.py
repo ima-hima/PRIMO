@@ -2,7 +2,6 @@ import subprocess
 from csv import DictWriter
 from datetime import datetime
 from os import mkdir, path
-from sys import exc_info
 from typing import Any, Dict, List, Tuple
 
 from django.apps import apps
@@ -829,14 +828,12 @@ def preview(request: HttpRequest) -> HttpResponse:
     sql_query, query_results = execute_query(request, request.session["scalar_or_3d"])
 
     are_results = True
-    if request.session["scalar_or_3d"].lower() == "scalar":
-        tabulated_query_results = []
-        try:
-            tabulated_query_results = tabulate_scalar(query_results, True)
-            # request.session["query_results"] = tabulated_query_results
-        except Exception:
-            print(exc_info()[0])
-            are_results = False
+    tabulated_query_results = tabulate_scalar(
+        query_results,
+        True,
+    )
+
+    are_results = bool(tabulated_query_results)
     # This is for use in export_csv_file().
     submission_values = [
         request.session["table_var_select_done"]["sex"],
@@ -890,25 +887,25 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     # the database structure diagram is already published on the website anyway.
     # TODO: maybe move this back into the DB?
     # Note we skip variables in 3D SELECT: we're getting all of them.
-    select_common = " ".join(
+    select_common = ", ".join(
         [
-            "specimen.id AS specimen_id,",
-            "specimen.hypocode AS hypocode,",
-            "session.id AS session_id,",
-            "institute.abbr AS collection_acronym,",
-            "specimen.catalog_number AS catalog_number,",
-            "taxon.label AS taxon_label,",
-            "specimen.mass AS mass,",
-            "sex.label AS sex_type,",
-            "taxonomic_type.taxonomic_type,",
-            "fossil.label AS fossil_or_extant,",
-            "captive.captive_or_wild,",
-            "original.original_or_cast,",
-            # "age_class.age_class,",
-            "locality.locality_name,",
-            "country.country_name,",
-            "specimen.comments AS specimen_comments,",
-            "session.comments AS session_comments,",
+            "specimen.id AS specimen_id",
+            "specimen.hypocode AS hypocode",
+            "session.id AS session_id",
+            "institute.abbr AS collection_acronym",
+            "specimen.catalog_number AS catalog_number",
+            "taxon.label AS taxon_label",
+            "specimen.mass AS mass",
+            "sex.label AS sex_type",
+            "taxonomic_type.taxonomic_type",
+            "fossil.label AS fossil_or_extant",
+            "captive.captive_or_wild",
+            "original.original_or_cast",
+            # "age_class.age_class",
+            "locality.locality_name",
+            "country.country_name",
+            "specimen.comments AS specimen_comments",
+            "session.comments AS session_comments",
             "observer.researcher_name AS researcher_name",
         ]
     )
@@ -1074,7 +1071,8 @@ def set_up_download(request: HttpRequest) -> Tuple[str, str]:
     # Stupid Windows: we need to make sure the newline is set correctly.
     # Abundance of caution.
     newline_char = "\n"
-    if request.META["HTTP_USER_AGENT"].lower().find("win"):
+    user_agent = request.META.get("HTTP_USER_AGENT", "").lower()
+    if "win" in user_agent:
         newline_char = "\r\n"
     request.session["newline_char"] = newline_char
 
@@ -1112,8 +1110,10 @@ def tabulate_scalar(
     Locality Name
     Country Name
 
-    All requested variables
+    query_results must be ordered by hypocode.
     """
+    if not query_results:
+        return []
     current_specimen = query_results[0]["hypocode"]
     output = []
     current_dict = init_query_table("Scalar", query_results[0])
