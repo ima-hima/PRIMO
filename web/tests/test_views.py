@@ -227,9 +227,15 @@ class DownloadAnd3DTest(TestCase):
         req.session["variable_labels"] = ["Weight", "Height"]
 
         keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
-        row = {k: f"val_{k}" for k in keys}
-        row.update({"variable_label": "Weight", "scalar_value": "42", "hypocode": "H1"})
-        query_results = [row]
+        row_weight = {k: f"val_{k}" for k in keys}
+        row_weight.update(
+            {"variable_label": "Weight", "scalar_value": "42", "hypocode": "H1"}
+        )
+        row_height = {k: f"val_{k}" for k in keys}
+        row_height.update(
+            {"variable_label": "Height", "scalar_value": "180", "hypocode": "H1"}
+        )
+        query_results = [row_weight, row_height]
 
         out_file = "test_collate_scalar.csv"
         with self.settings(DOWNLOAD_ROOT=self.tmpdir):
@@ -239,7 +245,13 @@ class DownloadAnd3DTest(TestCase):
             content = open(full_path).read()
             self.assertIn("Specimen ID", content)
             self.assertIn("Weight", content)
+            self.assertIn("Height", content)
             self.assertIn("H1", content)
+            # Both variable values must appear on the same data row
+            data_row = [line for line in content.splitlines() if "H1" in line]
+            self.assertEqual(len(data_row), 1)
+            self.assertIn("42", data_row[0])
+            self.assertIn("180", data_row[0])
 
 
 class DownloadViewTest(TestCase):

@@ -74,13 +74,9 @@ def collate_metadata(
             meta_names.append("missing points (indexed by specimen starting at 1)")
             rows = request.session["3d_metadata"]
         else:
-            rows = query_results
+            rows = tabulate_scalar(query_results, False)
         for row in rows:
-            in_dict = {
-                k: row[k]
-                for k in row.keys()
-                if k not in ("scalar_value", "variable_label")
-            }
+            in_dict = {k: row[k] for k in row.keys()}
             if request.session["scalar_or_3d"].lower() == "3d":
                 in_dict.update(
                     {"missing_pts": request.session["missing_pts"][row["specimen_id"]]}
