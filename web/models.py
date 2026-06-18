@@ -322,7 +322,7 @@ class Locality(models.Model):
         null=False,
     )
     continent = models.ForeignKey("Continent", default=7, on_delete=models.SET_DEFAULT)
-    country = models.ForeignKey("Country", default=10000, on_delete=models.SET_DEFAULT)
+    country = models.ForeignKey("Country", default=900, on_delete=models.SET_DEFAULT)
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
@@ -631,6 +631,7 @@ class Specimen(models.Model):
                   taxonomic type
     """
 
+    primo_id = models.IntegerField(unique=True)
     hypocode = models.CharField(max_length=20, blank=True)
     taxon = models.ForeignKey("Taxon", on_delete=models.PROTECT)
     institute = models.ForeignKey(

@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 
 from django.apps import apps
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.files import File
@@ -259,31 +260,29 @@ def export(
 ) -> HttpResponse:
     _, query_results = execute_query(request, scalar_or_3d)
 
+    specimen_ids = [r["specimen_id"] for r in query_results]
+    print(
+        f"DEBUG export: {len(query_results)} rows, {len(set(specimen_ids))} "
+        "unique specimens"
+    )
+    print(f"DEBUG export: 4026 in results = {4026 in specimen_ids}")
+    print(f"DEBUG sex filter: {request.session['table_var_select_done']['sex']}")
+    print(f"DEBUG fossil filter: {request.session['table_var_select_done']['fossil']}")
+    print(f"DEBUG taxon filter: {request.session['table_var_select_done']['taxon']}")
+    print(
+        f"DEBUG variable filter: {request.session['table_var_select_done']['variable']}"
+    )
+    tabulated = tabulate_scalar(query_results, False)
+    tabulated_ids = [r["specimen_id"] for r in tabulated]
+    print(
+        f"DEBUG tabulate: {len(tabulated)} specimens, "
+        f"4026 present = {4026 in tabulated_ids}"
+    )
+
     directory_name, file_to_download = set_up_download(request)
     collate_metadata(request, query_results, directory_name, file_to_download)
     request.session["page_title"] = f"PRIMO Download {scalar_or_3d} Data"
     return download(scalar_or_3d, directory_name, file_to_download)
-
-
-# def export_scalar(request: HttpRequest) -> HttpResponse:
-#     request.session["scalar_or_3d"] = "Scalar"
-#     directory_name, file_to_download = set_up_download(request)
-#     _, query_results = execute_query(request, "Scalar")
-#     collate_metadata(request, query_results, directory_name, file_to_download)
-#     return download(request, scalar_or_3d, directory_name, file_to_download)
-
-
-# def export_3d(
-#     request: HttpRequest, query_results: List[Dict[Any, Any]], output_file_type: str
-# ) -> HttpResponse:
-#     """Is this used?"""
-#     #     request.session["output_file_type"] = output_file_type
-#     request.session["scalar_or_3d"] = "3D"
-#     directory_name, file_to_download = set_up_download(request)
-#     _, query_results = execute_query(request, "3D")
-#     create_3d_output_string(request, query_results, output_file_type)
-#     collate_metadata(request, query_results, directory_name, file_to_download)
-#     return download(request, scalar_or_3d, directory_name, file_to_download)
 
 
 def create_3d_output_string(
@@ -414,9 +413,7 @@ def get_3D_data(request: HttpRequest) -> List[Dict[Any, Any]]:
         # Now return all rows as a dictionary object. Note that each variable
         # name will have its own row, so I'm going to have to jump through some
         # hoops to get the names out correctly for the table headers in the view.
-        # TODO: There has to be a better way to do that.
 
-        # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
         query_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
     # Not a session variable because it's a dictionary.
@@ -548,6 +545,14 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
                 )
                 columns = [col[0] for col in variable_query.description]
                 vals = [dict(zip(columns, row)) for row in variable_query.fetchall()]
+                if not vals:
+                    messages.warning(
+                        request,
+                        (
+                            "No variables are associated with the selected bodyparts. "
+                            "Please reselect bodyparts."
+                        ),
+                    )
 
         else:
             vals = (
@@ -734,19 +739,10 @@ def execute_query(
     request: HttpRequest, scalar_or_3d: str
 ) -> Tuple[str, List[Dict[Any, Any]]]:
     """Set up the query SQL. Do query. Call result table display."""
-    submission_values = [
-        request.session["table_var_select_done"]["sex"],
-        request.session["table_var_select_done"]["fossil"],
-        request.session["table_var_select_done"]["taxon"],
-    ]
     if scalar_or_3d.lower() == "scalar":
-        sql_query = set_up_sql_query(True, True)
-        submission_values.append(request.session["table_var_select_done"]["variable"])
-        # We have to query for the variable names separately.
         with connection.cursor() as variable_query:
-            # Recall that variable label is abbreviation, name is full name.
             variable_query.execute(
-                "SELECT label  "
+                "SELECT label "
                 "  FROM variable "
                 " WHERE variable.id "
                 "    IN %s "
@@ -756,44 +752,13 @@ def execute_query(
             request.session["variable_labels"] = [
                 label[0] for label in variable_query.fetchall()
             ]
-    else:
-        sql_query = set_up_sql_query(False, True)
-
-    # Use cursor here?
-    with connection.cursor() as cursor:
-        cursor.execute(
-            sql_query,
-            submission_values,
-        )
-        # Now return all rows as a dictionary object. Note that each variable
-        # name will have its own row, so I'm going to have to jump through some
-        # hoops to get the names out correctly for the table headers in the view.
-        # TODO: There has to be a better way to do this.
-
-        columns = [col[0] for col in cursor.description]
-        # TODO: what was this? [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     preview_only = True
     if request.user.is_authenticated and request.user.username != "user":
         preview_only = False
 
-    # TODO: Look into doing this all with built-ins, rather than with .raw()
-    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
     sql_query = set_up_sql_query(True, preview_only)
 
-    # We have to query for the variable names separately.
-    with connection.cursor() as variable_query:
-        variable_query.execute(
-            "SELECT label "
-            "  FROM variable "
-            " WHERE variable.id "
-            "    IN %s "
-            "ORDER BY label ASC;",
-            [request.session["table_var_select_done"]["variable"]],
-        )
-        # TODO: what was this for? [label[0] for label in variable_query.fetchall()]
-
-    # Use cursor here?
     with connection.cursor() as cursor:
         cursor.execute(
             sql_query,
@@ -804,12 +769,6 @@ def execute_query(
                 request.session["table_var_select_done"]["variable"],
             ],
         )
-        # Now return all rows as a dictionary object. Note that each variable
-        # name will have its own row, so I'm going to have to jump through some
-        # hoops to get the names out correctly for the table headers in the view.
-        # TODO: There has to be a better way to do this.
-
-        # Note nice list comprehensions from the Django docs here:
         columns = [col[0] for col in cursor.description]
         return sql_query, [dict(zip(columns, row)) for row in cursor.fetchall()]
 
@@ -817,9 +776,6 @@ def execute_query(
 def preview(request: HttpRequest) -> HttpResponse:
     """Set up the scalar query SQL. Do query. Call result table display."""
     request.session["page_title"] = f"{request.session['scalar_or_3d']} Results Preview"
-
-    # TODO: Look into doing this all with built-ins, rather than with .raw()
-    # TODO: Consider moving all of this, and 3D into db. As it was before, dammit.
 
     sql_query, query_results = execute_query(request, request.session["scalar_or_3d"])
 
@@ -909,8 +865,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
 
     if is_scalar:
         select_start = (
-            "SELECT data_scalar.id AS scalar_id, "
-            "       variable.label AS variable_label, "
+            "SELECT variable.label AS variable_label, "
             "       data_scalar.value AS scalar_value, "
         )
         from_start = " ".join(
@@ -950,13 +905,13 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
             "  ON institute.id = specimen.institute_id",
             "JOIN captive",
             "  ON captive.id = specimen.captive_id",
-            "JOIN taxonomic_type",
+            "LEFT JOIN taxonomic_type",  # Some are NULL.
             "  ON taxonomic_type.id = specimen.taxonomic_type_id",
             # "JOIN age_class",
             # "  ON age_class.id = specimen.age_class_id",
-            "JOIN locality",
+            "LEFT JOIN locality",
             "  ON locality.id = specimen.locality_id",
-            "JOIN country",
+            "LEFT JOIN country",
             "  ON country.id = locality.country_id",
             "JOIN observer",
             "  ON observer.id = session.observer_id",
@@ -1106,18 +1061,18 @@ def tabulate_scalar(
     Locality Name
     Country Name
 
-    query_results must be ordered by hypocode.
+    query_results must be ordered by specimen_id.
     """
     if not query_results:
         return []
-    current_specimen = query_results[0]["hypocode"]
+    current_specimen = query_results[0]["specimen_id"]
     output = []
     current_dict = init_query_table("Scalar", query_results[0])
     num_specimens = 1
     for row in query_results:
         # Is this a new specimen? If so need to set up new empty dictionary and
         # append it.
-        if row["hypocode"] == current_specimen:
+        if row["specimen_id"] == current_specimen:
             current_dict[row["variable_label"]] = row["scalar_value"]
         else:
             num_specimens += 1
@@ -1126,7 +1081,7 @@ def tabulate_scalar(
             # This next so we can look up values quickly in view rather than
             # having to do constant conditionals.
             current_dict[row["variable_label"]] = row["scalar_value"]
-            current_specimen = row["hypocode"]
+            current_specimen = row["specimen_id"]
         # TODO: Figure out SQL so we don't have to do entire query and cull it here.
         if preview_only and num_specimens >= 15:
             break

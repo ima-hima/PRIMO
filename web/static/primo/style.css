@@ -391,3 +391,14 @@ background-color: #8dbdd8;
 .result_directions {
   max-width: 750px;
 }
+.message {
+  margin: 12px 0 12px 20px;
+  padding: 10px 14px;
+  border: 1px solid;
+  display: inline-block;
+}
+.message.warning {
+  background-color: #f8d7da;
+  border-color: #cc0000;
+  color: #7a0000;
+}

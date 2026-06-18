@@ -37,6 +37,7 @@ disallow_untyped_defs = true
 django_settings_module = "config.settings"
 
 
-# mypy may eventually need this or something similar.
-# [tool.mypy-.migrations]
-# ignore_errors = true
+[[tool.mypy.overrides]]
+module = ["*.migrations.*"]
+ignore_errors = true
+disallow_untyped_defs = false

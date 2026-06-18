@@ -1,0 +1,8 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        REQUIREMENTS: requirements-dev.txt
+    environment:
+      DEBUG: "true"

@@ -31,32 +31,17 @@ $(document).ready(function() {
         }
     })
     isSomethingChecked = checkForChecked();
-    if(isSomethingChecked){ $("#selectAll").prop("value", "Deselect all"); }
+    if(isSomethingChecked){ $("#selectAll").prop("checked", true); }
 
     $("#selectAll").click(function(){
-        var isSomethingChecked = checkForChecked();
-        if (isSomethingChecked) {
-            $('input:checkbox').prop('checked', false);
-            isSomethingChecked = false;
-            $("#selectAll").prop("value", "Select all");
-        } else {
-            $('input:checkbox').prop('checked', true);
-            isSomethingChecked = true;
-            $("#selectAll").prop("value", "Deselect all");
-        }
+        var checked = $(this).prop("checked");
+        $(".checkSingle").prop("checked", checked);
     });
 
-  $('.checkSingle').click(function() {
-      var isSomethingChecked = checkForChecked();
-      if(isSomethingChecked){
-          $("#selectAll").prop("value", "Deselect all");
-      } else {
-          $("#selectAll").prop("value", "Select all");
-      }
-    // } //else {
-    //   $("#selectAll").prop("checked", false);
-    // }
-  });
+    $(".checkSingle").click(function() {
+        var allChecked = $(".checkSingle").length === $(".checkSingle:checked").length;
+        $("#selectAll").prop("checked", allChecked);
+    });
 });
 </script>
 {% if current_table == 'variable' and not request.session.table_var_select_done.bodypart %}
@@ -88,7 +73,7 @@ $(document).ready(function() {
         <th>Variable ID</th>
         <th>Variable name</th>
         <th>Variable label</th>
-        <th><input id="selectAll" type="button" value="Select all"></th>
+        <th><input id="selectAll" type="checkbox"></th>
     </tr>
     </thead>
     <tbody>
@@ -133,7 +118,7 @@ $(document).ready(function() {
     {% else %} {# sex or fossil #}
     <tr>
         <th width="80%">{{ current_table|capfirst }}</th>
-        <th><input id="selectAll" type="button" value="Select all"></th>
+        <th><label><input id="selectAll" type="checkbox"> Select all</label></th>
     </tr>
     </thead>
     <tbody>

@@ -21,6 +21,11 @@
     <div id="content">
 
         <h2>{% block subtitle %}{% endblock %}</h2>
+        {% if messages %}
+            {% for message in messages %}
+                <p class="message {{ message.tags }}">{{ message }}</p>
+            {% endfor %}
+        {% endif %}
         {% block content %}{% endblock %}
     </div>
     <!-- TODO: make this a query of some kind? -->
