@@ -1,6 +1,10 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.forms import UserChangeForm as AuthUserChangeForm
+from django.contrib.auth.models import Group, User
 from django.db import models
-from django.forms import Textarea
+from django.forms import ModelMultipleChoiceField, SelectMultiple, Textarea
+from django.http import HttpRequest
 
 # because filters.py is at top level, import from .filters
 from .filters import DropdownFilter
@@ -30,9 +34,54 @@ from .models import (  # Ageclass,
     Variable,
 )
 
-# Register your models here.
-
 COMMENT_FIELD_OVERRIDE = {"widget": Textarea(attrs={"rows": 3})}
+
+
+class UserChangeForm(AuthUserChangeForm):
+    group = ModelMultipleChoiceField(
+        queryset=Group.objects.all(),
+        required=False,
+        label="Groups",
+        widget=SelectMultiple(),
+    )
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["group"].initial = self.instance.groups.all()
+
+    def save(self, commit: bool = True) -> None:
+        user = super().save(commit=commit)
+        if commit:
+            user.groups.set(self.cleaned_data.get("group", []))
+        return user
+
+
+admin.site.unregister(User)
+
+
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    form = UserChangeForm
+    filter_horizontal = ()
+
+    fieldsets = (
+        (None, {"fields": ("username", "password")}),
+        ("Personal info", {"fields": ("first_name", "last_name", "email")}),
+        (
+            "Permissions",
+            {
+                "fields": (
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "group",
+                    "user_permissions",
+                ),
+            },
+        ),
+        ("Important dates", {"fields": ("last_login", "date_joined")}),
+    )
 
 
 @admin.register(DataScalar)
@@ -491,6 +540,7 @@ class SexAdmin(admin.ModelAdmin):
 class SpecimenAdmin(admin.ModelAdmin):
     list_display = [
         "id",
+        "primo_id",
         "hypocode",
         "taxon",
         "institute",
@@ -504,7 +554,10 @@ class SpecimenAdmin(admin.ModelAdmin):
         "captive",
         "comments",
     ]
+    readonly_fields = ("id",)
     fields = (
+        "id",
+        "primo_id",
         "hypocode",
         "taxon",
         "institute",
@@ -521,15 +574,31 @@ class SpecimenAdmin(admin.ModelAdmin):
     list_filter = (
         ("taxon__label", DropdownFilter),
         ("institute__institute_name", DropdownFilter),
-        ("sex__sex", DropdownFilter),
+        ("sex__label", DropdownFilter),
         ("taxonomic_type__taxonomic_type", DropdownFilter),
         # ("age_class__age_class", DropdownFilter),
         ("captive__captive_or_wild", DropdownFilter),
-        ("fossil__fossil_or_extant", DropdownFilter),
+        ("fossil__label", DropdownFilter),
     )
+    list_select_related = False
     search_fields = ["id"]
     actions_on_top = True
     actions_on_bottom = True
+
+    def get_queryset(self, request: HttpRequest) -> models.QuerySet[Specimen]:
+        return (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "taxon",
+                "institute",
+                "locality",
+                "sex",
+                "fossil",
+                "captive",
+                "taxonomic_type",
+            )
+        )
 
 
 @admin.register(TaxonomicType)
