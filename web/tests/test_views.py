@@ -55,7 +55,7 @@ class TabulateScalarTest(TestCase):
         ]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["specimen_id"], 1)
+        self.assertEqual(result[0]["specimen_id"], "1")
         self.assertEqual(result[0]["Weight"], "12")
         self.assertEqual(result[0]["Height"], "34")
 
@@ -67,8 +67,8 @@ class TabulateScalarTest(TestCase):
         ]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["specimen_id"], 1)
-        self.assertEqual(result[1]["specimen_id"], 2)
+        self.assertEqual(result[0]["specimen_id"], "1")
+        self.assertEqual(result[1]["specimen_id"], "2")
         self.assertEqual(result[1]["Other"], "30")
 
     def test_tabulate_preview_limit(self) -> None:
@@ -80,7 +80,7 @@ class TabulateScalarTest(TestCase):
         rows = [self._make_row(99, "Length", "99")]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["specimen_id"], 99)
+        self.assertEqual(result[0]["specimen_id"], "99")
         self.assertEqual(result[0]["Length"], "99")
 
     def test_tabulate_preview_limit_exactly_15(self) -> None:
