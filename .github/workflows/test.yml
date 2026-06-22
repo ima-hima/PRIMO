@@ -41,6 +41,9 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements/requirements.txt
 
+      - name: Grant test database privileges
+        run: mysql -h 127.0.0.1 -u root -pprimo_ci_root_password -e "GRANT ALL PRIVILEGES ON \`test_%\`.* TO 'nyceporg_primo'@'%'; FLUSH PRIVILEGES;"
+
       - name: Run tests
         env:
           DB_NAME: nyceporg_primo3
