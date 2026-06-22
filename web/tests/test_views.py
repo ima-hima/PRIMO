@@ -55,7 +55,7 @@ class TabulateScalarTest(TestCase):
         ]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["specimen_id"], 1)
+        self.assertEqual(result[0]["specimen_id"], "1")
         self.assertEqual(result[0]["Weight"], "12")
         self.assertEqual(result[0]["Height"], "34")
 
@@ -67,8 +67,8 @@ class TabulateScalarTest(TestCase):
         ]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["specimen_id"], 1)
-        self.assertEqual(result[1]["specimen_id"], 2)
+        self.assertEqual(result[0]["specimen_id"], "1")
+        self.assertEqual(result[1]["specimen_id"], "2")
         self.assertEqual(result[1]["Other"], "30")
 
     def test_tabulate_preview_limit(self) -> None:
@@ -80,13 +80,96 @@ class TabulateScalarTest(TestCase):
         rows = [self._make_row(99, "Length", "99")]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["specimen_id"], 99)
+        self.assertEqual(result[0]["specimen_id"], "99")
         self.assertEqual(result[0]["Length"], "99")
 
     def test_tabulate_preview_limit_exactly_15(self) -> None:
         rows = [self._make_row(i, "V", str(i)) for i in range(15)]
         result = tabulate_scalar(rows, True)
         self.assertEqual(len(result), 15)
+
+
+class BuildTreeJsonTest(TestCase):
+    def _nodes(self, *specs: dict) -> list[dict]:
+        """Build a flat node list from shorthand dicts."""
+        return [
+            {
+                "id": s["id"],
+                "label": s.get("label", f"node_{s['id']}"),
+                "parent_id": s.get("parent_id", s["id"]),
+                "expand_in_tree": s.get("expand", False),
+                "tree_root": s.get("tree_root", 0),
+            }
+            for s in specs
+        ]
+
+    def _call(self, nodes: list, selected_ids: list[int]) -> tuple:
+        with patch("web.views.apps.get_model") as mock_get_model:
+            mock_get_model.return_value.objects.values.return_value = nodes
+            return views.build_tree_json("taxon", selected_ids)
+
+    def test_single_root_no_children(self) -> None:
+        nodes = self._nodes({"id": 1, "tree_root": 1})
+        roots, selection = self._call(nodes, [])
+        self.assertEqual(len(roots), 1)
+        self.assertEqual(roots[0]["id"], 1)
+        self.assertEqual(roots[0]["children"], [])
+
+    def test_root_identified_by_tree_root_flag(self) -> None:
+        nodes = self._nodes(
+            {"id": 1, "tree_root": 1},
+            {"id": 2, "parent_id": 1},
+        )
+        roots, _ = self._call(nodes, [])
+        self.assertEqual(len(roots), 1)
+        self.assertEqual(roots[0]["children"][0]["id"], 2)
+
+    def test_root_identified_by_self_referential_parent(self) -> None:
+        nodes = self._nodes(
+            {"id": 5, "parent_id": 5},  # self-referential root
+            {"id": 6, "parent_id": 5},
+        )
+        roots, _ = self._call(nodes, [])
+        self.assertEqual(len(roots), 1)
+        self.assertEqual(roots[0]["id"], 5)
+
+    def test_multi_level_nesting(self) -> None:
+        nodes = self._nodes(
+            {"id": 1, "tree_root": 1},
+            {"id": 2, "parent_id": 1},
+            {"id": 3, "parent_id": 2},
+        )
+        roots, _ = self._call(nodes, [])
+        child = roots[0]["children"][0]
+        grandchild = child["children"][0]
+        self.assertEqual(grandchild["id"], 3)
+
+    def test_selection_map_marks_selected_ids(self) -> None:
+        nodes = self._nodes({"id": 1, "tree_root": 1}, {"id": 2, "parent_id": 1})
+        _, selection = self._call(nodes, [1])
+        self.assertTrue(selection["1"])
+        self.assertFalse(selection["2"])
+
+    def test_selection_map_empty_when_none_selected(self) -> None:
+        nodes = self._nodes({"id": 1, "tree_root": 1}, {"id": 2, "parent_id": 1})
+        _, selection = self._call(nodes, [])
+        self.assertFalse(any(selection.values()))
+
+    def test_selection_map_keys_are_strings(self) -> None:
+        nodes = self._nodes({"id": 10, "tree_root": 1})
+        _, selection = self._call(nodes, [10])
+        self.assertIn("10", selection)
+        self.assertNotIn(10, selection)
+
+    def test_expand_in_tree_preserved(self) -> None:
+        nodes = self._nodes({"id": 1, "tree_root": 1, "expand": True})
+        roots, _ = self._call(nodes, [])
+        self.assertTrue(roots[0]["expand_in_tree"])
+
+    def test_empty_tree(self) -> None:
+        roots, selection = self._call([], [])
+        self.assertEqual(roots, [])
+        self.assertEqual(selection, {})
 
 
 class ViewsHelpersTest(TestCase):
@@ -296,6 +379,23 @@ class DownloadViewTest(TestCase):
         with self.settings(DOWNLOAD_ROOT=self.tmpdir):
             views.set_up_download(req)
         self.assertEqual(req.session["newline_char"], "\r\n")
+
+
+class ParameterSelectionUnknownTableTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="tuser", password="pass")
+        self.client.login(username="tuser", password="pass")
+        session = self.client.session
+        session["table_var_select_done"] = {"undefined": []}
+        session["scalar_or_3d"] = "Scalar"
+        session["page_title"] = ""
+        session.save()
+
+    def test_unknown_current_table_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.client.get(
+                reverse("parameter_selection", kwargs={"current_table": "undefined"})
+            )
 
 
 class LoginRequiredTest(TestCase):

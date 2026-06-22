@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load get_item %}
+{% load react_tags %}
 {% block subtitle %}
     {% if current_table == "bodypart" %}
         Body Part
@@ -88,32 +89,16 @@ $(document).ready(function() {
         </tr>
         {% endfor %}
     {% elif current_table == 'bodypart' or current_table == 'taxon' %}
-        <link href="{% static 'primo/js/nlstree/nlstree.css' %}" media="screen" type="text/css" rel="stylesheet">
-        <script type="text/javascript" src="{% static 'primo/js/nlstree/nlstree.js' %}"></script>
-        <script type="text/javascript" src="{% static 'primo/js/nlstree/nlstreeext_state.js' %}"></script>
-
     </thead>
     <tbody>
         <tr><td>
-        <div id="heirarchy">
-            <script>
-                var tree = new NlsTree("main");
-
-                tree.opt.icon     = true;
-                tree.opt.sort     = "no";
-                tree.opt.check    = true;
-                tree.opt.oneClick = true;
-
-                //maintain state using cookie
-                tree.opt.mntState = true;
-
-                //paste in tree structure
-                {{ javascript|safe }}
-                //render the tree
-                tree.renderAttributes();
-                tree.render();
-            </script>
-        </div>
+        <script>
+            window.PRIMO_TREE_DATA = {{ tree_data_json|safe }};
+            window.PRIMO_INITIAL_SELECTION = {{ tree_selection_json|safe }};
+        </script>
+        <link rel="stylesheet" href="{% react_asset 'main.css' %}">
+        <div id="react-tree-root"></div>
+        <script defer src="{% react_asset 'main.js' %}"></script>
         </td></tr>
     {% else %} {# sex or fossil #}
     <tr>

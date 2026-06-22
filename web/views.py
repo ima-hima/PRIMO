@@ -1,3 +1,4 @@
+import json
 import subprocess
 from csv import DictWriter
 from datetime import datetime
@@ -92,70 +93,41 @@ def collate_metadata(
 #     return "(" + reduce((lambda b, c: b + str(c) + ","), myList, "")[:-1] + ")"
 
 
-def create_tree_javascript(
-    request: HttpRequest, parent_id: int, current_table: str
-) -> str:
+def build_tree_json(
+    model_name: str, selected_ids: list[int]
+) -> tuple[list[dict], dict[str, bool]]:
     """
-    Create javascript for heirarchical tree display. Formal parameters for
-    tree.add() are:
-    add(node_id, parent_id, node name, url, icon, expand?, precheck?, extra info,
-    text on mouse hover).
-    Function is recursive on parent_id and returns a properly-formatted string
-    of Javascript code.
+    Build a nested tree structure and initial selection map for the React tree
+    component. Returns (tree_data, selection) where tree_data is a list of root
+    nodes and selection maps str(id) -> bool.
     """
-
-    # From reading nlstree docs (https://www.addobject.com/nlstree),
-    # it seems order is unimportant, so recursion may be unnecessary (wasteful?).
-    # Oh, wait: necessary because of if statement dealing with Eucatarrhini.
-    # Okay, so *eventually* unnecessary?
-
-    # The last two are currently unneeded, and therefore ignored below.
-    javascript = ""
-    js_item_delimiter = '", "'
-    vals = (
-        apps.get_model(
-            app_label="web",
-            model_name=current_table.capitalize(),
-        )
-        .objects.values(
-            "id",
-            "label",
-            "parent_id",
-            "expand_in_tree",
-        )
-        .filter(parent_id=parent_id)
+    model = apps.get_model(app_label="web", model_name=model_name.capitalize())
+    all_nodes = list(
+        model.objects.values("id", "label", "parent_id", "expand_in_tree", "tree_root")
     )
+    selected_set = set(selected_ids)
 
-    for val in vals:
-        # Remove quote marks from `name`, as they'll screw up Javascript
-        name = val["label"].replace('"', "")
-        item_id = val["id"]
-        parent_id = val["parent_id"]
-        expand = "true" if val["expand_in_tree"] else "false"
-        if name != "Eocatarrhini":
-            # I'm not clear why I don't need to recurse up Eucatarrhini heirarchy.
-            # Note that there's an extra blank entry for icon after the second item_id.
-            javascript += (
-                'tree.add("'
-                + str(item_id)
-                + js_item_delimiter
-                + str(parent_id)
-                + js_item_delimiter
-                + name
-                + js_item_delimiter
-                + str(item_id)
-                + js_item_delimiter
-                + '", '
-                + expand
-                + ", "
-            )
-            if item_id not in request.session["table_var_select_done"][current_table]:
-                javascript += "false );\n"
-            else:
-                javascript += "true );\n"
-            javascript += create_tree_javascript(request, item_id, current_table)
+    node_map: dict[int, dict] = {
+        n["id"]: {
+            "id": n["id"],
+            "label": n["label"],
+            "expand_in_tree": bool(n["expand_in_tree"]),
+            "children": [],
+        }
+        for n in all_nodes
+    }
 
-    return javascript
+    roots: list[dict] = []
+    for n in all_nodes:
+        nid = n["id"]
+        pid = n["parent_id"]
+        if n.get("tree_root") or pid == nid:
+            roots.append(node_map[nid])
+        elif pid in node_map:
+            node_map[pid]["children"].append(node_map[nid])
+
+    selection = {str(n["id"]): n["id"] in selected_set for n in all_nodes}
+    return roots, selection
 
 
 def download(
@@ -519,7 +491,8 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 @login_required
 def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpResponse:
     """Select all parameters for current_table."""
-    javascript = ""
+    tree_data: list[dict] = []
+    tree_selection: dict[str, bool] = {}
     request.session["page_title"] = f"{current_table.capitalize()} Selection"
     if current_table == "variable":
         if request.session["table_var_select_done"]["bodypart"]:
@@ -570,38 +543,10 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
 
     elif current_table in ("bodypart", "taxon"):
         vals = []
-        # Do original query to get root of tree.
-        # The rest of the tree will be recursively created in
-        # `create_tree_javascript()`.
-        value = (
-            apps.get_model(
-                app_label="web",
-                model_name=current_table.capitalize(),
-            )
-            .objects.values(
-                "id",
-                "label",
-                "parent_id",
-                "expand_in_tree",
-                "tree_root",
-            )
-            .filter(tree_root=1)[0]
+        tree_data, tree_selection = build_tree_json(
+            current_table,
+            request.session["table_var_select_done"][current_table],
         )
-
-        name = value["label"].replace('"', "")
-        item_id = value["id"]
-        parent_id = value["parent_id"]
-        expand = "true" if value["expand_in_tree"] else "false"
-        javascript = (
-            f'tree.add("{item_id}", "{parent_id}", "{name}", "", "", {expand}, '
-        )
-        if item_id not in request.session["table_var_select_done"][current_table]:
-            javascript += "false );\n"
-        else:
-            javascript += "true );\n"
-
-        # Now do follow-up query using root as parent.
-        javascript += create_tree_javascript(request, item_id, current_table)
 
     elif current_table in ("fossil", "sex"):
         current_model = apps.get_model(
@@ -610,15 +555,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         )
         vals = current_model.objects.values("id", "label").all()
     else:
-        # I have to do the set because nlsTree seems to be forcing a
-        # refresh with current_table set to "undefined". The actual
-        # value is unimportant, so I've just chosen one that has a model.
-        current_model = apps.get_model(
-            app_label="web",
-            model_name="Taxon",
-        )
-
-        vals = current_model.objects.values("id", "label").all()
+        raise ValueError(f"Unexpected current_table value: {current_table!r}")
 
     return render(
         request,
@@ -626,7 +563,8 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         {
             "current_table": current_table,
             "values": vals,
-            "javascript": javascript,
+            "tree_data_json": json.dumps(tree_data),
+            "tree_selection_json": json.dumps(tree_selection),
         },
     )
 
@@ -652,31 +590,11 @@ def initialize_query(
         current_table = request.POST.get("table")
 
         if request.POST.get("commit") == "Submit checked options":
-            # Otherwise, "cancel" or "select all" was chosen.
-            selected_rows: list[int] = []
-
-            if (
-                request.POST.get("table") == "taxon"
-                or request.POST.get("table") == "bodypart"
-            ):
-                # I have to look at all POST variables and remove those that
-                # start with 'cb_main', as those are set by nlstree.js.
-                #
-                # All selected items cause one 'cb_main' variable to be set,
-                # as such: cb_main423 = 'on'. So I need to get the number at
-                # the end, as that's the id of the selected item.
-                for item in request.POST.items():
-                    if item[0].startswith("cb_main"):
-                        selected_rows.append(int(item[0][7:]))
-
-                if request.POST.get("table") == "bodypart":
-                    request.session["table_var_select_done"]["variable"] = []
-
-            else:  # Return is *not* from nlstree.js, so can just get id values.
-                for item in request.POST.getlist("id"):  # type: ignore
-                    # Because .get() returns only last item. Note that getlist()
-                    # returns an empty list for any missing key.
-                    selected_rows.append(int(item))  # type: ignore
+            selected_rows: list[int] = [
+                int(item) for item in request.POST.getlist("id")  # type: ignore
+            ]
+            if request.POST.get("table") == "bodypart":
+                request.session["table_var_select_done"]["variable"] = []
             request.session["table_var_select_done"][current_table] = selected_rows
     if not request.session["tables"] or request.session["scalar_or_3d"] != scalar_or_3d:
         # If tables isn't set, query for all tables and set up both tables and
