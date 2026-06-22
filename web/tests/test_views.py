@@ -30,54 +30,61 @@ class TabulateScalarTest(TestCase):
         self.assertEqual(tabulate_scalar([], False), [])
 
     def _make_row(
-        self, hypocode: str, variable_label: str, scalar_value: str
+        self,
+        specimen_id: int,
+        variable_label: str,
+        scalar_value: str,
+        hypocode: str = "",
     ) -> dict[str, str]:
         """Build a full row with all specimen metadata keys."""
         from web.views import get_specimen_metadata
 
-        row = {k: f"val_{k}" for k, _ in get_specimen_metadata("Scalar")}
-        row["hypocode"] = hypocode
+        row: dict[str, str] = {
+            k: f"val_{k}" for k, _ in get_specimen_metadata("Scalar")
+        }
+        row["specimen_id"] = str(specimen_id)
+        row["hypocode"] = hypocode or f"H{specimen_id}"
         row["variable_label"] = variable_label
         row["scalar_value"] = scalar_value
         return row
 
     def test_tabulate_single_specimen(self) -> None:
         rows = [
-            self._make_row("ABC", "Weight", "12"),
-            self._make_row("ABC", "Height", "34"),
+            self._make_row(1, "Weight", "12"),
+            self._make_row(1, "Height", "34"),
         ]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["hypocode"], "ABC")
+        self.assertEqual(result[0]["specimen_id"], 1)
         self.assertEqual(result[0]["Weight"], "12")
         self.assertEqual(result[0]["Height"], "34")
 
     def test_tabulate_multiple_specimens(self) -> None:
         rows = [
-            self._make_row("AAA", "Weight", "10"),
-            self._make_row("BBB", "Weight", "20"),
-            self._make_row("BBB", "Other", "20"),
+            self._make_row(1, "Weight", "10"),
+            self._make_row(2, "Weight", "20"),
+            self._make_row(2, "Other", "30"),
         ]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["hypocode"], "AAA")
-        self.assertEqual(result[1]["hypocode"], "BBB")
-        self.assertEqual(result[1]["Other"], "20")
+        self.assertEqual(result[0]["specimen_id"], 1)
+        self.assertEqual(result[1]["specimen_id"], 2)
+        self.assertEqual(result[1]["Other"], "30")
 
     def test_tabulate_preview_limit(self) -> None:
-        rows = [self._make_row(f"H{i}", "V", str(i)) for i in range(20)]
+        rows = [self._make_row(i, "V", str(i)) for i in range(20)]
         result = tabulate_scalar(rows, True)
         self.assertEqual(len(result), 15)
 
     def test_tabulate_single_specimen_single_variable(self) -> None:
-        rows = [self._make_row("X1", "Length", "99")]
+        rows = [self._make_row(99, "Length", "99")]
         result = tabulate_scalar(rows, False)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["hypocode"], "X1")
+        self.assertEqual(result[0]["specimen_id"], 99)
         self.assertEqual(result[0]["Length"], "99")
 
     def test_tabulate_preview_limit_exactly_15(self) -> None:
-        rows = [self._make_row(f"H{i}", "V", str(i)) for i in range(15)]
+        rows = [self._make_row(i, "V", str(i)) for i in range(15)]
         result = tabulate_scalar(rows, True)
         self.assertEqual(len(result), 15)
 
@@ -120,7 +127,9 @@ class ViewsHelpersTest(TestCase):
     def test_init_query_table_and_tabulate_preview_limit(self) -> None:
         keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
         base_row = {k: f"val_{k}" for k in keys}
-        base_row.update({"variable_label": "V1", "scalar_value": "1", "hypocode": "H0"})
+        base_row.update(
+            {"specimen_id": "0", "variable_label": "V1", "scalar_value": "1"}
+        )
 
         out = views.init_query_table("Scalar", base_row)
         for k in keys:
@@ -129,9 +138,9 @@ class ViewsHelpersTest(TestCase):
 
         rows = []
         for i in range(20):
-            row = {k: f"val_{k}_{i}" for k in keys}
+            row = {k: f"val_{k}" for k in keys}
             row.update(
-                {"variable_label": "V", "scalar_value": str(i), "hypocode": f"H{i}"}
+                {"specimen_id": str(i), "variable_label": "V", "scalar_value": str(i)}
             )
             rows.append(row)
 
@@ -229,11 +238,11 @@ class DownloadAnd3DTest(TestCase):
         keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
         row_weight = {k: f"val_{k}" for k in keys}
         row_weight.update(
-            {"variable_label": "Weight", "scalar_value": "42", "hypocode": "H1"}
+            {"specimen_id": "1", "variable_label": "Weight", "scalar_value": "42"}
         )
         row_height = {k: f"val_{k}" for k in keys}
         row_height.update(
-            {"variable_label": "Height", "scalar_value": "180", "hypocode": "H1"}
+            {"specimen_id": "1", "variable_label": "Height", "scalar_value": "180"}
         )
         query_results = [row_weight, row_height]
 
@@ -246,9 +255,8 @@ class DownloadAnd3DTest(TestCase):
             self.assertIn("Specimen ID", content)
             self.assertIn("Weight", content)
             self.assertIn("Height", content)
-            self.assertIn("H1", content)
-            # Both variable values must appear on the same data row
-            data_row = [line for line in content.splitlines() if "H1" in line]
+            # Both variable values must appear on the same data row (specimen_id=1)
+            data_row = [line for line in content.splitlines() if line.startswith("1,")]
             self.assertEqual(len(data_row), 1)
             self.assertIn("42", data_row[0])
             self.assertIn("180", data_row[0])
@@ -288,6 +296,63 @@ class DownloadViewTest(TestCase):
         with self.settings(DOWNLOAD_ROOT=self.tmpdir):
             views.set_up_download(req)
         self.assertEqual(req.session["newline_char"], "\r\n")
+
+
+class LoginRequiredTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="protected_user", password="pass")
+
+    def _assert_redirects_to_login(self, url: str) -> None:
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response["Location"])
+
+    def test_logout_requires_login(self) -> None:
+        self._assert_redirects_to_login(reverse("logout"))
+
+    def test_parameter_selection_requires_login(self) -> None:
+        self._assert_redirects_to_login(
+            reverse("parameter_selection", kwargs={"current_table": "taxon"})
+        )
+
+    def test_initialize_query_requires_login(self) -> None:
+        self._assert_redirects_to_login(
+            reverse("initialize_query", kwargs={"scalar_or_3d": "Scalar"})
+        )
+
+    def test_query_start_requires_login(self) -> None:
+        self._assert_redirects_to_login(reverse("query_start"))
+
+    def test_logout_accessible_when_logged_in(self) -> None:
+        self.client.login(username="protected_user", password="pass")
+        response = self.client.get(reverse("logout"))
+        self.assertEqual(response.status_code, 200)
+
+
+class PreviewUserTest(TestCase):
+    def setUp(self) -> None:
+        User.objects.create_user(username="user", password="previewpass")
+        User.objects.create_user(username="fulluser", password="fullpass")
+
+    def test_preview_account_redirected_to_login_on_protected_views(self) -> None:
+        """'user' account must be logged in to access protected views."""
+        self.client.login(username="user", password="previewpass")
+        response = self.client.get(reverse("query_start"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_tabulate_scalar_caps_at_15_for_preview(self) -> None:
+        from web.views import get_specimen_metadata, tabulate_scalar
+
+        keys = [k for k, _ in get_specimen_metadata("Scalar")]
+        rows = []
+        for i in range(20):
+            row = {k: "v" for k in keys}
+            row.update(
+                {"specimen_id": str(i), "variable_label": "V", "scalar_value": str(i)}
+            )
+            rows.append(row)
+        self.assertEqual(len(tabulate_scalar(rows, preview_only=True)), 15)
+        self.assertEqual(len(tabulate_scalar(rows, preview_only=False)), 20)
 
 
 class SimpleViewsTest(TestCase):
