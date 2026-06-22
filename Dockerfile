@@ -1,3 +1,15 @@
+# Stage 1: Build React bundle
+FROM node:20-slim AS react-builder
+WORKDIR /build
+COPY src/tree-view-app/package*.json ./
+RUN npm install --legacy-peer-deps
+COPY src/tree-view-app/src ./src
+COPY src/tree-view-app/public ./public
+ENV GENERATE_SOURCEMAP=false
+ENV PUBLIC_URL=/static/primo/react
+RUN npm run build
+
+# Stage 2: Python app
 FROM python:3.12-slim
 
 ARG REQUIREMENTS=requirements.txt
@@ -13,7 +25,6 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-
 RUN pip install --upgrade pip
 
 COPY requirements/ /requirements/
@@ -21,6 +32,9 @@ COPY requirements/ /requirements/
 RUN pip install -r /requirements/${REQUIREMENTS}
 
 COPY . .
+
+RUN mkdir -p /staticfiles/primo/react
+COPY --from=react-builder /build/build/ /staticfiles/primo/react/
 
 EXPOSE 8000
 
