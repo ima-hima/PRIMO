@@ -849,7 +849,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
             "taxon.label AS taxon_label",
             "specimen.mass AS mass",
             "sex.label AS sex_type",
-            "taxonomic_type.taxonomic_type",
+            'COALESCE(taxonomic_type.taxonomic_type, "") AS taxonomic_type',
             "fossil.label AS fossil_or_extant",
             "captive.captive_or_wild",
             "original.original_or_cast",

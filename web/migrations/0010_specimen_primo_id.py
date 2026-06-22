@@ -15,7 +15,13 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.SeparateDatabaseAndState(
-            database_operations=[],
+            database_operations=[
+                migrations.AddField(
+                    model_name="specimen",
+                    name="primo_id",
+                    field=models.IntegerField(null=True),
+                ),
+            ],
             state_operations=[
                 migrations.AddField(
                     model_name="specimen",
