@@ -557,12 +557,15 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
     else:
         raise ValueError(f"Unexpected current_table value: {current_table!r}")
 
+    selected_ids = set(request.session["table_var_select_done"].get(current_table, []))
+
     return render(
         request,
         "web/parameter_selection.jinja",
         {
             "current_table": current_table,
             "values": vals,
+            "selected_ids": selected_ids,
             "tree_data_json": json.dumps(tree_data),
             "tree_selection_json": json.dumps(tree_selection),
         },

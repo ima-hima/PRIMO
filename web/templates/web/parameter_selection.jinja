@@ -11,38 +11,42 @@
     Selection {% endblock %}
 {% block content %}
 <div id="main-content">
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
 <script>
-$(document).ready(function() {
-    // set up box at top to select or deselect all
-    function checkForChecked() {
-        var isSomethingChecked = false;
-        $(".checkSingle").each(function() {
-            if($(this).is(":checked")) {
-                isSomethingChecked = true;
-            }
-        })
-        return isSomethingChecked
+document.addEventListener('DOMContentLoaded', function () {
+    var selectAll = document.getElementById('selectAll');
+    var singles = document.querySelectorAll('.checkSingle');
+    var submitBtns = document.querySelectorAll('input[name="commit"][value="Submit checked options"]');
+
+    function updateSubmitButton() {
+        var hasSelection =
+            document.querySelectorAll('input[type="hidden"][name="id"]').length > 0 ||
+            document.querySelectorAll('.checkSingle:checked').length > 0;
+        submitBtns.forEach(function (btn) { btn.disabled = !hasSelection; });
     }
 
-    var isSomethingChecked = false;
-    $(".checkSingle").each(function() {
-        if($(this).is(":checked")) {
-            isSomethingChecked = true;
-        }
-    })
-    isSomethingChecked = checkForChecked();
-    if(isSomethingChecked){ $("#selectAll").prop("checked", true); }
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            singles.forEach(function (cb) { cb.checked = selectAll.checked; });
+            updateSubmitButton();
+        });
+    }
 
-    $("#selectAll").click(function(){
-        var checked = $(this).prop("checked");
-        $(".checkSingle").prop("checked", checked);
+    singles.forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            if (selectAll) {
+                selectAll.checked = document.querySelectorAll('.checkSingle').length ===
+                                    document.querySelectorAll('.checkSingle:checked').length;
+            }
+            updateSubmitButton();
+        });
     });
 
-    $(".checkSingle").click(function() {
-        var allChecked = $(".checkSingle").length === $(".checkSingle:checked").length;
-        $("#selectAll").prop("checked", allChecked);
-    });
+    updateSubmitButton();
+
+    var form = document.querySelector('#query-wizard-filter-table-options form');
+    if (form) {
+        new MutationObserver(updateSubmitButton).observe(form, { childList: true, subtree: true });
+    }
 });
 </script>
 {% if current_table == 'variable' and not request.session.table_var_select_done.bodypart %}
@@ -85,7 +89,7 @@ $(document).ready(function() {
             <td>{{ value.var_name }}</td>
             <td>{{ value.var_label }}</td>
             <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.var_id }}"
-                    {% if request.session.table_var_select_done.current_table|get_item:value.id %} CHECKED {% endif %}></td>
+                    {% if value.var_id in selected_ids %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% elif current_table == 'bodypart' or current_table == 'taxon' %}
@@ -111,7 +115,7 @@ $(document).ready(function() {
         <tr>
             <td>{{ value.label }}</td>
             <td class="centered"><input type="checkbox" class="checkSingle" name='id' value="{{ value.id }}"
-                {% if value.id in request.session.table_var_select_done.current_table %} CHECKED {% endif %}></td>
+                {% if value.id in selected_ids %} CHECKED {% endif %}></td>
         </tr>
         {% endfor %}
     {% endif %}

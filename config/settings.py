@@ -173,6 +173,10 @@ STATIC_URL = "/static/"
 
 STATIC_ROOT = "/staticfiles"
 
+STATICFILES_DIRS = [
+    ("primo/react", "/react-static"),
+]
+
 SESSION_COOKIE_HTTPONLY = True
 
 # SESSION_SAVE_EVERY_REQUEST = True

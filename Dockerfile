@@ -33,8 +33,8 @@ RUN pip install -r /requirements/${REQUIREMENTS}
 
 COPY . .
 
-RUN mkdir -p /staticfiles/primo/react
-COPY --from=react-builder /build/build/ /staticfiles/primo/react/
+RUN mkdir -p /react-static
+COPY --from=react-builder /build/build/ /react-static/
 
 EXPOSE 8000
 
