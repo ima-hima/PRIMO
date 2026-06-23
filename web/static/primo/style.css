@@ -310,6 +310,10 @@ th {
 .submit {
   font-size: 15px;
 }
+.submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .submit-buttons {
   text-align: right;
   margin: 15px 10px;

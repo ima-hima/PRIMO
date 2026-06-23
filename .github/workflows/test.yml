@@ -7,6 +7,21 @@ on:
     branches: [master]
 
 jobs:
+  test-react:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/tree-view-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/tree-view-app/package-lock.json
+      - run: npm install --legacy-peer-deps
+      - run: CI=true npm test
+
   test:
     runs-on: ubuntu-latest
 
