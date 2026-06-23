@@ -4,6 +4,10 @@ __pycache__
 
 # other
 .DS_Store
+**/.DS_Store
+*.sql
+style_samples/
+supporting docs/
 *.dSYM
 *.log
 *.prn
