@@ -59,7 +59,7 @@ function TreeNode({ taxon, selected, onSelect, expandAll = false }) {
 
   return (
     <div className="tree-node">
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className={`tree-node-row${hasChildren ? " has-children" : ""}`}>
         {hasChildren ? (
           <span className="clickable" onClick={handleToggle}>
             {expanded
@@ -67,7 +67,7 @@ function TreeNode({ taxon, selected, onSelect, expandAll = false }) {
               : <FaChevronRight color="#006699" size={11} />}
           </span>
         ) : (
-          <span style={{ width: 12, display: "inline-block" }} />
+          <span className="tree-node-spacer" />
         )}
         <label>
           <input
