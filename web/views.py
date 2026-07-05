@@ -194,8 +194,6 @@ def email(request: HttpRequest) -> HttpResponse:
     error = None
     if request.method == "POST":
         if form.is_valid():
-            # Get crap from POST. I'm using `type: ignore` here because I know
-            # the form has already been validated and all of these fields exist.
             name = f"{request.POST.get('first_name')} {request.POST.get('last_name')}"
             address = f"{request.POST.get('email')},"
             body = (
@@ -238,11 +236,11 @@ def export(
         "unique specimens"
     )
     print(f"DEBUG export: 4026 in results = {4026 in specimen_ids}")
-    print(f"DEBUG sex filter: {request.session['table_var_select_done']['sex']}")
-    print(f"DEBUG fossil filter: {request.session['table_var_select_done']['fossil']}")
-    print(f"DEBUG taxon filter: {request.session['table_var_select_done']['taxon']}")
+    print(f"DEBUG sex filter: {request.session['table_selections']['sex']}")
+    print(f"DEBUG fossil filter: {request.session['table_selections']['fossil']}")
+    print(f"DEBUG taxon filter: {request.session['table_selections']['taxon']}")
     print(
-        f"DEBUG variable filter: {request.session['table_var_select_done']['variable']}"
+        f"DEBUG variable filter: {request.session['table_selections']['variable']}"
     )
     tabulated = tabulate_scalar(query_results, False)
     tabulated_ids = [r["specimen_id"] for r in tabulated]
@@ -452,7 +450,7 @@ def log_in(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         username = request.POST.get("user_name")
         password = request.POST.get("password")
-        next_page = request.POST.get("next")  # type: ignore
+        next_page = request.POST.get("next") or next_page
         user = authenticate(username=username, password=password)
 
         if user is not None and user.is_active:
@@ -495,7 +493,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
     tree_selection: dict[str, bool] = {}
     request.session["page_title"] = f"{current_table.capitalize()} Selection"
     if current_table == "variable":
-        if request.session["table_var_select_done"]["bodypart"]:
+        if request.session["table_selections"]["bodypart"]:
             with connection.cursor() as variable_query:
                 sql = (
                     "SELECT v.variable_name AS var_name, "
@@ -514,7 +512,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
                 )
 
                 variable_query.execute(
-                    sql, [request.session["table_var_select_done"]["bodypart"]]
+                    sql, [request.session["table_selections"]["bodypart"]]
                 )
                 columns = [col[0] for col in variable_query.description]
                 vals = [dict(zip(columns, row)) for row in variable_query.fetchall()]
@@ -545,7 +543,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
         vals = []
         tree_data, tree_selection = build_tree_json(
             current_table,
-            request.session["table_var_select_done"][current_table],
+            request.session["table_selections"][current_table],
         )
 
     elif current_table in ("fossil", "sex"):
@@ -557,7 +555,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
     else:
         raise ValueError(f"Unexpected current_table value: {current_table!r}")
 
-    selected_ids = set(request.session["table_var_select_done"].get(current_table, []))
+    selected_ids = set(request.session["table_selections"].get(current_table, []))
 
     return render(
         request,
@@ -594,11 +592,11 @@ def initialize_query(
 
         if request.POST.get("commit") == "Submit checked options":
             selected_rows: list[int] = [
-                int(item) for item in request.POST.getlist("id")  # type: ignore
+                int(item) for item in request.POST.getlist("id")
             ]
             if request.POST.get("table") == "bodypart":
-                request.session["table_var_select_done"]["variable"] = []
-            request.session["table_var_select_done"][current_table] = selected_rows
+                request.session["table_selections"]["variable"] = []
+            request.session["table_selections"][current_table] = selected_rows
     if not request.session["tables"] or request.session["scalar_or_3d"] != scalar_or_3d:
         # If tables isn't set, query for all tables and set up both tables and
         # selected lists. Note that "tables" will exist as key either way.
@@ -610,7 +608,7 @@ def initialize_query(
         # selected will hold all preselected data (e.g. sex: [1, 2, 3, 4, 5, 9]).
         selected = {}
         request.session["tables"] = []
-        request.session["table_var_select_done"] = {}
+        request.session["table_selections"] = {}
 
         for table in tables:
             # if len(request.session['selected'][table.table_name]) == 0:
@@ -622,25 +620,28 @@ def initialize_query(
             )
 
             if table.preselected:
+                filter_table_name = table.filter_table_name
+                if filter_table_name is None:
+                    raise ValueError(f"Table {table} is missing filter_table_name")
                 model = apps.get_model(
                     app_label="web",
-                    model_name=table.filter_table_name.capitalize(),  # type: ignore
+                    model_name=filter_table_name.capitalize(),
                 )
                 values = model.objects.values("id").all()
                 # Because vals is a list of dicts in format 'id': value.
-                request.session["table_var_select_done"][table.filter_table_name] = [
+                request.session["table_selections"][filter_table_name] = [
                     value["id"] for value in values
-                ]  # type: ignore
+                ]
             else:
-                request.session["table_var_select_done"][table.filter_table_name] = []
+                request.session["table_selections"][table.filter_table_name] = []
                 # So I can use 'if selected[table]' in initialize_query.jinja.
 
-    selected = request.session["table_var_select_done"]
+    selected = request.session["table_selections"]
     # I coudn't figure out any way to do this other than to check each time.
     finished = True
 
     for table in request.session["tables"]:
-        if not selected[table["table_name"]]:  # type: ignore
+        if not selected[table["table_name"]]:
             finished = False
 
     request.session.modified = True
@@ -668,7 +669,7 @@ def execute_query(
                 " WHERE variable.id "
                 "    IN %s "
                 "ORDER BY label ASC;",
-                [request.session["table_var_select_done"]["variable"]],
+                [request.session["table_selections"]["variable"]],
             )
             request.session["variable_labels"] = [
                 label[0] for label in variable_query.fetchall()
@@ -684,10 +685,10 @@ def execute_query(
         cursor.execute(
             sql_query,
             [
-                request.session["table_var_select_done"]["sex"],
-                request.session["table_var_select_done"]["fossil"],
-                request.session["table_var_select_done"]["taxon"],
-                request.session["table_var_select_done"]["variable"],
+                request.session["table_selections"]["sex"],
+                request.session["table_selections"]["fossil"],
+                request.session["table_selections"]["taxon"],
+                request.session["table_selections"]["variable"],
             ],
         )
         columns = [col[0] for col in cursor.description]
@@ -709,12 +710,12 @@ def preview(request: HttpRequest) -> HttpResponse:
     are_results = bool(tabulated_query_results)
     # This is for use in export_csv_file().
     submission_values = [
-        request.session["table_var_select_done"]["sex"],
-        request.session["table_var_select_done"]["fossil"],
-        request.session["table_var_select_done"]["taxon"],
+        request.session["table_selections"]["sex"],
+        request.session["table_selections"]["fossil"],
+        request.session["table_selections"]["taxon"],
     ]
     if request.session["scalar_or_3d"].lower() == "scalar":
-        submission_values.append(request.session["table_var_select_done"]["variable"])
+        submission_values.append(request.session["table_selections"]["variable"])
     context = {
         "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,
@@ -726,7 +727,7 @@ def preview(request: HttpRequest) -> HttpResponse:
     }
     if request.session["scalar_or_3d"].lower() == "scalar":
         context["variable_labels"] = request.session["variable_labels"]
-        context["variable_ids"] = request.session["table_var_select_done"]["variable"]
+        context["variable_ids"] = request.session["table_selections"]["variable"]
         context["query_results"] = tabulated_query_results
         context["total_specimens"] = len(tabulated_query_results)
     else:
