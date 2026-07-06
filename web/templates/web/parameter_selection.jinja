@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
-{% if current_table == 'variable' and not request.session.table_var_select_done.bodypart %}
+{% if current_table == 'variable' and not request.session.table_selections.bodypart %}
         <p style="font-size: 16px;">No bodyparts were specified. Please select bodyparts before attempting to select variables. </p>
         <div style="margin-bottom: 30px;">
             <form action="{% url 'initialize_query' request.session.scalar_or_3d %}" method="post" />

@@ -386,7 +386,7 @@ class ParameterSelectionUnknownTableTest(TestCase):
         self.user = User.objects.create_user(username="tuser", password="pass")
         self.client.login(username="tuser", password="pass")
         session = self.client.session
-        session["table_var_select_done"] = {"undefined": []}
+        session["table_selections"] = {"undefined": []}
         session["scalar_or_3d"] = "Scalar"
         session["page_title"] = ""
         session.save()
