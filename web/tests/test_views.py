@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -461,11 +461,8 @@ class GroupAccessTest(TestCase):
     """Tests for get_accessible_group_ids and user_has_group_access."""
 
     def setUp(self) -> None:
-        self.public_group = Group.objects.create(name="Public")
+        self.public_group = Group.objects.create(name="non-member")
         self.other_group = Group.objects.create(name="Other")
-        override = override_settings(PUBLIC_GROUP_ID=self.public_group.id)
-        override.enable()
-        self.addCleanup(override.disable)
 
         self.anon = AnonymousUser()
 
@@ -512,11 +509,8 @@ class ExecuteQueryGroupFilterTest(TestCase):
 
     def setUp(self) -> None:
         self.factory = RequestFactory()
-        self.public_group = Group.objects.create(name="Public")
-        self.member_group = Group.objects.create(name="Member")
-        override = override_settings(PUBLIC_GROUP_ID=self.public_group.id)
-        override.enable()
-        self.addCleanup(override.disable)
+        self.public_group, _ = Group.objects.get_or_create(name="non-member")
+        self.member_group, _ = Group.objects.get_or_create(name="Member")
 
     def _make_request(self, user: User) -> HttpRequest:
         req = self.factory.get("/")
@@ -527,6 +521,7 @@ class ExecuteQueryGroupFilterTest(TestCase):
             "taxon": [1],
             "variable": [1],
         }
+        req.session["variable_labels"] = []
         req.user = user
         return req
 
@@ -550,9 +545,7 @@ class ExecuteQueryGroupFilterTest(TestCase):
         self.assertIn("session.group_id IN %s", sql_query)
         main_call = cursor.execute.call_args_list[-1]
         _, params = main_call.args
-        self.assertEqual(
-            set(params[0]), {self.public_group.id, self.member_group.id}
-        )
+        self.assertEqual(set(params[0]), {self.public_group.id, self.member_group.id})
 
     def test_public_only_user_gets_preview_only(self) -> None:
         user = User.objects.create_user(username="publiconly", password="pw")

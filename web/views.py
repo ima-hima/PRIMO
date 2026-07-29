@@ -3,14 +3,19 @@ import subprocess
 from csv import DictWriter
 from datetime import datetime
 from os import mkdir, path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    AnonymousUser,
+    Group,
+    User,
+)
 from django.core.files import File
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse
@@ -638,18 +643,28 @@ def initialize_query(
     )
 
 
+def _get_public_group_id() -> int:
+    """Return the id of the 'non-member' group, falling back to PUBLIC_GROUP_ID."""
+    try:
+        return Group.objects.get(name="non-member").id
+    except Group.DoesNotExist:
+        return settings.PUBLIC_GROUP_ID
+
+
 def get_accessible_group_ids(user: AbstractBaseUser | AnonymousUser) -> List[int]:
     """
     Return the list of session.group_id values `user` may query.
 
     Every visitor, including unauthenticated/anonymous ones, can see data
-    belonging to settings.PUBLIC_GROUP_ID -- the group new sessions default to
-    (see Session.group). Authenticated users can additionally see data
-    belonging to any Django auth Group they are a member of.
+    belonging to the 'non-member' group (the group new sessions default to).
+    Authenticated users can additionally see data belonging to any Django auth
+    Group they are a member of.
     """
-    group_ids = {settings.PUBLIC_GROUP_ID}
+    public_id = _get_public_group_id()
+    group_ids = {public_id}
     if user.is_authenticated:
-        group_ids.update(user.groups.values_list("id", flat=True))
+        concrete = cast(User, user)
+        group_ids.update(concrete.groups.values_list("id", flat=True))
     return list(group_ids)
 
 
@@ -658,13 +673,13 @@ def user_has_group_access(user: AbstractBaseUser | AnonymousUser) -> bool:
     Return True if `user` should get full (non-preview) query results.
 
     This is true for authenticated users who belong to at least one group
-    besides the public default group (settings.PUBLIC_GROUP_ID). Unauthenticated
-    visitors and users with no group membership beyond the public one only ever
-    get a truncated preview (see tabulate_scalar).
+    besides the 'non-member' public group. Unauthenticated visitors and users
+    with no group membership beyond that only ever get a truncated preview.
     """
     if not user.is_authenticated:
         return False
-    return user.groups.exclude(id=settings.PUBLIC_GROUP_ID).exists()
+    public_id = _get_public_group_id()
+    return cast(User, user).groups.exclude(id=public_id).exists()
 
 
 def execute_query(

@@ -186,8 +186,6 @@ SESSION_COOKIE_HTTPONLY = True
 
 DOWNLOAD_ROOT = "/tmp/"
 
-# Sessions default to this Group (see web.models.Session.group) when no group is
-# explicitly assigned. It is treated as the "public" group: every visitor,
-# including unauthenticated ones, can query data belonging to it. See
-# web.views.get_accessible_group_ids.
+# Fallback group id used by get_accessible_group_ids when the 'non-member'
+# group does not exist in the database.
 PUBLIC_GROUP_ID = int(os.getenv("PUBLIC_GROUP_ID", "3"))
