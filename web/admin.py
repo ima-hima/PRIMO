@@ -500,6 +500,7 @@ class SessionAdmin(admin.ModelAdmin):
         "iteration",
         "comments",
         "filename",
+        "group",
     ]
     fields = [
         "observer",
@@ -509,14 +510,18 @@ class SessionAdmin(admin.ModelAdmin):
         "iteration",
         "comments",
         "filename",
+        "group",
     ]
     list_filter = (
         ("observer__researcher_name", DropdownFilter),
         ("specimen__hypocode", DropdownFilter),
         ("protocol__label", DropdownFilter),
         ("filename", DropdownFilter),
+        ("group__name", DropdownFilter),
     )
-    search_fields = ["label", "abbr", "institute_dept", "locality__locality_name"]
+    search_fields = ["comments", "filename"]
+    list_select_related = ["observer", "specimen", "protocol", "original", "group"]
+    list_per_page = 100
     actions_on_top = True
     actions_on_bottom = True
 
