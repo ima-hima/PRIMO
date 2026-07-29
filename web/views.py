@@ -10,6 +10,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.files import File
 from django.core.mail import send_mail
 from django.db import connection
@@ -657,6 +658,35 @@ def initialize_query(
     )
 
 
+def get_accessible_group_ids(user: AbstractBaseUser | AnonymousUser) -> List[int]:
+    """
+    Return the list of session.group_id values `user` may query.
+
+    Every visitor, including unauthenticated/anonymous ones, can see data
+    belonging to settings.PUBLIC_GROUP_ID -- the group new sessions default to
+    (see Session.group). Authenticated users can additionally see data
+    belonging to any Django auth Group they are a member of.
+    """
+    group_ids = {settings.PUBLIC_GROUP_ID}
+    if user.is_authenticated:
+        group_ids.update(user.groups.values_list("id", flat=True))
+    return list(group_ids)
+
+
+def user_has_group_access(user: AbstractBaseUser | AnonymousUser) -> bool:
+    """
+    Return True if `user` should get full (non-preview) query results.
+
+    This is true for authenticated users who belong to at least one group
+    besides the public default group (settings.PUBLIC_GROUP_ID). Unauthenticated
+    visitors and users with no group membership beyond the public one only ever
+    get a truncated preview (see tabulate_scalar).
+    """
+    if not user.is_authenticated:
+        return False
+    return user.groups.exclude(id=settings.PUBLIC_GROUP_ID).exists()
+
+
 def execute_query(
     request: HttpRequest, scalar_or_3d: str
 ) -> Tuple[str, List[Dict[Any, Any]]]:
@@ -675,9 +705,8 @@ def execute_query(
                 label[0] for label in variable_query.fetchall()
             ]
 
-    preview_only = True
-    if request.user.is_authenticated and request.user.username != "user":
-        preview_only = False
+    group_ids = get_accessible_group_ids(request.user)
+    preview_only = not user_has_group_access(request.user)
 
     sql_query = set_up_sql_query(True, preview_only)
 
@@ -685,6 +714,7 @@ def execute_query(
         cursor.execute(
             sql_query,
             [
+                group_ids,
                 request.session["table_selections"]["sex"],
                 request.session["table_selections"]["fossil"],
                 request.session["table_selections"]["taxon"],
@@ -710,6 +740,7 @@ def preview(request: HttpRequest) -> HttpResponse:
     are_results = bool(tabulated_query_results)
     # This is for use in export_csv_file().
     submission_values = [
+        get_accessible_group_ids(request.user),
         request.session["table_selections"]["sex"],
         request.session["table_selections"]["fossil"],
         request.session["table_selections"]["taxon"],
@@ -720,7 +751,7 @@ def preview(request: HttpRequest) -> HttpResponse:
         "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,
         "total_specimens": len(tabulated_query_results),
-        "preview_only": request.user.username == "user",
+        "preview_only": not user_has_group_access(request.user),
         "specimen_metadata": get_specimen_metadata(request.session["scalar_or_3d"]),
         "user": request.user.username,
         "query_results": tabulated_query_results,
@@ -783,7 +814,12 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
             "observer.researcher_name AS researcher_name",
         ]
     )
-    where = "WHERE sex.id IN %s AND fossil.id IN %s AND taxon.id IN %s"
+    # session.group_id restricts results to groups the requesting user may
+    # access (see get_accessible_group_ids); applies to both scalar and 3D.
+    where = (
+        "WHERE session.group_id IN %s "
+        "AND sex.id IN %s AND fossil.id IN %s AND taxon.id IN %s"
+    )
 
     if is_scalar:
         select_start = (
