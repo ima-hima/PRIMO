@@ -14,7 +14,7 @@ repos:
       - id: setup-cfg-fmt
 
   - repo: https://github.com/myint/autoflake
-    rev: v2.2.1
+    rev: v2.3.3
     hooks:
       - id: autoflake
         args:
@@ -45,7 +45,7 @@ repos:
     rev: 'bd424e4'
     hooks:
     -   id: mypy
-        entry: /Users/eric/miniforge3/envs/primo/bin/mypy .
+        entry: mypy .
         language: system
         types: [python]
         require_serial: true
