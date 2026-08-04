@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.files import File
+from django.core.mail import EmailMessage
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -204,8 +205,6 @@ def email(request: HttpRequest) -> HttpResponse:
                 f"{request.POST.get('country')}\n"
                 f"{request.POST.get('body')}"
             )
-            from django.core.mail import EmailMessage
-
             EmailMessage(
                 subject="PRIMO access request",
                 body=body,

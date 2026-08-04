@@ -532,8 +532,10 @@ class EmailViewTest(TestCase):
         response = self.client.post(reverse("email"), {})
         self.assertEqual(response.status_code, 200)
 
-    @patch("web.views.send_mail")
-    def test_email_post_valid(self, mock_send_mail: MagicMock) -> None:
+    @patch("web.views.EmailMessage")
+    def test_email_post_valid(self, mock_email_cls: MagicMock) -> None:
+        mock_instance = MagicMock()
+        mock_email_cls.return_value = mock_instance
         data = {
             "first_name": "Jane",
             "last_name": "Doe",
@@ -547,4 +549,70 @@ class EmailViewTest(TestCase):
         }
         response = self.client.post(reverse("email"), data)
         self.assertEqual(response.status_code, 200)
-        mock_send_mail.assert_called_once()
+        mock_email_cls.assert_called_once()
+        mock_instance.send.assert_called_once()
+
+
+class PasswordResetFormTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username="resetuser", email="reset@example.com", password="oldpass"
+        )
+
+    def test_get_users_returns_active_user(self) -> None:
+        from web.forms import PrimoPasswordResetForm
+
+        form = PrimoPasswordResetForm()
+        users = list(form.get_users("reset@example.com"))
+        self.assertEqual(users, [self.user])
+
+    def test_get_users_returns_unusable_password_user(self) -> None:
+        """
+        Subclass must include users with unusable passwords (e.g.
+        invalidated accounts).
+        """
+        from web.forms import PrimoPasswordResetForm
+
+        self.user.set_unusable_password()
+        self.user.save()
+        form = PrimoPasswordResetForm()
+        users = list(form.get_users("reset@example.com"))
+        self.assertEqual(users, [self.user])
+
+    def test_get_users_excludes_inactive_user(self) -> None:
+        from web.forms import PrimoPasswordResetForm
+
+        self.user.is_active = False
+        self.user.save()
+        form = PrimoPasswordResetForm()
+        users = list(form.get_users("reset@example.com"))
+        self.assertEqual(users, [])
+
+    def test_get_users_case_insensitive_email(self) -> None:
+        from web.forms import PrimoPasswordResetForm
+
+        form = PrimoPasswordResetForm()
+        users = list(form.get_users("RESET@EXAMPLE.COM"))
+        self.assertEqual(users, [self.user])
+
+
+class PasswordResetUrlsTest(TestCase):
+    def test_password_reset_page(self) -> None:
+        response = self.client.get(reverse("password_reset"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_password_reset_done_page(self) -> None:
+        response = self.client.get(reverse("password_reset_done"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_password_reset_complete_page(self) -> None:
+        response = self.client.get(reverse("password_reset_complete"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_password_reset_confirm_invalid_token(self) -> None:
+        response = self.client.get(
+            reverse(
+                "password_reset_confirm", kwargs={"uidb64": "bad", "token": "bad-token"}
+            )
+        )
+        self.assertEqual(response.status_code, 200)
