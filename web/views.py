@@ -11,7 +11,6 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.files import File
-from django.core.mail import send_mail
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -201,17 +200,19 @@ def email(request: HttpRequest) -> HttpResponse:
                 f"{request.POST.get('affiliation')},"
                 f"{request.POST.get('position')},"
                 f"{request.POST.get('dept')},"
-                f"{request.POST.get('institute')}/n"
-                f"{request.POST.get('country')}/n"
+                f"{request.POST.get('institute')}\n"
+                f"{request.POST.get('country')}\n"
                 f"{request.POST.get('body')}"
             )
-            send_mail(
-                "PRIMO access request",
-                body,
-                "primo@nycep.org",
-                ["eric.delson@example.com"],
-                fail_silently=False,
-            )
+            from django.core.mail import EmailMessage
+
+            EmailMessage(
+                subject="PRIMO access request",
+                body=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[settings.PRIMO_ADMIN_EMAIL],
+                reply_to=[request.POST.get("email", "")],
+            ).send(fail_silently=False)
             return render(request, "web/email.jinja", {"success": True, "error": error})
         # Form is not valid, so errors should print.
         return render(request, "web/email.jinja", {"form": form})
@@ -229,25 +230,6 @@ def export(
     request: HttpRequest, scalar_or_3d: str, which_3d_output_type: str = ""
 ) -> HttpResponse:
     _, query_results = execute_query(request, scalar_or_3d)
-
-    specimen_ids = [r["specimen_id"] for r in query_results]
-    print(
-        f"DEBUG export: {len(query_results)} rows, {len(set(specimen_ids))} "
-        "unique specimens"
-    )
-    print(f"DEBUG export: 4026 in results = {4026 in specimen_ids}")
-    print(f"DEBUG sex filter: {request.session['table_selections']['sex']}")
-    print(f"DEBUG fossil filter: {request.session['table_selections']['fossil']}")
-    print(f"DEBUG taxon filter: {request.session['table_selections']['taxon']}")
-    print(
-        f"DEBUG variable filter: {request.session['table_selections']['variable']}"
-    )
-    tabulated = tabulate_scalar(query_results, False)
-    tabulated_ids = [r["specimen_id"] for r in tabulated]
-    print(
-        f"DEBUG tabulate: {len(tabulated)} specimens, "
-        f"4026 present = {4026 in tabulated_ids}"
-    )
 
     directory_name, file_to_download = set_up_download(request)
     collate_metadata(request, query_results, directory_name, file_to_download)

@@ -20,6 +20,7 @@
             {% endfor %}
             <input type="hidden" name="next" value="{{ next }}" />
             <label>&nbsp;</label><input type="submit" value="Sign in" />
+            <li><label>&nbsp;</label><a href="{% url 'password_reset' %}">Forgot your password?</a></li>
             </ul>
         </form>
     </div>
