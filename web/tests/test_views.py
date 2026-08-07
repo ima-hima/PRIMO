@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -527,30 +527,6 @@ class EmailViewTest(TestCase):
     def test_email_get(self) -> None:
         response = self.client.get(reverse("email"))
         self.assertEqual(response.status_code, 200)
-
-    def test_email_post_invalid(self) -> None:
-        response = self.client.post(reverse("email"), {})
-        self.assertEqual(response.status_code, 200)
-
-    @patch("web.views.EmailMessage")
-    def test_email_post_valid(self, mock_email_cls: MagicMock) -> None:
-        mock_instance = MagicMock()
-        mock_email_cls.return_value = mock_instance
-        data = {
-            "first_name": "Jane",
-            "last_name": "Doe",
-            "email": "jane@example.com",
-            "affiliation": "University",
-            "position": "Researcher",
-            "dept": "Biology",
-            "institute": "Bio Inst",
-            "country": "USA",
-            "body": "Please grant access.",
-        }
-        response = self.client.post(reverse("email"), data)
-        self.assertEqual(response.status_code, 200)
-        mock_email_cls.assert_called_once()
-        mock_instance.send.assert_called_once()
 
 
 class ChangePasswordViewTest(TestCase):

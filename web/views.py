@@ -11,7 +11,6 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.files import File
-from django.core.mail import EmailMessage
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -188,34 +187,9 @@ def download_success(request: HttpRequest) -> HttpResponse:
 
 
 def email(request: HttpRequest) -> HttpResponse:
-    """Create email form, collect info, send email."""
+    """Render access request form; submission opens user's email client via mailto."""
     request.session["page_title"] = "Email Administrator"
-    form = EmailForm(request.POST or None)
-    error = None
-    if request.method == "POST":
-        if form.is_valid():
-            name = f"{request.POST.get('first_name')} {request.POST.get('last_name')}"
-            address = f"{request.POST.get('email')},"
-            body = (
-                f"{name}, {address}\n"
-                f"{request.POST.get('affiliation')},"
-                f"{request.POST.get('position')},"
-                f"{request.POST.get('dept')},"
-                f"{request.POST.get('institute')}\n"
-                f"{request.POST.get('country')}\n"
-                f"{request.POST.get('body')}"
-            )
-            EmailMessage(
-                subject="PRIMO access request",
-                body=body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[settings.PRIMO_ADMIN_EMAIL],
-                reply_to=[request.POST.get("email", "")],
-            ).send(fail_silently=False)
-            return render(request, "web/email.jinja", {"success": True, "error": error})
-        # Form is not valid, so errors should print.
-        return render(request, "web/email.jinja", {"form": form})
-    # There is no POST data, page hasn't loaded previously,
+    form = EmailForm()
     return render(request, "web/email.jinja", {"form": form})
 
 
