@@ -436,6 +436,9 @@ def log_in(request: HttpRequest) -> HttpResponse:
 
         if user is not None and user.is_active:
             login(request, user)
+            profile = getattr(user, "profile", None)
+            if profile and profile.must_change_password:
+                return redirect("change_password")
             return redirect(next_page)
         return render(
             request,
@@ -458,6 +461,28 @@ def log_in(request: HttpRequest) -> HttpResponse:
             "error": None,
         },
     )
+
+
+@login_required
+def change_password(request: HttpRequest) -> HttpResponse:
+    error = None
+    if request.method == "POST":
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+        if not new_password:
+            error = "Password cannot be empty."
+        elif new_password != confirm_password:
+            error = "Passwords do not match."
+        else:
+            request.user.set_password(new_password)
+            request.user.save()
+            profile = getattr(request.user, "profile", None)
+            if profile:
+                profile.must_change_password = False
+                profile.save()
+            login(request, request.user)  # type: ignore[arg-type]
+            return redirect("/")
+    return render(request, "web/change_password.jinja", {"error": error})
 
 
 @login_required

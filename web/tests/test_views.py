@@ -553,66 +553,82 @@ class EmailViewTest(TestCase):
         mock_instance.send.assert_called_once()
 
 
-class PasswordResetFormTest(TestCase):
+class ChangePasswordViewTest(TestCase):
     def setUp(self) -> None:
-        self.user = User.objects.create_user(
-            username="resetuser", email="reset@example.com", password="oldpass"
-        )
+        self.user = User.objects.create_user(username="changeuser", password="oldpass")
+        from web.models import UserProfile
 
-    def test_get_users_returns_active_user(self) -> None:
-        from web.forms import PrimoPasswordResetForm
+        UserProfile.objects.create(user=self.user, must_change_password=True)
 
-        form = PrimoPasswordResetForm()
-        users = list(form.get_users("reset@example.com"))
-        self.assertEqual(users, [self.user])
+    def test_get_requires_login(self) -> None:
+        response = self.client.get(reverse("change_password"))
+        self.assertEqual(response.status_code, 302)
 
-    def test_get_users_returns_unusable_password_user(self) -> None:
-        """
-        Subclass must include users with unusable passwords (e.g.
-        invalidated accounts).
-        """
-        from web.forms import PrimoPasswordResetForm
-
-        self.user.set_unusable_password()
-        self.user.save()
-        form = PrimoPasswordResetForm()
-        users = list(form.get_users("reset@example.com"))
-        self.assertEqual(users, [self.user])
-
-    def test_get_users_excludes_inactive_user(self) -> None:
-        from web.forms import PrimoPasswordResetForm
-
-        self.user.is_active = False
-        self.user.save()
-        form = PrimoPasswordResetForm()
-        users = list(form.get_users("reset@example.com"))
-        self.assertEqual(users, [])
-
-    def test_get_users_case_insensitive_email(self) -> None:
-        from web.forms import PrimoPasswordResetForm
-
-        form = PrimoPasswordResetForm()
-        users = list(form.get_users("RESET@EXAMPLE.COM"))
-        self.assertEqual(users, [self.user])
-
-
-class PasswordResetUrlsTest(TestCase):
-    def test_password_reset_page(self) -> None:
-        response = self.client.get(reverse("password_reset"))
+    def test_get_renders_form(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.get(reverse("change_password"))
         self.assertEqual(response.status_code, 200)
 
-    def test_password_reset_done_page(self) -> None:
-        response = self.client.get(reverse("password_reset_done"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_password_reset_complete_page(self) -> None:
-        response = self.client.get(reverse("password_reset_complete"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_password_reset_confirm_invalid_token(self) -> None:
-        response = self.client.get(
-            reverse(
-                "password_reset_confirm", kwargs={"uidb64": "bad", "token": "bad-token"}
-            )
+    def test_post_mismatched_passwords_shows_error(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.post(
+            reverse("change_password"),
+            {"new_password": "newpass1", "confirm_password": "newpass2"},
         )
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "do not match")
+
+    def test_post_empty_password_shows_error(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.post(
+            reverse("change_password"),
+            {"new_password": "", "confirm_password": ""},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be empty")
+
+    def test_post_valid_clears_flag_and_redirects(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.post(
+            reverse("change_password"),
+            {"new_password": "newpass123", "confirm_password": "newpass123"},
+        )
+        from web.models import UserProfile
+
+        self.assertRedirects(response, "/")
+        self.user.refresh_from_db()
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertFalse(profile.must_change_password)
+        self.assertTrue(self.user.check_password("newpass123"))
+
+
+class LoginRedirectTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="loginuser", password="pass123")
+
+    def test_login_redirects_to_change_password_when_flag_set(self) -> None:
+        from web.models import UserProfile
+
+        UserProfile.objects.create(user=self.user, must_change_password=True)
+        response = self.client.post(
+            reverse("login"),
+            {"user_name": "loginuser", "password": "pass123"},
+        )
+        self.assertRedirects(response, reverse("change_password"))
+
+    def test_login_proceeds_normally_without_flag(self) -> None:
+        from web.models import UserProfile
+
+        UserProfile.objects.create(user=self.user, must_change_password=False)
+        response = self.client.post(
+            reverse("login"),
+            {"user_name": "loginuser", "password": "pass123"},
+        )
+        self.assertRedirects(response, "/")
+
+    def test_login_proceeds_normally_without_profile(self) -> None:
+        response = self.client.post(
+            reverse("login"),
+            {"user_name": "loginuser", "password": "pass123"},
+        )
+        self.assertRedirects(response, "/")

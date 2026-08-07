@@ -31,10 +31,17 @@ from .models import (  # Ageclass,
     Taxon,
     TaxonomicRank,
     TaxonomicType,
+    UserProfile,
     Variable,
 )
 
 COMMENT_FIELD_OVERRIDE = {"widget": Textarea(attrs={"rows": 3})}
+
+
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = "Profile"
 
 
 class UserChangeForm(AuthUserChangeForm):
@@ -64,6 +71,7 @@ admin.site.unregister(User)
 class CustomUserAdmin(UserAdmin):
     form = UserChangeForm
     filter_horizontal = ()
+    inlines = [UserProfileInline]
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),

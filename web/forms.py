@@ -1,24 +1,7 @@
 from django import forms
-from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import PasswordResetForm
-from django.db.models import QuerySet
 
 # from django.contrib.auth.forms import AuthenticationForm
 from django.utils.safestring import mark_safe
-
-UserModel = get_user_model()
-
-
-class PrimoPasswordResetForm(PasswordResetForm):
-    def get_users(self, email: str) -> QuerySet:  # type: ignore[override]
-        """Allow password reset for users with unusable passwords."""
-        email_field_name = UserModel.get_email_field_name()
-        return UserModel._default_manager.filter(
-            **{
-                f"{email_field_name}__iexact": email,
-                "is_active": True,
-            }
-        )
 
 
 class LoginForm(forms.Form):
