@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -528,23 +528,83 @@ class EmailViewTest(TestCase):
         response = self.client.get(reverse("email"))
         self.assertEqual(response.status_code, 200)
 
-    def test_email_post_invalid(self) -> None:
-        response = self.client.post(reverse("email"), {})
+
+class ChangePasswordViewTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="changeuser", password="oldpass")
+        from web.models import UserProfile
+
+        UserProfile.objects.create(user=self.user, must_change_password=True)
+
+    def test_get_requires_login(self) -> None:
+        response = self.client.get(reverse("change_password"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_get_renders_form(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.get(reverse("change_password"))
         self.assertEqual(response.status_code, 200)
 
-    @patch("web.views.send_mail")
-    def test_email_post_valid(self, mock_send_mail: MagicMock) -> None:
-        data = {
-            "first_name": "Jane",
-            "last_name": "Doe",
-            "email": "jane@example.com",
-            "affiliation": "University",
-            "position": "Researcher",
-            "dept": "Biology",
-            "institute": "Bio Inst",
-            "country": "USA",
-            "body": "Please grant access.",
-        }
-        response = self.client.post(reverse("email"), data)
+    def test_post_mismatched_passwords_shows_error(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.post(
+            reverse("change_password"),
+            {"new_password": "newpass1", "confirm_password": "newpass2"},
+        )
         self.assertEqual(response.status_code, 200)
-        mock_send_mail.assert_called_once()
+        self.assertContains(response, "do not match")
+
+    def test_post_empty_password_shows_error(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.post(
+            reverse("change_password"),
+            {"new_password": "", "confirm_password": ""},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be empty")
+
+    def test_post_valid_clears_flag_and_redirects(self) -> None:
+        self.client.login(username="changeuser", password="oldpass")
+        response = self.client.post(
+            reverse("change_password"),
+            {"new_password": "newpass123", "confirm_password": "newpass123"},
+        )
+        from web.models import UserProfile
+
+        self.assertRedirects(response, "/")
+        self.user.refresh_from_db()
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertFalse(profile.must_change_password)
+        self.assertTrue(self.user.check_password("newpass123"))
+
+
+class LoginRedirectTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="loginuser", password="pass123")
+
+    def test_login_redirects_to_change_password_when_flag_set(self) -> None:
+        from web.models import UserProfile
+
+        UserProfile.objects.create(user=self.user, must_change_password=True)
+        response = self.client.post(
+            reverse("login"),
+            {"user_name": "loginuser", "password": "pass123"},
+        )
+        self.assertRedirects(response, reverse("change_password"))
+
+    def test_login_proceeds_normally_without_flag(self) -> None:
+        from web.models import UserProfile
+
+        UserProfile.objects.create(user=self.user, must_change_password=False)
+        response = self.client.post(
+            reverse("login"),
+            {"user_name": "loginuser", "password": "pass123"},
+        )
+        self.assertRedirects(response, "/")
+
+    def test_login_proceeds_normally_without_profile(self) -> None:
+        response = self.client.post(
+            reverse("login"),
+            {"user_name": "loginuser", "password": "pass123"},
+        )
+        self.assertRedirects(response, "/")

@@ -1,7 +1,5 @@
 from django.conf import settings
 from django.contrib import admin
-
-# from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from web import views
@@ -41,6 +39,7 @@ urlpatterns = [
     # If there's no GET, it defaults to scalar.
     path("initialize_query/", views.initialize_query, name="initialize_query"),
     path("query_start/", views.query_start, name="query_start"),
+    path("change_password/", views.change_password, name="change_password"),
 ]
 
 if settings.DEBUG:
