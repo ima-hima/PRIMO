@@ -12,7 +12,6 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.files import File
-from django.core.mail import send_mail
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -189,34 +188,9 @@ def download_success(request: HttpRequest) -> HttpResponse:
 
 
 def email(request: HttpRequest) -> HttpResponse:
-    """Create email form, collect info, send email."""
+    """Render access request form; submission opens user's email client via mailto."""
     request.session["page_title"] = "Email Administrator"
-    form = EmailForm(request.POST or None)
-    error = None
-    if request.method == "POST":
-        if form.is_valid():
-            name = f"{request.POST.get('first_name')} {request.POST.get('last_name')}"
-            address = f"{request.POST.get('email')},"
-            body = (
-                f"{name}, {address}\n"
-                f"{request.POST.get('affiliation')},"
-                f"{request.POST.get('position')},"
-                f"{request.POST.get('dept')},"
-                f"{request.POST.get('institute')}/n"
-                f"{request.POST.get('country')}/n"
-                f"{request.POST.get('body')}"
-            )
-            send_mail(
-                "PRIMO access request",
-                body,
-                "primo@nycep.org",
-                ["eric.delson@example.com"],
-                fail_silently=False,
-            )
-            return render(request, "web/email.jinja", {"success": True, "error": error})
-        # Form is not valid, so errors should print.
-        return render(request, "web/email.jinja", {"form": form})
-    # There is no POST data, page hasn't loaded previously,
+    form = EmailForm()
     return render(request, "web/email.jinja", {"form": form})
 
 
@@ -230,25 +204,6 @@ def export(
     request: HttpRequest, scalar_or_3d: str, which_3d_output_type: str = ""
 ) -> HttpResponse:
     _, query_results = execute_query(request, scalar_or_3d)
-
-    specimen_ids = [r["specimen_id"] for r in query_results]
-    print(
-        f"DEBUG export: {len(query_results)} rows, {len(set(specimen_ids))} "
-        "unique specimens"
-    )
-    print(f"DEBUG export: 4026 in results = {4026 in specimen_ids}")
-    print(f"DEBUG sex filter: {request.session['table_selections']['sex']}")
-    print(f"DEBUG fossil filter: {request.session['table_selections']['fossil']}")
-    print(f"DEBUG taxon filter: {request.session['table_selections']['taxon']}")
-    print(
-        f"DEBUG variable filter: {request.session['table_selections']['variable']}"
-    )
-    tabulated = tabulate_scalar(query_results, False)
-    tabulated_ids = [r["specimen_id"] for r in tabulated]
-    print(
-        f"DEBUG tabulate: {len(tabulated)} specimens, "
-        f"4026 present = {4026 in tabulated_ids}"
-    )
 
     directory_name, file_to_download = set_up_download(request)
     collate_metadata(request, query_results, directory_name, file_to_download)
@@ -456,6 +411,9 @@ def log_in(request: HttpRequest) -> HttpResponse:
 
         if user is not None and user.is_active:
             login(request, user)
+            profile = getattr(user, "profile", None)
+            if profile and profile.must_change_password:
+                return redirect("change_password")
             return redirect(next_page)
         return render(
             request,
@@ -478,6 +436,28 @@ def log_in(request: HttpRequest) -> HttpResponse:
             "error": None,
         },
     )
+
+
+@login_required
+def change_password(request: HttpRequest) -> HttpResponse:
+    error = None
+    if request.method == "POST":
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+        if not new_password:
+            error = "Password cannot be empty."
+        elif new_password != confirm_password:
+            error = "Passwords do not match."
+        else:
+            request.user.set_password(new_password)
+            request.user.save()
+            profile = getattr(request.user, "profile", None)
+            if profile:
+                profile.must_change_password = False
+                profile.save()
+            login(request, request.user)  # type: ignore[arg-type]
+            return redirect("/")
+    return render(request, "web/change_password.jinja", {"error": error})
 
 
 @login_required

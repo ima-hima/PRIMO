@@ -175,7 +175,8 @@ STATIC_ROOT = "/staticfiles"
 
 STATICFILES_DIRS = [
     ("primo/react", "/react-static"),
-]
+] if os.path.isdir("/react-static") else []
+
 
 SESSION_COOKIE_HTTPONLY = True
 

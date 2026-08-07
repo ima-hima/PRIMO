@@ -1,5 +1,16 @@
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, User
 from django.db import models
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    must_change_password = models.BooleanField(default=True)
+
+    def __str__(self) -> str:
+        return self.user.username
+
+    class Meta:
+        db_table = "user_profile"
 
 
 class Bodypart(models.Model):
