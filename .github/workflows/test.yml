@@ -22,7 +22,7 @@ jobs:
           cache: npm
           cache-dependency-path: src/tree-view-app/package-lock.json
       - run: npm install --legacy-peer-deps
-      - run: CI=true npm test
+      - run: npm test
 
   test:
     runs-on: ubuntu-latest
