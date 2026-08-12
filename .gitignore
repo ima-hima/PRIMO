@@ -16,3 +16,4 @@ supporting docs/
 *.xml
 .env
 .sql
+react-static/
