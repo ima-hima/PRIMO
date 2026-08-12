@@ -507,10 +507,11 @@ class GroupAccessTest(TestCase):
 class ExecuteQueryGroupFilterTest(TestCase):
     """Verify execute_query filters by the requesting user's accessible groups."""
 
+    PUBLIC_ID = 99
+    MEMBER_ID = 100
+
     def setUp(self) -> None:
         self.factory = RequestFactory()
-        self.public_group, _ = Group.objects.get_or_create(name="non-member")
-        self.member_group, _ = Group.objects.get_or_create(name="Member")
 
     def _make_request(self, user: User) -> HttpRequest:
         req = self.factory.get("/")
@@ -535,33 +536,47 @@ class ExecuteQueryGroupFilterTest(TestCase):
 
     def test_group_ids_passed_as_first_sql_param(self) -> None:
         user = User.objects.create_user(username="member", password="pw")
-        user.groups.add(self.member_group)
         req = self._make_request(user)
         cursor = self._fake_cursor()
 
-        with patch("web.views.connection.cursor", return_value=cursor):
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids",
+            return_value=[self.PUBLIC_ID, self.MEMBER_ID],
+        ), patch(
+            "web.views.user_has_group_access", return_value=True
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
             sql_query, _ = views.execute_query(req, "Scalar")
 
         self.assertIn("session.group_id IN %s", sql_query)
         main_call = cursor.execute.call_args_list[-1]
         _, params = main_call.args
-        self.assertEqual(set(params[0]), {self.public_group.id, self.member_group.id})
+        self.assertEqual(set(params[0]), {self.PUBLIC_ID, self.MEMBER_ID})
 
     def test_public_only_user_gets_preview_only(self) -> None:
         user = User.objects.create_user(username="publiconly", password="pw")
         req = self._make_request(user)
         cursor = self._fake_cursor()
 
-        with patch("web.views.connection.cursor", return_value=cursor):
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids", return_value=[self.PUBLIC_ID]
+        ), patch(
+            "web.views.user_has_group_access", return_value=False
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
             views.execute_query(req, "Scalar")
 
         main_call = cursor.execute.call_args_list[-1]
         sql_query, _ = main_call.args
         self.assertIn("`specimen_id` ASC", sql_query)
-        # preview_only affects tabulate_scalar truncation, not the SQL text;
-        # confirm the user's own groups (none beyond public) is what's queried.
         _, params = main_call.args
-        self.assertEqual(set(params[0]), {self.public_group.id})
+        self.assertEqual(set(params[0]), {self.PUBLIC_ID})
 
 
 class SimpleViewsTest(TestCase):
