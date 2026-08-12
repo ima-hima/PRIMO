@@ -186,6 +186,3 @@ SESSION_COOKIE_HTTPONLY = True
 
 DOWNLOAD_ROOT = "/tmp/"
 
-# Fallback group id used by get_accessible_group_ids when the 'non-member'
-# group does not exist in the database.
-PUBLIC_GROUP_ID = int(os.getenv("PUBLIC_GROUP_ID", "3"))

@@ -643,25 +643,34 @@ def initialize_query(
     )
 
 
-def _get_public_group_id() -> int:
-    """Return the id of the 'non-member' group, falling back to PUBLIC_GROUP_ID."""
+def _get_public_group_id() -> int | None:
+    """Return the id of the 'non-member' group, or None if it doesn't exist."""
     try:
         return Group.objects.get(name="non-member").id
     except Group.DoesNotExist:
-        return settings.PUBLIC_GROUP_ID
+        return None
 
 
 def get_accessible_group_ids(user: AbstractBaseUser | AnonymousUser) -> List[int]:
     """
     Return the list of session.group_id values `user` may query.
 
-    Every visitor, including unauthenticated/anonymous ones, can see data
-    belonging to the 'non-member' group (the group new sessions default to).
-    Authenticated users can additionally see data belonging to any Django auth
-    Group they are a member of.
+    Admin users (superuser, staff, or members of the 'admin' group) see all
+    session groups. Every other visitor can see the 'non-member' group; authenticated
+    users additionally see data in any other Django auth Group they belong to.
+    If the 'non-member' group is missing, unauthenticated users get no results
+    and authenticated users see only their own groups.
     """
+    if user.is_authenticated:
+        concrete = cast(User, user)
+        if (
+            concrete.is_superuser
+            or concrete.is_staff
+            or concrete.groups.filter(name="admin").exists()
+        ):
+            return list(Group.objects.values_list("id", flat=True))
     public_id = _get_public_group_id()
-    group_ids = {public_id}
+    group_ids: set[int] = {public_id} if public_id is not None else set()
     if user.is_authenticated:
         concrete = cast(User, user)
         group_ids.update(concrete.groups.values_list("id", flat=True))
@@ -679,7 +688,8 @@ def user_has_group_access(user: AbstractBaseUser | AnonymousUser) -> bool:
     if not user.is_authenticated:
         return False
     public_id = _get_public_group_id()
-    return cast(User, user).groups.exclude(id=public_id).exists()
+    qs = cast(User, user).groups
+    return qs.exclude(id=public_id).exists() if public_id is not None else qs.exists()
 
 
 def execute_query(
@@ -1036,7 +1046,7 @@ def tabulate_scalar(
             current_dict[row["variable_label"]] = row["scalar_value"]
             current_specimen = row["specimen_id"]
         # TODO: Figure out SQL so we don't have to do entire query and cull it here.
-        if preview_only and num_specimens >= 15:
+        if preview_only and num_specimens >= 5:
             break
     output.append(current_dict)
     return output

@@ -74,7 +74,7 @@ class TabulateScalarTest(TestCase):
     def test_tabulate_preview_limit(self) -> None:
         rows = [self._make_row(i, "V", str(i)) for i in range(20)]
         result = tabulate_scalar(rows, True)
-        self.assertEqual(len(result), 15)
+        self.assertEqual(len(result), 5)
 
     def test_tabulate_single_specimen_single_variable(self) -> None:
         rows = [self._make_row(99, "Length", "99")]
@@ -83,10 +83,10 @@ class TabulateScalarTest(TestCase):
         self.assertEqual(result[0]["specimen_id"], "99")
         self.assertEqual(result[0]["Length"], "99")
 
-    def test_tabulate_preview_limit_exactly_15(self) -> None:
-        rows = [self._make_row(i, "V", str(i)) for i in range(15)]
+    def test_tabulate_preview_limit_exactly_5(self) -> None:
+        rows = [self._make_row(i, "V", str(i)) for i in range(5)]
         result = tabulate_scalar(rows, True)
-        self.assertEqual(len(result), 15)
+        self.assertEqual(len(result), 5)
 
 
 class BuildTreeJsonTest(TestCase):
@@ -230,7 +230,7 @@ class ViewsHelpersTest(TestCase):
             rows.append(row)
 
         result = views.tabulate_scalar(rows, True)
-        self.assertEqual(len(result), 15)
+        self.assertEqual(len(result), 5)
 
 
 class DownloadAnd3DTest(TestCase):
@@ -442,7 +442,7 @@ class PreviewUserTest(TestCase):
         response = self.client.get(reverse("query_start"))
         self.assertEqual(response.status_code, 200)
 
-    def test_tabulate_scalar_caps_at_15_for_preview(self) -> None:
+    def test_tabulate_scalar_caps_at_5_for_preview(self) -> None:
         from web.views import get_specimen_metadata, tabulate_scalar
 
         keys = [k for k, _ in get_specimen_metadata("Scalar")]
@@ -453,7 +453,7 @@ class PreviewUserTest(TestCase):
                 {"specimen_id": str(i), "variable_label": "V", "scalar_value": str(i)}
             )
             rows.append(row)
-        self.assertEqual(len(tabulate_scalar(rows, preview_only=True)), 15)
+        self.assertEqual(len(tabulate_scalar(rows, preview_only=True)), 5)
         self.assertEqual(len(tabulate_scalar(rows, preview_only=False)), 20)
 
 
