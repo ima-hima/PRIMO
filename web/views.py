@@ -894,9 +894,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
 #     Is this used?
 #     """
 
-#     preview_only = False
-#     if not request.user.is_authenticated or request.user.username == "user":
-#         preview_only = True
+#     preview_only = not user_has_group_access(request.user)
 
 #     request.session["scalar_or_3d"] = "3D"
 #     # request.session["output_file_type"] = output_file_type
@@ -922,6 +920,7 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
 #         cursor.execute(
 #             sql_query,
 #             [
+#                 get_accessible_group_ids(request.user),
 #                 request.session["table_var_select_done"]["sex"],
 #                 request.session["table_var_select_done"]["fossil"],
 #                 request.session["table_var_select_done"]["taxon"],
@@ -955,7 +954,6 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
 #         )
 #         .replace("[", "(")
 #         .replace("]", ")"),
-#         "groups": request.user.get_group_permissions(),
 #         "preview_only": preview_only,
 #         "query_results": query_results,
 #         "scalar_or_3d": request.session["scalar_or_3d"],
