@@ -2,6 +2,7 @@
 FROM node:20-slim AS react-builder
 WORKDIR /build
 COPY src/tree-view-app/package*.json ./
+COPY src/tree-view-app/vite.config.js ./
 RUN npm install --legacy-peer-deps
 COPY src/tree-view-app/src ./src
 COPY src/tree-view-app/public ./public
@@ -34,7 +35,7 @@ RUN pip install -r /requirements/${REQUIREMENTS}
 COPY . .
 
 RUN mkdir -p /react-static
-COPY --from=react-builder /build/build/ /react-static/
+COPY --from=react-builder /react-static/ /react-static/
 
 EXPOSE 8000
 
