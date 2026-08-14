@@ -462,6 +462,9 @@ class GroupAccessTest(TestCase):
 
     def setUp(self) -> None:
         self.public_group = Group.objects.create(name="non-member")
+        self.delson_group = Group.objects.create(name="Delson files")
+        self.member_group = Group.objects.create(name="member")
+        self.admin_group = Group.objects.create(name="admin")
         self.other_group = Group.objects.create(name="Other")
 
         self.anon = AnonymousUser()
@@ -474,7 +477,13 @@ class GroupAccessTest(TestCase):
         self.public_only_user.groups.add(self.public_group)
 
         self.member_user = User.objects.create_user(username="member", password="pw")
-        self.member_user.groups.add(self.public_group, self.other_group)
+        self.member_user.groups.add(self.public_group, self.member_group)
+
+        self.admin_user = User.objects.create_user(username="admin", password="pw")
+        self.admin_user.groups.add(self.admin_group)
+
+        self.delson_user = User.objects.create_user(username="delson", password="pw")
+        self.delson_user.groups.add(self.public_group, self.delson_group)
 
     def test_anonymous_user_gets_only_public_group(self) -> None:
         self.assertEqual(
@@ -488,7 +497,7 @@ class GroupAccessTest(TestCase):
 
     def test_user_gets_public_group_plus_own_groups(self) -> None:
         ids = set(views.get_accessible_group_ids(self.member_user))
-        self.assertEqual(ids, {self.public_group.id, self.other_group.id})
+        self.assertEqual(ids, {self.public_group.id, self.member_group.id})
 
     def test_anonymous_user_has_no_group_access(self) -> None:
         self.assertFalse(views.user_has_group_access(self.anon))
@@ -502,6 +511,23 @@ class GroupAccessTest(TestCase):
 
     def test_user_in_another_group_has_group_access(self) -> None:
         self.assertTrue(views.user_has_group_access(self.member_user))
+
+    def test_member_cannot_see_delson_group(self) -> None:
+        """Members must not have the Delson files group in their accessible IDs."""
+        ids = set(views.get_accessible_group_ids(self.member_user))
+        self.assertNotIn(self.delson_group.id, ids)
+
+    def test_delson_user_can_see_delson_group(self) -> None:
+        ids = set(views.get_accessible_group_ids(self.delson_user))
+        self.assertIn(self.delson_group.id, ids)
+
+    def test_admin_user_can_see_delson_group(self) -> None:
+        ids = set(views.get_accessible_group_ids(self.admin_user))
+        self.assertIn(self.delson_group.id, ids)
+
+    def test_anonymous_user_cannot_see_delson_group(self) -> None:
+        ids = set(views.get_accessible_group_ids(self.anon))
+        self.assertNotIn(self.delson_group.id, ids)
 
 
 class ExecuteQueryGroupFilterTest(TestCase):
