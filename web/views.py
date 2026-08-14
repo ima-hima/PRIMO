@@ -693,9 +693,16 @@ def user_has_group_access(user: AbstractBaseUser | AnonymousUser) -> bool:
 
 
 def execute_query(
-    request: HttpRequest, scalar_or_3d: str
+    request: HttpRequest, scalar_or_3d: str, limit_to_five: bool = False
 ) -> Tuple[str, List[Dict[Any, Any]]]:
-    """Set up the query SQL. Do query. Call result table display."""
+    """
+    Set up the query SQL. Do query. Call result table display.
+
+    limit_to_five restricts the query itself to the first five matching
+    specimens, so the preview page never has to fetch (and then cull) a
+    potentially huge result set. Pass False (the default) to run the full,
+    unbounded query, e.g. for downloads.
+    """
     if scalar_or_3d.lower() == "scalar":
         with connection.cursor() as variable_query:
             variable_query.execute(
@@ -711,21 +718,22 @@ def execute_query(
             ]
 
     group_ids = get_accessible_group_ids(request.user)
-    preview_only = not user_has_group_access(request.user)
 
-    sql_query = set_up_sql_query(True, preview_only)
+    sql_query = set_up_sql_query(True, limit_to_five)
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            sql_query,
-            [
-                group_ids,
-                request.session["table_selections"]["sex"],
-                request.session["table_selections"]["fossil"],
-                request.session["table_selections"]["taxon"],
-                request.session["table_selections"]["variable"],
-            ],
-        )
+        params = [
+            group_ids,
+            request.session["table_selections"]["sex"],
+            request.session["table_selections"]["fossil"],
+            request.session["table_selections"]["taxon"],
+            request.session["table_selections"]["variable"],
+        ]
+        if limit_to_five:
+            # The query text repeats the WHERE filters in a subquery (see
+            # set_up_sql_query), so its placeholders need repeating too.
+            params = params + params
+        cursor.execute(sql_query, params)
         columns = [col[0] for col in cursor.description]
         return sql_query, [dict(zip(columns, row)) for row in cursor.fetchall()]
 
@@ -734,7 +742,9 @@ def preview(request: HttpRequest) -> HttpResponse:
     """Set up the scalar query SQL. Do query. Call result table display."""
     request.session["page_title"] = f"{request.session['scalar_or_3d']} Results Preview"
 
-    sql_query, query_results = execute_query(request, request.session["scalar_or_3d"])
+    sql_query, query_results = execute_query(
+        request, request.session["scalar_or_3d"], limit_to_five=True
+    )
 
     are_results = True
     tabulated_query_results = tabulate_scalar(
@@ -790,8 +800,14 @@ def query_start(request: HttpRequest) -> HttpResponse:
     return render(request, "web/query_start.jinja")
 
 
-def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
-    """Create an SQL query for either 3D or scalar data."""
+def set_up_sql_query(is_scalar: bool, limit_to_five: bool) -> str:
+    """
+    Create an SQL query for either 3D or scalar data.
+
+    If limit_to_five is True, restrict the results to the first five
+    specimens (by specimen_id) matching the filters, so preview requests
+    don't have to fetch and then cull a potentially huge result set.
+    """
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
@@ -882,6 +898,18 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     )
 
     ordering = "ORDER BY `specimen_id` ASC"
+
+    if limit_to_five:
+        # Row-limiting the main query directly would cut off mid-specimen
+        # (e.g. after only some of a specimen's variables), since it returns
+        # one row per specimen/variable pair. Instead, find the first five
+        # matching specimen ids and restrict the main query to just those.
+        five_specimen_ids = (
+            f"SELECT DISTINCT specimen.id {from_start} {joins} {where} "
+            "ORDER BY specimen.id ASC LIMIT 5"
+        )
+        where = f"{where} AND specimen.id IN ({five_specimen_ids})"
+
     return f"{select_start} {select_common} {from_start} {joins} {where} {ordering};"
 
 

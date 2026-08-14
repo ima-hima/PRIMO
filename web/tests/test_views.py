@@ -189,25 +189,24 @@ class ViewsHelpersTest(TestCase):
         self.assertEqual(unknown, scalar)
 
     def test_set_up_sql_query_scalar_and_3d(self) -> None:
-        scalar_sql = views.set_up_sql_query(True, True)
+        scalar_sql = views.set_up_sql_query(True, False)
         self.assertIn("variable.id in %s", scalar_sql)
         self.assertIn("ORDER BY `specimen_id` ASC", scalar_sql)
         self.assertIn("session.group_id IN %s", scalar_sql)
 
-        three_sql = views.set_up_sql_query(False, True)
+        three_sql = views.set_up_sql_query(False, False)
         self.assertIn("FROM session", three_sql)
         self.assertNotIn("variable.id in %s", three_sql)
         self.assertIn("session.group_id IN %s", three_sql)
 
-    def test_set_up_sql_query_preview_only_does_not_affect_output(self) -> None:
-        self.assertEqual(
-            views.set_up_sql_query(True, True),
-            views.set_up_sql_query(True, False),
-        )
-        self.assertEqual(
-            views.set_up_sql_query(False, True),
-            views.set_up_sql_query(False, False),
-        )
+    def test_set_up_sql_query_limit_to_five_adds_specimen_limit_subquery(self) -> None:
+        scalar_sql = views.set_up_sql_query(True, True)
+        self.assertIn("specimen.id IN (SELECT DISTINCT specimen.id", scalar_sql)
+        self.assertIn("ORDER BY specimen.id ASC LIMIT 5", scalar_sql)
+        # The unbounded query is unaffected.
+        full_sql = views.set_up_sql_query(True, False)
+        self.assertNotIn("LIMIT 5", full_sql)
+        self.assertNotEqual(scalar_sql, full_sql)
 
     def test_init_query_table_and_tabulate_preview_limit(self) -> None:
         keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
@@ -603,6 +602,49 @@ class ExecuteQueryGroupFilterTest(TestCase):
         self.assertIn("`specimen_id` ASC", sql_query)
         _, params = main_call.args
         self.assertEqual(set(params[0]), {self.PUBLIC_ID})
+
+    def test_limit_to_five_limits_sql_and_doubles_params(self) -> None:
+        user = User.objects.create_user(username="member2", password="pw")
+        req = self._make_request(user)
+        cursor = self._fake_cursor()
+
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids",
+            return_value=[self.PUBLIC_ID, self.MEMBER_ID],
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
+            sql_query, _ = views.execute_query(req, "Scalar", limit_to_five=True)
+
+        self.assertIn("LIMIT 5", sql_query)
+        main_call = cursor.execute.call_args_list[-1]
+        _, params = main_call.args
+        # WHERE filters appear twice (main query + specimen-limiting
+        # subquery), so the param list must be doubled to match.
+        self.assertEqual(len(params), 10)
+        self.assertEqual(params[:5], params[5:])
+
+    def test_default_query_is_not_limited(self) -> None:
+        user = User.objects.create_user(username="member3", password="pw")
+        req = self._make_request(user)
+        cursor = self._fake_cursor()
+
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids",
+            return_value=[self.PUBLIC_ID, self.MEMBER_ID],
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
+            sql_query, _ = views.execute_query(req, "Scalar")
+
+        self.assertNotIn("LIMIT 5", sql_query)
+        main_call = cursor.execute.call_args_list[-1]
+        _, params = main_call.args
+        self.assertEqual(len(params), 5)
 
 
 # class ExecuteQuery3DGroupFilterTest(TestCase):
