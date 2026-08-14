@@ -1,4 +1,7 @@
+from typing import Any
+
 from django.contrib import admin
+from django.contrib.admin import RelatedFieldListFilter
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm as AuthUserChangeForm
 from django.contrib.auth.models import Group, User
@@ -36,6 +39,18 @@ from .models import (  # Ageclass,
 )
 
 COMMENT_FIELD_OVERRIDE = {"widget": Textarea(attrs={"rows": 3})}
+
+HIDDEN_SESSION_GROUPS = {"non-member", "admin"}
+
+
+class SessionGroupFilter(RelatedFieldListFilter):
+    def field_choices(  # type: ignore[override]
+        self, field: Any, request: HttpRequest, model_admin: Any
+    ) -> list[tuple[str, str]]:
+        return [
+            (str(group.pk), group.name)
+            for group in Group.objects.exclude(name__in=HIDDEN_SESSION_GROUPS)
+        ]
 
 
 class UserProfileInline(admin.StackedInline):
@@ -525,7 +540,7 @@ class SessionAdmin(admin.ModelAdmin):
         ("specimen__hypocode", DropdownFilter),
         ("protocol__label", DropdownFilter),
         ("filename", DropdownFilter),
-        ("group__name", DropdownFilter),
+        ("group", SessionGroupFilter),
     )
     search_fields = ["comments", "filename"]
     list_select_related = ["observer", "specimen", "protocol", "original", "group"]

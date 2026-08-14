@@ -1,9 +1,9 @@
 import os
 import shutil
 import tempfile
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser, Group, User
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory, TestCase, override_settings
@@ -74,7 +74,7 @@ class TabulateScalarTest(TestCase):
     def test_tabulate_preview_limit(self) -> None:
         rows = [self._make_row(i, "V", str(i)) for i in range(20)]
         result = tabulate_scalar(rows, True)
-        self.assertEqual(len(result), 15)
+        self.assertEqual(len(result), 5)
 
     def test_tabulate_single_specimen_single_variable(self) -> None:
         rows = [self._make_row(99, "Length", "99")]
@@ -83,10 +83,10 @@ class TabulateScalarTest(TestCase):
         self.assertEqual(result[0]["specimen_id"], "99")
         self.assertEqual(result[0]["Length"], "99")
 
-    def test_tabulate_preview_limit_exactly_15(self) -> None:
-        rows = [self._make_row(i, "V", str(i)) for i in range(15)]
+    def test_tabulate_preview_limit_exactly_5(self) -> None:
+        rows = [self._make_row(i, "V", str(i)) for i in range(5)]
         result = tabulate_scalar(rows, True)
-        self.assertEqual(len(result), 15)
+        self.assertEqual(len(result), 5)
 
 
 class BuildTreeJsonTest(TestCase):
@@ -192,10 +192,12 @@ class ViewsHelpersTest(TestCase):
         scalar_sql = views.set_up_sql_query(True, True)
         self.assertIn("variable.id in %s", scalar_sql)
         self.assertIn("ORDER BY `specimen_id` ASC", scalar_sql)
+        self.assertIn("session.group_id IN %s", scalar_sql)
 
         three_sql = views.set_up_sql_query(False, True)
         self.assertIn("FROM session", three_sql)
         self.assertNotIn("variable.id in %s", three_sql)
+        self.assertIn("session.group_id IN %s", three_sql)
 
     def test_set_up_sql_query_preview_only_does_not_affect_output(self) -> None:
         self.assertEqual(
@@ -228,7 +230,7 @@ class ViewsHelpersTest(TestCase):
             rows.append(row)
 
         result = views.tabulate_scalar(rows, True)
-        self.assertEqual(len(result), 15)
+        self.assertEqual(len(result), 5)
 
 
 class DownloadAnd3DTest(TestCase):
@@ -440,7 +442,7 @@ class PreviewUserTest(TestCase):
         response = self.client.get(reverse("query_start"))
         self.assertEqual(response.status_code, 200)
 
-    def test_tabulate_scalar_caps_at_15_for_preview(self) -> None:
+    def test_tabulate_scalar_caps_at_5_for_preview(self) -> None:
         from web.views import get_specimen_metadata, tabulate_scalar
 
         keys = [k for k, _ in get_specimen_metadata("Scalar")]
@@ -451,8 +453,252 @@ class PreviewUserTest(TestCase):
                 {"specimen_id": str(i), "variable_label": "V", "scalar_value": str(i)}
             )
             rows.append(row)
-        self.assertEqual(len(tabulate_scalar(rows, preview_only=True)), 15)
+        self.assertEqual(len(tabulate_scalar(rows, preview_only=True)), 5)
         self.assertEqual(len(tabulate_scalar(rows, preview_only=False)), 20)
+
+
+class GroupAccessTest(TestCase):
+    """Tests for get_accessible_group_ids and user_has_group_access."""
+
+    def setUp(self) -> None:
+        self.public_group = Group.objects.create(name="non-member")
+        self.delson_group = Group.objects.create(name="Delson files")
+        self.member_group = Group.objects.create(name="member")
+        self.admin_group = Group.objects.create(name="admin")
+        self.other_group = Group.objects.create(name="Other")
+
+        self.anon = AnonymousUser()
+
+        self.no_group_user = User.objects.create_user(username="nogroup", password="pw")
+
+        self.public_only_user = User.objects.create_user(
+            username="publiconly", password="pw"
+        )
+        self.public_only_user.groups.add(self.public_group)
+
+        self.member_user = User.objects.create_user(username="member", password="pw")
+        self.member_user.groups.add(self.public_group, self.member_group)
+
+        self.admin_user = User.objects.create_user(username="admin", password="pw")
+        self.admin_user.groups.add(self.admin_group)
+
+        self.delson_user = User.objects.create_user(username="delson", password="pw")
+        self.delson_user.groups.add(self.public_group, self.delson_group)
+
+    def test_anonymous_user_gets_only_public_group(self) -> None:
+        self.assertEqual(
+            views.get_accessible_group_ids(self.anon), [self.public_group.id]
+        )
+
+    def test_user_with_no_groups_gets_only_public_group(self) -> None:
+        self.assertEqual(
+            views.get_accessible_group_ids(self.no_group_user), [self.public_group.id]
+        )
+
+    def test_user_gets_public_group_plus_own_groups(self) -> None:
+        ids = set(views.get_accessible_group_ids(self.member_user))
+        self.assertEqual(ids, {self.public_group.id, self.member_group.id})
+
+    def test_anonymous_user_has_no_group_access(self) -> None:
+        self.assertFalse(views.user_has_group_access(self.anon))
+
+    def test_user_with_no_groups_has_no_group_access(self) -> None:
+        self.assertFalse(views.user_has_group_access(self.no_group_user))
+
+    def test_user_in_public_group_only_has_no_group_access(self) -> None:
+        """A user with no group beyond the public default only gets a preview."""
+        self.assertFalse(views.user_has_group_access(self.public_only_user))
+
+    def test_user_in_another_group_has_group_access(self) -> None:
+        self.assertTrue(views.user_has_group_access(self.member_user))
+
+    def test_member_cannot_see_delson_group(self) -> None:
+        """Members must not have the Delson files group in their accessible IDs."""
+        ids = set(views.get_accessible_group_ids(self.member_user))
+        self.assertNotIn(self.delson_group.id, ids)
+
+    def test_delson_user_can_see_delson_group(self) -> None:
+        ids = set(views.get_accessible_group_ids(self.delson_user))
+        self.assertIn(self.delson_group.id, ids)
+
+    def test_admin_user_can_see_delson_group(self) -> None:
+        ids = set(views.get_accessible_group_ids(self.admin_user))
+        self.assertIn(self.delson_group.id, ids)
+
+    def test_anonymous_user_cannot_see_delson_group(self) -> None:
+        ids = set(views.get_accessible_group_ids(self.anon))
+        self.assertNotIn(self.delson_group.id, ids)
+
+
+class ExecuteQueryGroupFilterTest(TestCase):
+    """Verify execute_query filters by the requesting user's accessible groups."""
+
+    PUBLIC_ID = 99
+    MEMBER_ID = 100
+
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+
+    def _make_request(self, user: User) -> HttpRequest:
+        req = self.factory.get("/")
+        _add_session(req)
+        req.session["table_selections"] = {
+            "sex": [1],
+            "fossil": [1],
+            "taxon": [1],
+            "variable": [1],
+        }
+        req.session["variable_labels"] = []
+        req.user = user
+        return req
+
+    def _fake_cursor(self) -> MagicMock:
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.__exit__.return_value = False
+        cursor.description = []
+        cursor.fetchall.return_value = []
+        return cursor
+
+    def test_group_ids_passed_as_first_sql_param(self) -> None:
+        user = User.objects.create_user(username="member", password="pw")
+        req = self._make_request(user)
+        cursor = self._fake_cursor()
+
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids",
+            return_value=[self.PUBLIC_ID, self.MEMBER_ID],
+        ), patch(
+            "web.views.user_has_group_access", return_value=True
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
+            sql_query, _ = views.execute_query(req, "Scalar")
+
+        self.assertIn("session.group_id IN %s", sql_query)
+        main_call = cursor.execute.call_args_list[-1]
+        _, params = main_call.args
+        self.assertEqual(set(params[0]), {self.PUBLIC_ID, self.MEMBER_ID})
+
+    def test_public_only_user_gets_preview_only(self) -> None:
+        user = User.objects.create_user(username="publiconly", password="pw")
+        req = self._make_request(user)
+        cursor = self._fake_cursor()
+
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids", return_value=[self.PUBLIC_ID]
+        ), patch(
+            "web.views.user_has_group_access", return_value=False
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
+            views.execute_query(req, "Scalar")
+
+        main_call = cursor.execute.call_args_list[-1]
+        sql_query, _ = main_call.args
+        self.assertIn("`specimen_id` ASC", sql_query)
+        _, params = main_call.args
+        self.assertEqual(set(params[0]), {self.PUBLIC_ID})
+
+
+# class ExecuteQuery3DGroupFilterTest(TestCase):
+#     """Verify query_3d filters by the requesting user's accessible groups.
+#     Uncomment when query_3d is re-enabled in views.py.
+#     """
+#
+#     PUBLIC_ID = 99
+#     MEMBER_ID = 100
+#
+#     def setUp(self) -> None:
+#         self.factory = RequestFactory()
+#
+#     def _make_request(self, user: User) -> HttpRequest:
+#         req = self.factory.get("/")
+#         _add_session(req)
+#         req.session["table_var_select_done"] = {
+#             "sex": [1],
+#             "fossil": [1],
+#             "taxon": [1],
+#         }
+#         req.user = user
+#         return req
+#
+#     def _fake_cursor(self) -> MagicMock:
+#         cursor = MagicMock()
+#         cursor.__enter__.return_value = cursor
+#         cursor.__exit__.return_value = False
+#         cursor.description = []
+#         cursor.fetchall.return_value = []
+#         return cursor
+#
+#     def test_group_ids_passed_as_first_sql_param(self) -> None:
+#         user = User.objects.create_user(username="member3d", password="pw")
+#         req = self._make_request(user)
+#         cursor = self._fake_cursor()
+#
+#         with patch(
+#             "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+#         ), patch(
+#             "web.views.get_accessible_group_ids",
+#             return_value=[self.PUBLIC_ID, self.MEMBER_ID],
+#         ), patch(
+#             "web.views.user_has_group_access", return_value=True
+#         ), patch(
+#             "web.views.connection.cursor", return_value=cursor
+#         ):
+#             views.query_3d(req, "grfnd")
+#
+#         self.assertIn(
+#             "session.group_id IN %s",
+#             cursor.execute.call_args_list[-1].args[0]
+#         )
+#         params = cursor.execute.call_args_list[-1].args[1]
+#         self.assertEqual(set(params[0]), {self.PUBLIC_ID, self.MEMBER_ID})
+#
+#     def test_public_only_user_gets_preview_only(self) -> None:
+#         user = User.objects.create_user(username="public3d", password="pw")
+#         req = self._make_request(user)
+#         cursor = self._fake_cursor()
+#
+#         with patch(
+#             "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+#         ), patch(
+#             "web.views.get_accessible_group_ids", return_value=[self.PUBLIC_ID]
+#         ), patch(
+#             "web.views.user_has_group_access", return_value=False
+#         ), patch(
+#             "web.views.connection.cursor", return_value=cursor
+#         ):
+#             views.query_3d(req, "grfnd")
+#
+#         params = cursor.execute.call_args_list[-1].args[1]
+#         self.assertEqual(set(params[0]), {self.PUBLIC_ID})
+#
+#     def test_member_cannot_see_delson_data_in_3d(self) -> None:
+#         """Group filter must exclude Delson sessions from member queries."""
+#         user = User.objects.create_user(username="member3d_nodelon", password="pw")
+#         req = self._make_request(user)
+#         cursor = self._fake_cursor()
+#         delson_id = 4
+#
+#         with patch(
+#             "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+#         ), patch(
+#             "web.views.get_accessible_group_ids",
+#             return_value=[self.PUBLIC_ID, self.MEMBER_ID],
+#         ), patch(
+#             "web.views.user_has_group_access", return_value=True
+#         ), patch(
+#             "web.views.connection.cursor", return_value=cursor
+#         ):
+#             views.query_3d(req, "grfnd")
+#
+#         params = cursor.execute.call_args_list[-1].args[1]
+#         self.assertNotIn(delson_id, set(params[0]))
 
 
 class SimpleViewsTest(TestCase):
