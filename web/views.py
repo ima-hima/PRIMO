@@ -220,7 +220,7 @@ def backup_table(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "admin/backup.html",
-        {"message": message, "message_class": message_class},
+        {"message": message, "message_class": message_class, "title": "Back Up Table"},
     )
 
 

@@ -5,6 +5,7 @@ from django.urls import include, path
 from web import views
 
 admin.site.site_header = "PRIMO Adminstration"
+admin.site.site_title = "PRIMO"
 # Next default: "Django site admin"
 # admin.site.index_title = 'Features area'
 # Next default: "Django site admin"
