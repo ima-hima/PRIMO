@@ -501,6 +501,129 @@ class BackupTableViewTest(TestCase):
         self.assertNotEqual(response.status_code, 200)
 
 
+class RestoreTableViewTest(TestCase):
+    def setUp(self) -> None:
+        self.staff_user = User.objects.create_user(
+            username="restore_staff", password="pw", is_staff=True
+        )
+        self.regular_user = User.objects.create_user(
+            username="restore_regular", password="pw", is_staff=False
+        )
+        self.backups = {
+            "specimen": [("specimen_20260818_1700", "18th August 2026, 17:00")],
+            "session": [],
+            "data_scalar": [],
+        }
+
+    def test_get_requires_staff(self) -> None:
+        self.client.login(username="restore_regular", password="pw")
+        response = self.client.get(reverse("restore_table"))
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_get_renders_for_staff(self) -> None:
+        self.client.login(username="restore_staff", password="pw")
+        with patch("web.views._get_backups", return_value=self.backups):
+            response = self.client.get(reverse("restore_table"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_post_invalid_backup_shows_error(self) -> None:
+        self.client.login(username="restore_staff", password="pw")
+        with patch("web.views._get_backups", return_value=self.backups):
+            response = self.client.post(
+                reverse("restore_table"), {"backup": "auth_user_20260818_1700"}
+            )
+        self.assertContains(response, "Invalid backup")
+
+    def test_post_valid_backup_shows_confirmation(self) -> None:
+        self.client.login(username="restore_staff", password="pw")
+        with patch("web.views._get_backups", return_value=self.backups):
+            response = self.client.post(
+                reverse("restore_table"), {"backup": "specimen_20260818_1700"}
+            )
+        self.assertContains(response, "Warning")
+        self.assertContains(response, "cannot be undone")
+        self.assertNotContains(response, "Restored")
+
+    def test_post_confirmed_executes_restore(self) -> None:
+        self.client.login(username="restore_staff", password="pw")
+        with patch("web.views._get_backups", return_value=self.backups):
+            with patch("web.views.connection") as mock_conn:
+                mock_cursor = MagicMock()
+                mock_conn.cursor.return_value.__enter__ = MagicMock(
+                    return_value=mock_cursor
+                )
+                mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+                response = self.client.post(
+                    reverse("restore_table"),
+                    {"backup": "specimen_20260818_1700", "confirmed": "1"},
+                )
+        self.assertContains(response, "Restored")
+        calls = [c[0][0] for c in mock_cursor.execute.call_args_list]
+        self.assertTrue(any("DROP TABLE" in c for c in calls))
+        self.assertTrue(any("RENAME TABLE" in c for c in calls))
+
+    def test_post_unauthenticated_redirects(self) -> None:
+        response = self.client.post(
+            reverse("restore_table"), {"backup": "specimen_20260818_1700"}
+        )
+        self.assertNotEqual(response.status_code, 200)
+
+
+class DeleteBackupViewTest(TestCase):
+    def setUp(self) -> None:
+        self.staff_user = User.objects.create_user(
+            username="delete_staff", password="pw", is_staff=True
+        )
+        self.backups = {
+            "specimen": [("specimen_20260818_1700", "18th August 2026, 17:00")],
+            "session": [],
+            "data_scalar": [],
+        }
+
+    def test_post_invalid_backup_shows_error(self) -> None:
+        self.client.login(username="delete_staff", password="pw")
+        with patch("web.views._get_backups", return_value=self.backups):
+            response = self.client.post(
+                reverse("delete_backup"), {"backup": "auth_user_20260818_1700"}
+            )
+        self.assertContains(response, "Invalid backup")
+
+    def test_post_valid_backup_shows_confirmation(self) -> None:
+        self.client.login(username="delete_staff", password="pw")
+        with patch("web.views._get_backups", return_value=self.backups):
+            response = self.client.post(
+                reverse("delete_backup"), {"backup": "specimen_20260818_1700"}
+            )
+        self.assertContains(response, "Warning")
+        self.assertNotContains(response, "Deleted")
+
+    def test_post_confirmed_executes_drop(self) -> None:
+        self.client.login(username="delete_staff", password="pw")
+        with patch("web.views._get_backups", return_value=self.backups):
+            with patch("web.views.connection") as mock_conn:
+                mock_cursor = MagicMock()
+                mock_conn.cursor.return_value.__enter__ = MagicMock(
+                    return_value=mock_cursor
+                )
+                mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+                response = self.client.post(
+                    reverse("delete_backup"),
+                    {"backup": "specimen_20260818_1700", "confirmed": "1"},
+                )
+        self.assertContains(response, "Deleted")
+        call_sql = mock_cursor.execute.call_args[0][0]
+        self.assertIn("DROP TABLE", call_sql)
+        self.assertIn("specimen_20260818_1700", call_sql)
+
+    def test_get_requires_staff(self) -> None:
+        User.objects.create_user(
+            username="delete_regular", password="pw", is_staff=False
+        )
+        self.client.login(username="delete_regular", password="pw")
+        response = self.client.get(reverse("delete_backup"))
+        self.assertNotEqual(response.status_code, 200)
+
+
 class GroupAccessTest(TestCase):
     """Tests for get_accessible_group_ids and user_has_group_access."""
 
