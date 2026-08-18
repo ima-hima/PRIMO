@@ -1,0 +1,19 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Back Up Table</h1>
+{% if message %}
+<p class="{{ message_class }}">{{ message }}</p>
+{% endif %}
+<form method="post">
+    {% csrf_token %}
+    <p>
+        <label for="table">Table:</label>
+        <select name="table" id="table">
+            <option value="specimen">specimen</option>
+            <option value="session">session</option>
+            <option value="data_scalar">data_scalar</option>
+        </select>
+    </p>
+    <p><input type="submit" value="Back up" /></p>
+</form>
+{% endblock %}
