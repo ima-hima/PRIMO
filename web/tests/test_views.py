@@ -199,15 +199,21 @@ class ViewsHelpersTest(TestCase):
         self.assertNotIn("variable.id in %s", three_sql)
         self.assertIn("session.group_id IN %s", three_sql)
 
-    def test_set_up_sql_query_preview_only_does_not_affect_output(self) -> None:
+    def test_set_up_sql_query_limit_to_five_adds_limiting_subquery(self) -> None:
+        limited_sql = views.set_up_sql_query(True, True)
+        unlimited_sql = views.set_up_sql_query(True, False)
+
+        self.assertNotEqual(limited_sql, unlimited_sql)
+        self.assertIn("specimen.id IN (SELECT DISTINCT specimen.id", limited_sql)
+        self.assertIn("ORDER BY specimen.id ASC LIMIT 5", limited_sql)
+        self.assertNotIn("LIMIT 5", unlimited_sql)
+
+    def test_set_up_sql_query_default_is_not_limited(self) -> None:
         self.assertEqual(
-            views.set_up_sql_query(True, True),
+            views.set_up_sql_query(True),
             views.set_up_sql_query(True, False),
         )
-        self.assertEqual(
-            views.set_up_sql_query(False, True),
-            views.set_up_sql_query(False, False),
-        )
+        self.assertNotIn("LIMIT 5", views.set_up_sql_query(False))
 
     def test_init_query_table_and_tabulate_preview_limit(self) -> None:
         keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
@@ -345,6 +351,96 @@ class DownloadAnd3DTest(TestCase):
             self.assertEqual(len(data_row), 1)
             self.assertIn("42", data_row[0])
             self.assertIn("180", data_row[0])
+
+
+class StreamScalarExportTest(TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.mkdtemp(prefix="primo_test_stream_")
+        self.factory = RequestFactory()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_stream_scalar_export_writes_grouped_csv(self) -> None:
+        req = self.factory.get("/")
+        _add_session(req)
+        req.user = AnonymousUser()
+        req.session["table_selections"] = {
+            "sex": [1],
+            "fossil": [1],
+            "taxon": [1],
+            "variable": [1],
+        }
+
+        keys = [k for k, _ in views.get_specimen_metadata("Scalar")]
+        columns = keys + ["variable_label", "scalar_value"]
+
+        def make_row(specimen_id: str, variable_label: str, scalar_value: str) -> tuple:
+            base = tuple(
+                specimen_id if k == "specimen_id" else f"val_{k}" for k in keys
+            )
+            return base + (variable_label, scalar_value)
+
+        label_cursor = MagicMock()
+        label_cursor.__enter__.return_value = label_cursor
+        label_cursor.__exit__.return_value = False
+        label_cursor.fetchall.return_value = [("Weight",), ("Height",)]
+
+        data_cursor = MagicMock()
+        data_cursor.__enter__.return_value = data_cursor
+        data_cursor.__exit__.return_value = False
+        data_cursor.description = [(c,) for c in columns]
+        data_cursor.__iter__.return_value = iter(
+            [
+                make_row("1", "Weight", "42"),
+                make_row("1", "Height", "180"),
+                make_row("2", "Weight", "50"),
+            ]
+        )
+
+        out_file = os.path.join(self.tmpdir, "stream_out.csv")
+        with patch(
+            "web.views.connection.cursor", side_effect=[label_cursor, data_cursor]
+        ), patch("web.views.get_accessible_group_ids", return_value=[1]):
+            views.stream_scalar_export(req, out_file)
+
+        content = open(out_file).read()
+        lines = [line for line in content.splitlines() if line]
+        self.assertEqual(len(lines), 3)  # header + specimen 1 + specimen 2
+        specimen1_line = [line for line in lines if line.startswith("1,")][0]
+        specimen2_line = [line for line in lines if line.startswith("2,")][0]
+        self.assertIn("42", specimen1_line)
+        self.assertIn("180", specimen1_line)
+        self.assertIn("50", specimen2_line)
+
+
+class ExportAccessGateTest(TestCase):
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+
+    def _make_request(self) -> HttpRequest:
+        req = self.factory.get("/")
+        _add_session(req)
+        req.user = AnonymousUser()
+        return req
+
+    def test_export_forbidden_for_preview_only_user(self) -> None:
+        req = self._make_request()
+        with patch("web.views.user_has_group_access", return_value=False):
+            response = views.export(req, "Scalar")
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_proceeds_for_full_access_user(self) -> None:
+        req = self._make_request()
+        req.session["scalar_or_3d"] = "Scalar"
+        with patch("web.views.user_has_group_access", return_value=True), patch(
+            "web.views.set_up_download", return_value=("", "out.csv")
+        ), patch("web.views.stream_scalar_export") as mock_stream, patch(
+            "web.views.download", return_value=HttpResponse("ok")
+        ):
+            response = views.export(req, "Scalar")
+        mock_stream.assert_called_once()
+        self.assertEqual(response.status_code, 200)
 
 
 class DownloadViewTest(TestCase):
@@ -771,6 +867,45 @@ class ExecuteQueryGroupFilterTest(TestCase):
         self.assertIn("`specimen_id` ASC", sql_query)
         _, params = main_call.args
         self.assertEqual(set(params[0]), {self.PUBLIC_ID})
+
+    def test_limit_to_five_limits_sql_and_doubles_params(self) -> None:
+        user = User.objects.create_user(username="member2", password="pw")
+        req = self._make_request(user)
+        cursor = self._fake_cursor()
+
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids",
+            return_value=[self.PUBLIC_ID],
+        ), patch("web.views.connection.cursor", return_value=cursor):
+            sql_query, _ = views.execute_query(req, "Scalar", limit_to_five=True)
+
+        self.assertIn("LIMIT 5", sql_query)
+        main_call = cursor.execute.call_args_list[-1]
+        _, params = main_call.args
+        # The WHERE clause (and its params) appear twice: once for the main
+        # query, once inside the specimen-limiting subquery.
+        self.assertEqual(len(params), 10)
+        self.assertEqual(params[:5], params[5:])
+
+    def test_default_query_is_not_limited(self) -> None:
+        user = User.objects.create_user(username="member3", password="pw")
+        req = self._make_request(user)
+        cursor = self._fake_cursor()
+
+        with patch(
+            "web.views._get_public_group_id", return_value=self.PUBLIC_ID
+        ), patch(
+            "web.views.get_accessible_group_ids",
+            return_value=[self.PUBLIC_ID],
+        ), patch("web.views.connection.cursor", return_value=cursor):
+            sql_query, _ = views.execute_query(req, "Scalar")
+
+        self.assertNotIn("LIMIT 5", sql_query)
+        main_call = cursor.execute.call_args_list[-1]
+        _, params = main_call.args
+        self.assertEqual(len(params), 5)
 
 
 # class ExecuteQuery3DGroupFilterTest(TestCase):
