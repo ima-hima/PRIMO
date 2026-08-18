@@ -1,0 +1,53 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+{% if message %}
+<p class="{{ message_class }}">{{ message }}</p>
+{% endif %}
+
+{% if confirm_backup %}
+<div class="errornote">
+{% if confirm_action == "restore" %}
+    <p><strong>Warning:</strong> This will permanently drop the current <strong>{{ confirm_table }}</strong> table and replace it with the backup from <strong>{{ confirm_label }}</strong>. This cannot be undone.</p>
+    <form method="post" action="{% url 'restore_table' %}">
+{% else %}
+    <p><strong>Warning:</strong> This will permanently delete the <strong>{{ confirm_table }}</strong> backup from <strong>{{ confirm_label }}</strong>. This cannot be undone.</p>
+    <form method="post" action="{% url 'delete_backup' %}">
+{% endif %}
+        {% csrf_token %}
+        <input type="hidden" name="backup" value="{{ confirm_backup }}" />
+        <input type="hidden" name="confirmed" value="1" />
+        <input type="submit" value="Yes, {{ confirm_action }}" />
+        &nbsp;<a href="{% url 'restore_table' %}">Cancel</a>
+    </form>
+</div>
+{% else %}
+<table>
+    <thead>
+        <tr><th>Table</th><th>Backup</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for table, backup_list in backups.items %}
+    <tr>
+        <td>{{ table }}</td>
+        <td>
+            {% if backup_list %}
+            <form id="actions-{{ table }}" method="post">
+                {% csrf_token %}
+                <select name="backup">
+                    {% for name, label in backup_list %}
+                    <option value="{{ name }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <input type="submit" value="Restore" formaction="{% url 'restore_table' %}" />
+                <input type="submit" value="Delete" formaction="{% url 'delete_backup' %}" />
+            </form>
+            {% else %}
+            <em>No backups</em>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

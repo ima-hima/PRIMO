@@ -196,6 +196,146 @@ def download_success(request: HttpRequest) -> HttpResponse:
 BACKUP_TABLES = {"specimen", "session", "data_scalar"}
 
 
+def _get_backups() -> dict[str, list[tuple[str, str]]]:
+    """Return {base_table: [(backup_name, label), ...]} sorted newest-first."""
+    import re
+
+    pattern = re.compile(r"^(.+)_(\d{8})_(\d{4})$")
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW TABLES")
+        all_tables = [row[0] for row in cursor.fetchall()]
+    backups: dict[str, list[tuple[str, str]]] = {t: [] for t in BACKUP_TABLES}
+    for name in all_tables:
+        m = pattern.match(name)
+        if m and m.group(1) in BACKUP_TABLES:
+            try:
+                dt = datetime.strptime(f"{m.group(2)}_{m.group(3)}", "%Y%m%d_%H%M")
+                label = dt.strftime("%-d %B %Y, %H:%M").replace(
+                    dt.strftime("%-d"), _ordinal(dt.day), 1
+                )
+            except ValueError:
+                label = name
+            backups[m.group(1)].append((name, label))
+    for pairs in backups.values():
+        pairs.sort(key=lambda x: x[0], reverse=True)
+    return backups
+
+
+def _ordinal(n: int) -> str:
+    suffix = (
+        "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    )
+    return f"{n}{suffix}"
+
+
+@staff_member_required
+def delete_backup(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    confirm_backup = None
+    confirm_table = None
+    confirm_label = None
+
+    if request.method == "POST":
+        backup_name = request.POST.get("backup", "")
+        import re
+
+        m = re.match(r"^(.+)_\d{8}_\d{4}$", backup_name)
+        if not m or m.group(1) not in BACKUP_TABLES:
+            message = f"Invalid backup: {backup_name}"
+            message_class = "errornote"
+        elif request.POST.get("confirmed") == "1":
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"DROP TABLE `{backup_name}`")
+                message = f"Deleted backup: {backup_name}"
+            except Exception as e:
+                message = f"Delete failed: {e}"
+                message_class = "errornote"
+        else:
+            confirm_backup = backup_name
+            confirm_table = m.group(1)
+            try:
+                dt = datetime.strptime(
+                    backup_name[len(confirm_table) + 1 :], "%Y%m%d_%H%M"
+                )
+                confirm_label = dt.strftime("%-d %B %Y, %H:%M").replace(
+                    dt.strftime("%-d"), _ordinal(dt.day), 1
+                )
+            except ValueError:
+                confirm_label = backup_name
+
+    return render(
+        request,
+        "admin/restore.html",
+        {
+            "message": message,
+            "message_class": message_class,
+            "title": "Restore / Delete Backups",
+            "backups": _get_backups(),
+            "confirm_backup": confirm_backup,
+            "confirm_table": confirm_table if confirm_backup else None,
+            "confirm_label": confirm_label,
+            "confirm_action": "delete",
+        },
+    )
+
+
+@staff_member_required
+def restore_table(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    confirm_backup = None
+    confirm_table = None
+    confirm_label = None
+
+    if request.method == "POST":
+        backup_name = request.POST.get("backup", "")
+        import re
+
+        m = re.match(r"^(.+)_\d{8}_\d{4}$", backup_name)
+        if not m or m.group(1) not in BACKUP_TABLES:
+            message = f"Invalid backup: {backup_name}"
+            message_class = "errornote"
+        elif request.POST.get("confirmed") == "1":
+            table = m.group(1)
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"DROP TABLE `{table}`")
+                    cursor.execute(f"RENAME TABLE `{backup_name}` TO `{table}`")
+                message = f"Restored {backup_name} to {table}"
+            except Exception as e:
+                message = f"Restore failed: {e}"
+                message_class = "errornote"
+        else:
+            confirm_backup = backup_name
+            confirm_table = m.group(1)
+            try:
+                dt = datetime.strptime(
+                    backup_name[len(confirm_table) + 1 :], "%Y%m%d_%H%M"
+                )
+                confirm_label = dt.strftime("%-d %B %Y, %H:%M").replace(
+                    dt.strftime("%-d"), _ordinal(dt.day), 1
+                )
+            except ValueError:
+                confirm_label = backup_name
+
+    return render(
+        request,
+        "admin/restore.html",
+        {
+            "message": message,
+            "message_class": message_class,
+            "title": "Restore Table",
+            "backups": _get_backups(),
+            "confirm_backup": confirm_backup,
+            "confirm_table": confirm_table,
+            "confirm_label": confirm_label,
+            "confirm_action": "restore",
+        },
+    )
+
+
 @staff_member_required
 def backup_table(request: HttpRequest) -> HttpResponse:
     message = None
