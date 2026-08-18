@@ -457,6 +457,51 @@ class PreviewUserTest(TestCase):
         self.assertEqual(len(tabulate_scalar(rows, preview_only=False)), 20)
 
 
+class BackupTableViewTest(TestCase):
+    def setUp(self) -> None:
+        self.staff_user = User.objects.create_user(
+            username="staff", password="pw", is_staff=True
+        )
+        self.regular_user = User.objects.create_user(
+            username="regular", password="pw", is_staff=False
+        )
+
+    def test_get_requires_staff(self) -> None:
+        self.client.login(username="regular", password="pw")
+        response = self.client.get(reverse("backup_table"))
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_get_renders_form_for_staff(self) -> None:
+        self.client.login(username="staff", password="pw")
+        response = self.client.get(reverse("backup_table"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_post_invalid_table_shows_error(self) -> None:
+        self.client.login(username="staff", password="pw")
+        response = self.client.post(reverse("backup_table"), {"table": "auth_user"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid table")
+
+    def test_post_valid_table_creates_backup(self) -> None:
+        self.client.login(username="staff", password="pw")
+        with patch("web.views.connection") as mock_conn:
+            mock_cursor = MagicMock()
+            mock_conn.cursor.return_value.__enter__ = MagicMock(
+                return_value=mock_cursor
+            )
+            mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+            response = self.client.post(reverse("backup_table"), {"table": "specimen"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Backup created")
+        call_sql = mock_cursor.execute.call_args[0][0]
+        self.assertIn("specimen_", call_sql)
+        self.assertIn("CREATE TABLE", call_sql)
+
+    def test_post_unauthenticated_redirects(self) -> None:
+        response = self.client.post(reverse("backup_table"), {"table": "specimen"})
+        self.assertNotEqual(response.status_code, 200)
+
+
 class GroupAccessTest(TestCase):
     """Tests for get_accessible_group_ids and user_has_group_access."""
 
