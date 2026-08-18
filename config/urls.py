@@ -5,6 +5,7 @@ from django.urls import include, path
 from web import views
 
 admin.site.site_header = "PRIMO Adminstration"
+admin.site.site_title = "PRIMO"
 # Next default: "Django site admin"
 # admin.site.index_title = 'Features area'
 # Next default: "Django site admin"
@@ -12,6 +13,7 @@ admin.site.site_header = "PRIMO Adminstration"
 
 urlpatterns = [
     path("", views.IndexView.as_view(), name="index"),
+    path("admin/backup/", views.backup_table, name="backup_table"),
     path("admin/", admin.site.urls, name="admin"),
     path("email/", views.email, name="email"),
     path("entity_relation_diagram/", views.entity_relation_diagram, name="erd"),

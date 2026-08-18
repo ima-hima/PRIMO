@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Tuple, cast
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import (
@@ -190,6 +191,37 @@ def download_success(request: HttpRequest) -> HttpResponse:
     """TODO: Is this in use?"""
     request.session["page_title"] = "Download Success"
     return render(request, "web/download_success.jinja", {})
+
+
+BACKUP_TABLES = {"specimen", "session", "data_scalar"}
+
+
+@staff_member_required
+def backup_table(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    if request.method == "POST":
+        table = request.POST.get("table", "")
+        if table not in BACKUP_TABLES:
+            message = f"Invalid table: {table}"
+            message_class = "errornote"
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+            backup_name = f"{table}_{timestamp}"
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"CREATE TABLE `{backup_name}` AS SELECT * FROM `{table}`"
+                    )
+                message = f"Backup created: {backup_name}"
+            except Exception as e:
+                message = f"Backup failed: {e}"
+                message_class = "errornote"
+    return render(
+        request,
+        "admin/backup.html",
+        {"message": message, "message_class": message_class, "title": "Back Up Table"},
+    )
 
 
 def email(request: HttpRequest) -> HttpResponse:
