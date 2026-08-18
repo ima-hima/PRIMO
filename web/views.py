@@ -18,7 +18,7 @@ from django.contrib.auth.models import (
 )
 from django.core.files import File
 from django.db import connection
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
@@ -89,6 +89,65 @@ def collate_metadata(
                     {"missing_pts": request.session["missing_pts"][row["specimen_id"]]}
                 )
             writer.writerow(in_dict)
+
+
+def stream_scalar_export(request: HttpRequest, output_file_name: str) -> None:
+    """
+    Run the (unbounded) scalar query and write the CSV directly as rows are
+    fetched, instead of first collecting the full result set into a list
+    (as collate_metadata/tabulate_scalar do). Rows are grouped into one CSV
+    row per specimen as they arrive, relying on the query's
+    `ORDER BY specimen_id` so a specimen's rows are never split across
+    groups.
+    """
+    with connection.cursor() as variable_query:
+        variable_query.execute(
+            "SELECT label "
+            "  FROM variable "
+            " WHERE variable.id "
+            "    IN %s "
+            "ORDER BY label ASC;",
+            [request.session["table_selections"]["variable"]],
+        )
+        request.session["variable_labels"] = [
+            label[0] for label in variable_query.fetchall()
+        ]
+
+    sql_query = set_up_sql_query(True)
+    params = [
+        get_accessible_group_ids(request.user),
+        request.session["table_selections"]["sex"],
+        request.session["table_selections"]["fossil"],
+        request.session["table_selections"]["taxon"],
+        request.session["table_selections"]["variable"],
+    ]
+
+    meta_names = [m[0] for m in get_specimen_metadata("Scalar")]
+    variable_names = request.session["variable_labels"]
+    headers = {m[0]: m[1] for m in get_specimen_metadata("Scalar")}
+    headers.update({v: v for v in variable_names})
+
+    with open(output_file_name, "w", newline="") as f:
+        writer = DictWriter(
+            File(f), fieldnames=meta_names + variable_names, extrasaction="ignore"
+        )
+        writer.writerow(headers)
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query, params)
+            columns = [col[0] for col in cursor.description]
+            current_specimen = None
+            current_dict: Dict[str, str] | None = None
+            for db_row in cursor:
+                row = dict(zip(columns, db_row))
+                if row["specimen_id"] != current_specimen:
+                    if current_dict is not None:
+                        writer.writerow(current_dict)
+                    current_dict = init_query_table("Scalar", row)
+                    current_specimen = row["specimen_id"]
+                current_dict[row["variable_label"]] = row["scalar_value"]
+            if current_dict is not None:
+                writer.writerow(current_dict)
 
 
 # def concat_variable_list(myList):
@@ -208,10 +267,21 @@ def entity_relation_diagram(request: HttpRequest) -> HttpResponse:
 def export(
     request: HttpRequest, scalar_or_3d: str, which_3d_output_type: str = ""
 ) -> HttpResponse:
-    _, query_results = execute_query(request, scalar_or_3d)
+    if not user_has_group_access(request.user):
+        return HttpResponseForbidden(
+            "Full downloads are only available to logged-in members. "
+            "Preview-only accounts are limited to the five-specimen preview."
+        )
 
     directory_name, file_to_download = set_up_download(request)
-    collate_metadata(request, query_results, directory_name, file_to_download)
+    if scalar_or_3d.lower() == "scalar":
+        output_file_name = path.join(
+            settings.DOWNLOAD_ROOT, directory_name, file_to_download
+        )
+        stream_scalar_export(request, output_file_name)
+    else:
+        _, query_results = execute_query(request, scalar_or_3d)
+        collate_metadata(request, query_results, directory_name, file_to_download)
     request.session["page_title"] = f"PRIMO Download {scalar_or_3d} Data"
     return download(scalar_or_3d, directory_name, file_to_download)
 
@@ -223,6 +293,16 @@ def create_3d_output_string(
     Collate data returned from 3D SQL query.
     Print out two files: a csv of metadata and a GRFND file. Fields
     included in metadata are enumerated below.
+
+    NOTE: unlike the scalar export path (see stream_scalar_export), this
+    builds the entire output_str in memory before writing it out, and its
+    caller (query_3d, currently disabled/commented out above) fetches the
+    full 3D result set via a single unbounded cursor.fetchall(). 3D isn't
+    exposed via any URL right now, so this hasn't caused problems, but if
+    3D querying/export is reintroduced, it will need the same large-result
+    treatment as the scalar path (SQL-level limiting for previews, streaming
+    the query/write for downloads) or it can reintroduce the original
+    "large query overloads the request" problem this issue was about.
     """
 
     newline_char = request.session["newline_char"]
@@ -693,7 +773,7 @@ def user_has_group_access(user: AbstractBaseUser | AnonymousUser) -> bool:
 
 
 def execute_query(
-    request: HttpRequest, scalar_or_3d: str
+    request: HttpRequest, scalar_or_3d: str, limit_to_five: bool = False
 ) -> Tuple[str, List[Dict[Any, Any]]]:
     """Set up the query SQL. Do query. Call result table display."""
     if scalar_or_3d.lower() == "scalar":
@@ -711,21 +791,23 @@ def execute_query(
             ]
 
     group_ids = get_accessible_group_ids(request.user)
-    preview_only = not user_has_group_access(request.user)
 
-    sql_query = set_up_sql_query(True, preview_only)
+    sql_query = set_up_sql_query(True, limit_to_five)
+
+    params = [
+        group_ids,
+        request.session["table_selections"]["sex"],
+        request.session["table_selections"]["fossil"],
+        request.session["table_selections"]["taxon"],
+        request.session["table_selections"]["variable"],
+    ]
+    if limit_to_five:
+        # The limiting subquery embeds a second copy of the WHERE clause
+        # (see set_up_sql_query), so its params need to appear again too.
+        params = params * 2
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            sql_query,
-            [
-                group_ids,
-                request.session["table_selections"]["sex"],
-                request.session["table_selections"]["fossil"],
-                request.session["table_selections"]["taxon"],
-                request.session["table_selections"]["variable"],
-            ],
-        )
+        cursor.execute(sql_query, params)
         columns = [col[0] for col in cursor.description]
         return sql_query, [dict(zip(columns, row)) for row in cursor.fetchall()]
 
@@ -734,7 +816,9 @@ def preview(request: HttpRequest) -> HttpResponse:
     """Set up the scalar query SQL. Do query. Call result table display."""
     request.session["page_title"] = f"{request.session['scalar_or_3d']} Results Preview"
 
-    sql_query, query_results = execute_query(request, request.session["scalar_or_3d"])
+    sql_query, query_results = execute_query(
+        request, request.session["scalar_or_3d"], limit_to_five=True
+    )
 
     are_results = True
     tabulated_query_results = tabulate_scalar(
@@ -752,6 +836,9 @@ def preview(request: HttpRequest) -> HttpResponse:
     ]
     if request.session["scalar_or_3d"].lower() == "scalar":
         submission_values.append(request.session["table_selections"]["variable"])
+    # sql_query embeds the WHERE clause (and its %s placeholders) twice when
+    # limit_to_five is used (see set_up_sql_query), so double these too.
+    submission_values = submission_values * 2
     context = {
         "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,
@@ -790,8 +877,12 @@ def query_start(request: HttpRequest) -> HttpResponse:
     return render(request, "web/query_start.jinja")
 
 
-def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
-    """Create an SQL query for either 3D or scalar data."""
+def set_up_sql_query(is_scalar: bool, limit_to_five: bool = False) -> str:
+    """
+    Create an SQL query for either 3D or scalar data. If limit_to_five,
+    restrict to the first five specimens (by id) matching the filters,
+    at the database level, instead of fetching every matching row.
+    """
 
     # This is okay to include in publicly-available code (i.e. git), because
     # the database structure diagram is already published on the website anyway.
@@ -882,6 +973,18 @@ def set_up_sql_query(is_scalar: bool, preview_only: bool) -> str:
     )
 
     ordering = "ORDER BY `specimen_id` ASC"
+
+    if limit_to_five:
+        # Scalar rows are one-per-variable, so a plain SQL LIMIT on the main
+        # query could cut a specimen off mid-variable-list. Instead, limit
+        # the specimen ids up front to the first five matching specimens,
+        # and restrict the main query to just those ids.
+        limiting_subquery = (
+            f"SELECT DISTINCT specimen.id {from_start} {joins} {where} "
+            "ORDER BY specimen.id ASC LIMIT 5"
+        )
+        where = f"{where} AND specimen.id IN ({limiting_subquery})"
+
     return f"{select_start} {select_common} {from_start} {joins} {where} {ordering};"
 
 
@@ -1043,7 +1146,6 @@ def tabulate_scalar(
             # having to do constant conditionals.
             current_dict[row["variable_label"]] = row["scalar_value"]
             current_specimen = row["specimen_id"]
-        # TODO: Figure out SQL so we don't have to do entire query and cull it here.
         if preview_only and num_specimens >= 5:
             break
     output.append(current_dict)
