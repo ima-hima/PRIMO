@@ -1,3 +1,4 @@
+import io
 import os
 import shutil
 import tempfile
@@ -553,6 +554,74 @@ class PreviewUserTest(TestCase):
             rows.append(row)
         self.assertEqual(len(tabulate_scalar(rows, preview_only=True)), 5)
         self.assertEqual(len(tabulate_scalar(rows, preview_only=False)), 20)
+
+
+class UploadCsvViewTest(TestCase):
+    def setUp(self) -> None:
+        self.staff_user = User.objects.create_user(
+            username="upload_staff", password="pw", is_staff=True
+        )
+        self.regular_user = User.objects.create_user(
+            username="upload_regular", password="pw", is_staff=False
+        )
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmpdir)
+
+    def _csv_file(self, name: str = "test.csv") -> io.BytesIO:
+        f = io.BytesIO(b"id,value\n1,2\n")
+        f.name = name
+        return f
+
+    def test_get_requires_staff(self) -> None:
+        self.client.login(username="upload_regular", password="pw")
+        response = self.client.get(reverse("upload_csv"))
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_get_renders_for_staff(self) -> None:
+        self.client.login(username="upload_staff", password="pw")
+        response = self.client.get(reverse("upload_csv"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_post_invalid_table_shows_error(self) -> None:
+        self.client.login(username="upload_staff", password="pw")
+        with self.settings(DOWNLOAD_ROOT=self.tmpdir):
+            response = self.client.post(
+                reverse("upload_csv"),
+                {"table": "specimen", "csv_file": self._csv_file()},
+            )
+        self.assertContains(response, "Invalid table")
+
+    def test_post_no_file_shows_error(self) -> None:
+        self.client.login(username="upload_staff", password="pw")
+        with self.settings(DOWNLOAD_ROOT=self.tmpdir):
+            response = self.client.post(reverse("upload_csv"), {"table": "session"})
+        self.assertContains(response, "No file selected")
+
+    def test_post_non_csv_shows_error(self) -> None:
+        self.client.login(username="upload_staff", password="pw")
+        f = io.BytesIO(b"data")
+        f.name = "test.txt"
+        with self.settings(DOWNLOAD_ROOT=self.tmpdir):
+            response = self.client.post(
+                reverse("upload_csv"), {"table": "session", "csv_file": f}
+            )
+        self.assertContains(response, "must be a CSV")
+
+    def test_post_valid_file_succeeds_and_is_deleted(self) -> None:
+        self.client.login(username="upload_staff", password="pw")
+        with self.settings(DOWNLOAD_ROOT=self.tmpdir):
+            response = self.client.post(
+                reverse("upload_csv"),
+                {"table": "session", "csv_file": self._csv_file()},
+            )
+        self.assertContains(response, "received successfully")
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, "test.csv")))
+
+    def test_post_unauthenticated_redirects(self) -> None:
+        response = self.client.post(reverse("upload_csv"), {"table": "session"})
+        self.assertNotEqual(response.status_code, 200)
 
 
 class BackupTableViewTest(TestCase):
