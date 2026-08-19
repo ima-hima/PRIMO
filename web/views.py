@@ -19,7 +19,12 @@ from django.contrib.auth.models import (
 )
 from django.core.files import File
 from django.db import connection
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseForbidden
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseForbidden,
+)
 from django.shortcuts import redirect, render
 from django.utils.encoding import smart_str
 from django.views.generic import TemplateView
@@ -146,6 +151,7 @@ def stream_scalar_export(request: HttpRequest, output_file_name: str) -> None:
                         writer.writerow(current_dict)
                     current_dict = init_query_table("Scalar", row)
                     current_specimen = row["specimen_id"]
+                assert current_dict is not None
                 current_dict[row["variable_label"]] = row["scalar_value"]
             if current_dict is not None:
                 writer.writerow(current_dict)
@@ -772,7 +778,7 @@ def parameter_selection(request: HttpRequest, current_table: str = "") -> HttpRe
                 .objects.values(
                     "variable_name",
                     "label",
-                    "bodypart_variable__bodypart_id",
+                    "bodypartvariable__bodypart_id",
                 )
                 .all()
             )
@@ -999,9 +1005,23 @@ def preview(request: HttpRequest) -> HttpResponse:
     )
 
     are_results = bool(tabulated_query_results)
+
+    group_ids = get_accessible_group_ids(request.user)
+    count_params = [
+        group_ids,
+        request.session["table_selections"]["sex"],
+        request.session["table_selections"]["fossil"],
+        request.session["table_selections"]["taxon"],
+        request.session["table_selections"]["variable"],
+    ]
+    count_sql = set_up_sql_query(True, count_only=True)
+    with connection.cursor() as cursor:
+        cursor.execute(count_sql, count_params)
+        total_specimens: int = cursor.fetchone()[0]
+
     # This is for use in export_csv_file().
     submission_values = [
-        get_accessible_group_ids(request.user),
+        group_ids,
         request.session["table_selections"]["sex"],
         request.session["table_selections"]["fossil"],
         request.session["table_selections"]["taxon"],
@@ -1014,7 +1034,7 @@ def preview(request: HttpRequest) -> HttpResponse:
     context = {
         "final_sql": sql_query.replace("%s", "{}").format(*submission_values),
         "are_results": are_results,
-        "total_specimens": len(tabulated_query_results),
+        "total_specimens": total_specimens,
         "preview_only": not user_has_group_access(request.user),
         "specimen_metadata": get_specimen_metadata(request.session["scalar_or_3d"]),
         "user": request.user.username,
@@ -1024,7 +1044,6 @@ def preview(request: HttpRequest) -> HttpResponse:
         context["variable_labels"] = request.session["variable_labels"]
         context["variable_ids"] = request.session["table_selections"]["variable"]
         context["query_results"] = tabulated_query_results
-        context["total_specimens"] = len(tabulated_query_results)
     else:
         # This is a list of all the session that will be returned from the query
         # so I can send it to `get_3D_data()` for a second query to get the actual data.
@@ -1049,7 +1068,9 @@ def query_start(request: HttpRequest) -> HttpResponse:
     return render(request, "web/query_start.jinja")
 
 
-def set_up_sql_query(is_scalar: bool, limit_to_five: bool = False) -> str:
+def set_up_sql_query(
+    is_scalar: bool, limit_to_five: bool = False, count_only: bool = False
+) -> str:
     """
     Create an SQL query for either 3D or scalar data. If limit_to_five,
     restrict to the first five specimens (by id) matching the filters,
@@ -1146,6 +1167,9 @@ def set_up_sql_query(is_scalar: bool, limit_to_five: bool = False) -> str:
 
     ordering = "ORDER BY `specimen_id` ASC"
 
+    if count_only:
+        return f"SELECT COUNT(DISTINCT specimen.id) {from_start} {joins} {where};"
+
     if limit_to_five:
         # Scalar rows are one-per-variable, so a plain SQL LIMIT on the main
         # query could cut a specimen off mid-variable-list. Instead, limit
@@ -1155,7 +1179,10 @@ def set_up_sql_query(is_scalar: bool, limit_to_five: bool = False) -> str:
             f"SELECT DISTINCT specimen.id {from_start} {joins} {where} "
             "ORDER BY specimen.id ASC LIMIT 5"
         )
-        where = f"{where} AND specimen.id IN ({limiting_subquery})"
+        where = (
+            f"{where} AND specimen.id IN (SELECT id FROM "
+            f"({limiting_subquery}) AS _preview)"
+        )
 
     return f"{select_start} {select_common} {from_start} {joins} {where} {ordering};"
 
