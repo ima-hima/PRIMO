@@ -204,7 +204,9 @@ class ViewsHelpersTest(TestCase):
         unlimited_sql = views.set_up_sql_query(True, False)
 
         self.assertNotEqual(limited_sql, unlimited_sql)
-        self.assertIn("specimen.id IN (SELECT DISTINCT specimen.id", limited_sql)
+        self.assertIn(
+            "specimen.id IN (SELECT id FROM (SELECT DISTINCT specimen.id", limited_sql
+        )
         self.assertIn("ORDER BY specimen.id ASC LIMIT 5", limited_sql)
         self.assertNotIn("LIMIT 5", unlimited_sql)
 
@@ -878,7 +880,9 @@ class ExecuteQueryGroupFilterTest(TestCase):
         ), patch(
             "web.views.get_accessible_group_ids",
             return_value=[self.PUBLIC_ID],
-        ), patch("web.views.connection.cursor", return_value=cursor):
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
             sql_query, _ = views.execute_query(req, "Scalar", limit_to_five=True)
 
         self.assertIn("LIMIT 5", sql_query)
@@ -899,7 +903,9 @@ class ExecuteQueryGroupFilterTest(TestCase):
         ), patch(
             "web.views.get_accessible_group_ids",
             return_value=[self.PUBLIC_ID],
-        ), patch("web.views.connection.cursor", return_value=cursor):
+        ), patch(
+            "web.views.connection.cursor", return_value=cursor
+        ):
             sql_query, _ = views.execute_query(req, "Scalar")
 
         self.assertNotIn("LIMIT 5", sql_query)
