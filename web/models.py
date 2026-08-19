@@ -163,6 +163,7 @@ class Data3D(models.Model):
         max_digits=8,
         default=9999.0000,
     )
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "data_3d"
@@ -176,6 +177,7 @@ class DataScalar(models.Model):
     session = models.ForeignKey("Session", on_delete=models.PROTECT)
     variable = models.ForeignKey("Variable", on_delete=models.PROTECT)
     value = models.CharField(max_length=10, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "data_scalar"
@@ -705,6 +707,7 @@ class Specimen(models.Model):
         default=7,
     )
     comments = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return self.hypocode
