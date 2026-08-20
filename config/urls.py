@@ -15,6 +15,9 @@ urlpatterns = [
     path("", views.IndexView.as_view(), name="index"),
     path("admin/backup/", views.backup_table, name="backup_table"),
     path("admin/upload/", views.upload_csv, name="upload_csv"),
+    path(
+        "admin/upload/status/<str:job_id>/", views.upload_status, name="upload_status"
+    ),
     path("admin/restore/", views.restore_table, name="restore_table"),
     path("admin/delete-backup/", views.delete_backup, name="delete_backup"),
     path("admin/", admin.site.urls, name="admin"),
