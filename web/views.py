@@ -2,7 +2,7 @@ import json
 import subprocess
 from csv import DictWriter
 from datetime import datetime
-from os import mkdir, path
+from os import mkdir, path, remove
 from typing import Any, Dict, List, Tuple, cast
 
 from django.apps import apps
@@ -259,6 +259,7 @@ def download_success(request: HttpRequest) -> HttpResponse:
 
 
 BACKUP_TABLES = {"specimen", "session", "data_scalar"}
+UPLOAD_TABLES = {"session", "data_scalar"}
 
 
 def _get_backups() -> dict[str, list[tuple[str, str]]]:
@@ -398,6 +399,41 @@ def restore_table(request: HttpRequest) -> HttpResponse:
             "confirm_label": confirm_label,
             "confirm_action": "restore",
         },
+    )
+
+
+@staff_member_required
+def upload_csv(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    if request.method == "POST":
+        table = request.POST.get("table", "")
+        csv_file = request.FILES.get("csv_file")
+        if table not in UPLOAD_TABLES:
+            message = f"Invalid table: {table}"
+            message_class = "errornote"
+        elif not csv_file:
+            message = "No file selected."
+            message_class = "errornote"
+        elif not csv_file.name or not csv_file.name.endswith(".csv"):
+            message = "File must be a CSV."
+            message_class = "errornote"
+        else:
+            filename: str = csv_file.name
+            tmp_path = path.join(settings.DOWNLOAD_ROOT, filename)
+            try:
+                with open(tmp_path, "wb") as f:
+                    for chunk in csv_file.chunks():
+                        f.write(chunk)
+                remove(tmp_path)
+                message = f"File '{filename}' received successfully."
+            except Exception as e:
+                message = f"Upload failed: {e}"
+                message_class = "errornote"
+    return render(
+        request,
+        "admin/upload.html",
+        {"message": message, "message_class": message_class, "title": "Update Tables"},
     )
 
 
