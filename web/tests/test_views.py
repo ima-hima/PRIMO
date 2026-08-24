@@ -609,15 +609,15 @@ class UploadCsvViewTest(TestCase):
             )
         self.assertContains(response, "must be a CSV")
 
-    def test_post_valid_file_succeeds_and_is_deleted(self) -> None:
+    def test_post_valid_file_redirects_to_status(self) -> None:
         self.client.login(username="upload_staff", password="pw")
         with self.settings(DOWNLOAD_ROOT=self.tmpdir):
             response = self.client.post(
                 reverse("upload_csv"),
                 {"table": "session", "csv_file": self._csv_file()},
             )
-        self.assertContains(response, "received successfully")
-        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, "test.csv")))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/upload/status/", response["Location"])
 
     def test_post_unauthenticated_redirects(self) -> None:
         response = self.client.post(reverse("upload_csv"), {"table": "session"})

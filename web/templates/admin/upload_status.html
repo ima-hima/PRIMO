@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="status-container">
+{% if job.done %}
+    {% if job.success %}
+    <p class="success">Script completed successfully.</p>
+    {% else %}
+    <p class="errornote">Script completed with errors.</p>
+    {% endif %}
+    {% if job.errors %}
+    <h3>Output{% if job.truncated %} (first {{ job.errors|length }} of {{ job.total_errors }} lines){% endif %}</h3>
+    <pre>{% for line in job.errors %}{{ line }}
+{% endfor %}</pre>
+    {% else %}
+    <p>No output.</p>
+    {% endif %}
+    <p><a href="{% url 'upload_csv' %}">Upload another file</a></p>
+{% else %}
+    <p>Processing… <span id="spinner">⏳</span></p>
+    <script>
+    (function poll() {
+        fetch(window.location.href, {headers: {Accept: "application/json"}})
+            .then(r => r.json())
+            .then(function(job) {
+                if (job.done) { location.reload(); }
+                else { setTimeout(poll, 2000); }
+            })
+            .catch(function() { setTimeout(poll, 2000); });
+    })();
+    </script>
+{% endif %}
+</div>
+{% endblock %}

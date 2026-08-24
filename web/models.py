@@ -501,10 +501,10 @@ class Session(models.Model):
         on_delete=models.PROTECT,
         verbose_name="Original or Cast",
     )
-    iteration = models.IntegerField(blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
     filename = models.CharField(max_length=255, blank=True, null=True)
     group = models.ForeignKey(Group, default=3, on_delete=models.PROTECT)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return str(self.id)

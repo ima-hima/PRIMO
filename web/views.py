@@ -1,5 +1,7 @@
 import json
 import subprocess
+import threading
+import uuid
 from csv import DictWriter
 from datetime import datetime
 from os import mkdir, path, remove
@@ -402,6 +404,63 @@ def restore_table(request: HttpRequest) -> HttpResponse:
     )
 
 
+_jobs: Dict[str, Dict[str, Any]] = {}
+_MAX_ERRORS = 25
+_SCRIPTS_DIR = path.join(path.dirname(path.dirname(path.abspath(__file__))), "scripts")
+
+
+def _run_script(job_id: str, table: str, csv_path: str) -> None:
+    script = path.join(_SCRIPTS_DIR, "create_teeth_scalar.py")
+    sess_path = csv_path + ".sess.csv"
+    scalar_path = csv_path + ".scalar.csv"
+    error_file = path.join(_SCRIPTS_DIR, "csvs", "teeth_scalar_errors.txt")
+    try:
+        result = subprocess.run(
+            [
+                "python",
+                script,
+                "--teeth",
+                csv_path,
+                "--sess",
+                sess_path,
+                "--scalar",
+                scalar_path,
+            ],
+            capture_output=True,
+            text=True,
+            cwd=_SCRIPTS_DIR,
+        )
+        lines = (result.stdout + result.stderr).splitlines()
+        try:
+            with open(error_file) as ef:
+                lines += ef.read().splitlines()
+        except OSError:
+            pass
+        error_lines = [line for line in lines if line.strip()]
+        truncated = len(error_lines) > _MAX_ERRORS
+        _jobs[job_id] = {
+            "done": True,
+            "success": result.returncode == 0,
+            "errors": error_lines[:_MAX_ERRORS],
+            "truncated": truncated,
+            "total_errors": len(error_lines),
+        }
+    except Exception as e:
+        _jobs[job_id] = {
+            "done": True,
+            "success": False,
+            "errors": [str(e)],
+            "truncated": False,
+            "total_errors": 1,
+        }
+    finally:
+        for p in (csv_path, sess_path, scalar_path):
+            try:
+                remove(p)
+            except OSError:
+                pass
+
+
 @staff_member_required
 def upload_csv(request: HttpRequest) -> HttpResponse:
     message = None
@@ -425,8 +484,14 @@ def upload_csv(request: HttpRequest) -> HttpResponse:
                 with open(tmp_path, "wb") as f:
                     for chunk in csv_file.chunks():
                         f.write(chunk)
-                remove(tmp_path)
-                message = f"File '{filename}' received successfully."
+                job_id = str(uuid.uuid4())
+                _jobs[job_id] = {"done": False}
+                threading.Thread(
+                    target=_run_script, args=(job_id, table, tmp_path), daemon=True
+                ).start()
+                from django.shortcuts import redirect as _redirect
+
+                return _redirect(f"/admin/upload/status/{job_id}/")
             except Exception as e:
                 message = f"Upload failed: {e}"
                 message_class = "errornote"
@@ -434,6 +499,20 @@ def upload_csv(request: HttpRequest) -> HttpResponse:
         request,
         "admin/upload.html",
         {"message": message, "message_class": message_class, "title": "Update Tables"},
+    )
+
+
+@staff_member_required
+def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
+    job = _jobs.get(job_id)
+    if job is None:
+        return HttpResponse("Job not found.", status=404)
+    if request.headers.get("Accept") == "application/json":
+        return HttpResponse(json.dumps(job), content_type="application/json")
+    return render(
+        request,
+        "admin/upload_status.html",
+        {"job": job, "job_id": job_id, "title": "Update Tables — Processing"},
     )
 
 
