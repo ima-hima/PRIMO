@@ -409,6 +409,79 @@ _MAX_ERRORS = 25
 _SCRIPTS_DIR = path.join(path.dirname(path.dirname(path.abspath(__file__))), "scripts")
 
 
+def _upsert_teeth_data(sess_path: str, scalar_path: str) -> list[str]:
+    """
+    Upsert session and scalar CSVs into the database.
+    Returns a list of error strings for rows that could not be inserted.
+    Session CSV: id,observer_id,group_id,specimen_id,original_id,protocol_id,
+                 comments,filename
+    Scalar CSV:  id,session_id,variable_id,value
+    """
+    import csv as csv_mod
+
+    errors: list[str] = []
+
+    with connection.cursor() as cursor:
+        with open(sess_path, newline="") as f:
+            reader = csv_mod.DictReader(f)
+            for row in reader:
+                try:
+                    cursor.execute(
+                        """
+                        INSERT INTO session
+                            (id, observer_id, group_id, specimen_id,
+                             original_id, protocol_id, comments, filename)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            observer_id = VALUES(observer_id),
+                            group_id = VALUES(group_id),
+                            original_id = VALUES(original_id),
+                            protocol_id = VALUES(protocol_id),
+                            comments = VALUES(comments),
+                            filename = VALUES(filename)
+                        """,
+                        [
+                            row["id"],
+                            row["observer_id"],
+                            row["group_id"],
+                            row["specimen_id"],
+                            row["original_id"],
+                            row["protocol_id"],
+                            row["comments"],
+                            row["filename"],
+                        ],
+                    )
+                except Exception as e:
+                    errors.append(
+                        f"Session insert failed for specimen "
+                        f"{row.get('specimen_id')}: {e}"
+                    )
+
+        with open(scalar_path, newline="") as f:
+            reader = csv_mod.DictReader(f)
+            for row in reader:
+                try:
+                    cursor.execute(
+                        """
+                        INSERT INTO data_scalar
+                            (id, session_id, variable_id, value)
+                        VALUES (%s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            value = VALUES(value)
+                        """,
+                        [
+                            row["id"],
+                            row["session_id"],
+                            row["variable_id"],
+                            row["value"],
+                        ],
+                    )
+                except Exception as e:
+                    errors.append(f"Scalar insert failed id={row.get('id')}: {e}")
+
+    return errors
+
+
 def _run_script(job_id: str, table: str, csv_path: str) -> None:
     script = path.join(_SCRIPTS_DIR, "create_teeth_scalar.py")
     sess_path = csv_path + ".sess.csv"
@@ -436,11 +509,13 @@ def _run_script(job_id: str, table: str, csv_path: str) -> None:
                 lines += ef.read().splitlines()
         except OSError:
             pass
+        if result.returncode == 0:
+            lines += _upsert_teeth_data(sess_path, scalar_path)
         error_lines = [line for line in lines if line.strip()]
         truncated = len(error_lines) > _MAX_ERRORS
         _jobs[job_id] = {
             "done": True,
-            "success": result.returncode == 0,
+            "success": result.returncode == 0 and not error_lines,
             "errors": error_lines[:_MAX_ERRORS],
             "truncated": truncated,
             "total_errors": len(error_lines),
