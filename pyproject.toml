@@ -8,6 +8,7 @@ use_parentheses = true
 ensure_newline_before_comments = true
 
 [tool.black]
+extend-exclude = "migrations"
 
 
 [tool.flake8]
@@ -31,6 +32,8 @@ ignore = [
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
 disallow_untyped_defs = true
+exclude = ["^scratch/"]
+
 
 
 [tool.django-stubs]
