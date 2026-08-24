@@ -7,6 +7,13 @@
     {% else %}
     <p class="errornote">Script completed with errors.</p>
     {% endif %}
+    {% if job.counts %}
+    <pre>{% if job.counts.sessions_inserted is not None %}Sessions inserted: {{ job.counts.sessions_inserted }}
+Sessions updated: {{ job.counts.sessions_updated }}
+Scalar rows inserted: {{ job.counts.scalars_inserted }}
+Scalar rows updated: {{ job.counts.scalars_updated }}{% endif %}{% if job.counts.specimens_inserted is not None %}Specimens inserted: {{ job.counts.specimens_inserted }}
+Specimens updated: {{ job.counts.specimens_updated }}{% endif %}</pre>
+    {% endif %}
     {% if job.errors %}
     <h3>Output{% if job.truncated %} (first {{ job.errors|length }} of {{ job.total_errors }} lines){% endif %}</h3>
     <pre>{% for line in job.errors %}{{ line }}

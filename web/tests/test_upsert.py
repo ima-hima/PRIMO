@@ -23,12 +23,19 @@ class UpsertTeethDataTest(TestCase):
     def setUp(self) -> None:
         with connection.cursor() as c:
             c.execute("SET FOREIGN_KEY_CHECKS=0")
+            c.execute(
+                "INSERT IGNORE INTO specimen (id, taxonomic_type_id, updated_at)"
+                " VALUES (100, 1, NOW()),"
+                "        (101, 1, NOW())"
+            )
 
     def tearDown(self) -> None:
         with connection.cursor() as c:
             c.execute("SET FOREIGN_KEY_CHECKS=1")
 
-    def _run(self, sess_content: str, scalar_content: str) -> list[str]:
+    def _run(
+        self, sess_content: str, scalar_content: str
+    ) -> tuple[list[str], dict[str, int]]:
         with (
             tempfile.NamedTemporaryFile(
                 mode="w", suffix=".sess.csv", delete=False
@@ -60,11 +67,13 @@ class UpsertTeethDataTest(TestCase):
             return [dict(zip(cols, r)) for r in c.fetchall()]
 
     def test_inserts_new_session_and_scalar(self) -> None:
-        errors = self._run(
+        errors, counts = self._run(
             _sess_csv("1,9,2,100,1,5,test comment,teeth"),
             _scalar_csv("100,1,225,12.3"),
         )
         self.assertEqual(errors, [])
+        self.assertEqual(counts["sessions_inserted"], 1)
+        self.assertEqual(counts["scalars_inserted"], 1)
         sess = self._session_row(1)
         self.assertIsNotNone(sess)
         assert sess is not None
@@ -79,11 +88,13 @@ class UpsertTeethDataTest(TestCase):
             _sess_csv("1,9,2,100,1,5,original comment,teeth"),
             _scalar_csv("100,1,225,12.3"),
         )
-        errors = self._run(
+        errors, counts = self._run(
             _sess_csv("1,9,2,100,1,5,updated comment,teeth"),
             _scalar_csv("100,1,225,9.9"),
         )
         self.assertEqual(errors, [])
+        self.assertEqual(counts["sessions_updated"], 1)
+        self.assertEqual(counts["scalars_updated"], 1)
         sess = self._session_row(1)
         assert sess is not None
         self.assertEqual(sess["comments"], "updated comment")
@@ -91,7 +102,7 @@ class UpsertTeethDataTest(TestCase):
         self.assertEqual(scalars[0]["value"], "9.9")
 
     def test_inserts_multiple_sessions_and_scalars(self) -> None:
-        errors = self._run(
+        errors, counts = self._run(
             _sess_csv(
                 "1,9,2,100,1,5,,teeth",
                 "2,9,2,101,1,5,,teeth",
@@ -102,6 +113,8 @@ class UpsertTeethDataTest(TestCase):
             ),
         )
         self.assertEqual(errors, [])
+        self.assertEqual(counts["sessions_inserted"], 2)
+        self.assertEqual(counts["scalars_inserted"], 2)
         self.assertIsNotNone(self._session_row(1))
         self.assertIsNotNone(self._session_row(2))
         self.assertEqual(len(self._scalar_rows(1)), 1)
@@ -111,7 +124,7 @@ class UpsertTeethDataTest(TestCase):
         # variable_id 999999 doesn't exist but FK checks are off;
         # use an invalid specimen_id type to force an error instead
         # by passing a non-numeric value
-        errors = self._run(
+        errors, _ = self._run(
             _sess_csv("BADID,9,2,100,1,5,,teeth"),
             _scalar_csv("100,1,225,1.0"),
         )
@@ -123,5 +136,7 @@ class UpsertTeethDataTest(TestCase):
             self.assertEqual(c.fetchone()[0], 1)
 
     def test_empty_csvs_produce_no_errors(self) -> None:
-        errors = self._run(SESSION_HEADER, SCALAR_HEADER)
+        errors, counts = self._run(SESSION_HEADER, SCALAR_HEADER)
         self.assertEqual(errors, [])
+        self.assertEqual(counts["sessions_inserted"], 0)
+        self.assertEqual(counts["scalars_inserted"], 0)

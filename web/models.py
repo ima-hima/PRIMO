@@ -644,7 +644,6 @@ class Specimen(models.Model):
                   taxonomic type
     """
 
-    primo_id = models.IntegerField(unique=True)
     hypocode = models.CharField(max_length=20, blank=True)
     taxon = models.ForeignKey("Taxon", on_delete=models.PROTECT)
     institute = models.ForeignKey(

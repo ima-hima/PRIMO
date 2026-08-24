@@ -67,7 +67,7 @@ def process_teeth(
     """Read a teeth CSV and write session and scalar output CSVs."""
     entries: defaultdict[Any, Any] = defaultdict(dict)
 
-    with open(teeth_path, "r") as f:
+    with open(teeth_path, "r", encoding="utf-8-sig") as f:
         rows = DictReader(f, delimiter=",", quotechar='"')
 
         # Identify measurement columns: everything between group_id and COMMENT.

@@ -404,15 +404,35 @@ def restore_table(request: HttpRequest) -> HttpResponse:
     )
 
 
-_jobs: Dict[str, Dict[str, Any]] = {}
 _MAX_ERRORS = 25
 _SCRIPTS_DIR = path.join(path.dirname(path.dirname(path.abspath(__file__))), "scripts")
 
 
-def _upsert_teeth_data(sess_path: str, scalar_path: str) -> list[str]:
+def _job_path(job_id: str) -> str:
+    return path.join(settings.DOWNLOAD_ROOT, f".job_{job_id}.json")
+
+
+def _write_job(job_id: str, data: Dict[str, Any]) -> None:
+    with open(_job_path(job_id), "w") as f:
+        json.dump(data, f)
+
+
+def _read_job(job_id: str) -> Dict[str, Any] | None:
+    try:
+        with open(_job_path(job_id)) as f:
+            return json.load(f)  # type: ignore[no-any-return]
+    except OSError:
+        return None
+
+
+def _upsert_teeth_data(
+    sess_path: str, scalar_path: str
+) -> tuple[list[str], dict[str, int]]:
     """
     Upsert session and scalar CSVs into the database.
-    Returns a list of error strings for rows that could not be inserted.
+    Returns (errors, counts) where counts has keys:
+      sessions_inserted, sessions_updated, scalars_inserted, scalars_updated.
+    MySQL rowcount: 1 = inserted, 2 = updated, 0 = no change.
     Session CSV: id,observer_id,group_id,specimen_id,original_id,protocol_id,
                  comments,filename
     Scalar CSV:  id,session_id,variable_id,value
@@ -420,48 +440,85 @@ def _upsert_teeth_data(sess_path: str, scalar_path: str) -> list[str]:
     import csv as csv_mod
 
     errors: list[str] = []
+    counts = {
+        "sessions_inserted": 0,
+        "sessions_updated": 0,
+        "scalars_inserted": 0,
+        "scalars_updated": 0,
+    }
 
     with connection.cursor() as cursor:
         with open(sess_path, newline="") as f:
-            reader = csv_mod.DictReader(f)
-            for row in reader:
-                try:
-                    cursor.execute(
-                        """
-                        INSERT INTO session
-                            (id, observer_id, group_id, specimen_id,
-                             original_id, protocol_id, comments, filename,
-                             updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                        ON DUPLICATE KEY UPDATE
-                            observer_id = VALUES(observer_id),
-                            group_id = VALUES(group_id),
-                            original_id = VALUES(original_id),
-                            protocol_id = VALUES(protocol_id),
-                            comments = VALUES(comments),
-                            filename = VALUES(filename),
-                            updated_at = NOW()
-                        """,
-                        [
-                            row["id"],
-                            row["observer_id"],
-                            row["group_id"],
-                            row["specimen_id"],
-                            row["original_id"],
-                            row["protocol_id"],
-                            row["comments"],
-                            row["filename"],
-                        ],
-                    )
-                except Exception as e:
-                    errors.append(
-                        f"Session insert failed for specimen "
-                        f"{row.get('specimen_id')}: {e}"
-                    )
+            sess_rows = list(csv_mod.DictReader(f))
+
+        # Pre-check for missing specimens so we can report them clearly.
+        all_specimen_ids = list({row["specimen_id"] for row in sess_rows})
+        if all_specimen_ids:
+            fmt = ",".join(["%s"] * len(all_specimen_ids))
+            cursor.execute(
+                f"SELECT id FROM specimen WHERE id IN ({fmt})", all_specimen_ids
+            )
+            found = {str(r[0]) for r in cursor.fetchall()}
+            missing = sorted(
+                {sid for sid in all_specimen_ids if sid not in found},
+                key=lambda x: int(x),
+            )
+            if missing:
+                errors.append(
+                    f"Skipped {len(missing)} session(s) — specimen IDs not in "
+                    f"specimen table: {', '.join(missing)}"
+                )
+        else:
+            missing = []
+
+        skipped_session_ids: set[str] = set()
+        for row in sess_rows:
+            if row["specimen_id"] in missing:
+                skipped_session_ids.add(row["id"])
+                continue
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO session
+                        (id, observer_id, group_id, specimen_id,
+                         original_id, protocol_id, comments, filename,
+                         updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        observer_id = VALUES(observer_id),
+                        group_id = VALUES(group_id),
+                        original_id = VALUES(original_id),
+                        protocol_id = VALUES(protocol_id),
+                        comments = VALUES(comments),
+                        filename = VALUES(filename),
+                        updated_at = NOW()
+                    """,
+                    [
+                        row["id"],
+                        row["observer_id"],
+                        row["group_id"],
+                        row["specimen_id"],
+                        row["original_id"],
+                        row["protocol_id"],
+                        row["comments"],
+                        row["filename"],
+                    ],
+                )
+                if cursor.rowcount == 1:
+                    counts["sessions_inserted"] += 1
+                elif cursor.rowcount == 2:
+                    counts["sessions_updated"] += 1
+            except Exception as e:
+                errors.append(
+                    f"Session insert failed for specimen "
+                    f"{row.get('specimen_id')}: {e}"
+                )
 
         with open(scalar_path, newline="") as f:
             reader = csv_mod.DictReader(f)
             for row in reader:
+                if row["session_id"] in skipped_session_ids:
+                    continue
                 try:
                     cursor.execute(
                         """
@@ -479,10 +536,128 @@ def _upsert_teeth_data(sess_path: str, scalar_path: str) -> list[str]:
                             row["value"],
                         ],
                     )
+                    if cursor.rowcount == 1:
+                        counts["scalars_inserted"] += 1
+                    elif cursor.rowcount == 2:
+                        counts["scalars_updated"] += 1
                 except Exception as e:
                     errors.append(f"Scalar insert failed id={row.get('id')}: {e}")
 
-    return errors
+    return errors, counts
+
+
+def _upsert_specimen_data(
+    specimen_path: str,
+) -> tuple[list[str], dict[str, int]]:
+    """
+    Upsert specimen CSV into the database.
+    CSV columns: id, hypocode, taxon_id, institute_id, catalog_number,
+                 mass, locality_id, sex_id, fossil_id, captive_id,
+                 taxonomic_type_id, comments
+    """
+    import csv as csv_mod
+
+    errors: list[str] = []
+    counts = {"specimens_inserted": 0, "specimens_updated": 0}
+
+    with connection.cursor() as cursor:
+        with open(specimen_path, newline="") as f:
+            rows = list(csv_mod.DictReader(f))
+
+        for row in rows:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO specimen
+                        (id, hypocode, taxon_id, institute_id, catalog_number,
+                         mass, locality_id, sex_id, fossil_id, captive_id,
+                         taxonomic_type_id, comments, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        hypocode = VALUES(hypocode),
+                        taxon_id = VALUES(taxon_id),
+                        institute_id = VALUES(institute_id),
+                        catalog_number = VALUES(catalog_number),
+                        mass = VALUES(mass),
+                        locality_id = VALUES(locality_id),
+                        sex_id = VALUES(sex_id),
+                        fossil_id = VALUES(fossil_id),
+                        captive_id = VALUES(captive_id),
+                        taxonomic_type_id = VALUES(taxonomic_type_id),
+                        comments = VALUES(comments),
+                        updated_at = NOW()
+                    """,
+                    [
+                        row["id"],
+                        row["hypocode"],
+                        row["taxon_id"],
+                        row["institute_id"],
+                        row["catalog_number"],
+                        row["mass"],
+                        row["locality_id"],
+                        row["sex_id"],
+                        row["fossil_id"],
+                        row["captive_id"],
+                        row["taxonomic_type_id"],
+                        row["comments"],
+                    ],
+                )
+                if cursor.rowcount == 1:
+                    counts["specimens_inserted"] += 1
+                elif cursor.rowcount == 2:
+                    counts["specimens_updated"] += 1
+            except Exception as e:
+                errors.append(f"Specimen insert failed for id={row.get('id')}: {e}")
+
+    return errors, counts
+
+
+def _run_specimen_script(job_id: str, csv_path: str) -> None:
+    script = path.join(_SCRIPTS_DIR, "process_specimen_csv.py")
+    out_path = csv_path + ".specimen.csv"
+    try:
+        result = subprocess.run(
+            ["python", script, "--in", csv_path, "--out", out_path],
+            capture_output=True,
+            text=True,
+            cwd=_SCRIPTS_DIR,
+        )
+        lines = (result.stdout + result.stderr).splitlines()
+        upsert_counts: dict[str, int] | None = None
+        if result.returncode == 0:
+            upsert_errors, upsert_counts = _upsert_specimen_data(out_path)
+            lines += upsert_errors
+        error_lines = [line for line in lines if line.strip()]
+        truncated = len(error_lines) > _MAX_ERRORS
+        _write_job(
+            job_id,
+            {
+                "done": True,
+                "success": result.returncode == 0 and not error_lines,
+                "errors": error_lines[:_MAX_ERRORS],
+                "truncated": truncated,
+                "total_errors": len(error_lines),
+                "counts": upsert_counts,
+            },
+        )
+    except Exception as e:
+        _write_job(
+            job_id,
+            {
+                "done": True,
+                "success": False,
+                "errors": [str(e)],
+                "truncated": False,
+                "total_errors": 1,
+                "counts": None,
+            },
+        )
+    finally:
+        for p in (csv_path, out_path):
+            try:
+                remove(p)
+            except OSError:
+                pass
 
 
 def _run_script(job_id: str, table: str, csv_path: str) -> None:
@@ -512,31 +687,45 @@ def _run_script(job_id: str, table: str, csv_path: str) -> None:
                 lines += ef.read().splitlines()
         except OSError:
             pass
+        upsert_counts: dict[str, int] | None = None
         if result.returncode == 0:
-            lines += _upsert_teeth_data(sess_path, scalar_path)
+            upsert_errors, upsert_counts = _upsert_teeth_data(sess_path, scalar_path)
+            lines += upsert_errors
         error_lines = [line for line in lines if line.strip()]
         truncated = len(error_lines) > _MAX_ERRORS
-        _jobs[job_id] = {
-            "done": True,
-            "success": result.returncode == 0 and not error_lines,
-            "errors": error_lines[:_MAX_ERRORS],
-            "truncated": truncated,
-            "total_errors": len(error_lines),
-        }
+        _write_job(
+            job_id,
+            {
+                "done": True,
+                "success": result.returncode == 0 and not error_lines,
+                "errors": error_lines[:_MAX_ERRORS],
+                "truncated": truncated,
+                "total_errors": len(error_lines),
+                "counts": upsert_counts,
+            },
+        )
     except Exception as e:
-        _jobs[job_id] = {
-            "done": True,
-            "success": False,
-            "errors": [str(e)],
-            "truncated": False,
-            "total_errors": 1,
-        }
+        _write_job(
+            job_id,
+            {
+                "done": True,
+                "success": False,
+                "errors": [str(e)],
+                "truncated": False,
+                "total_errors": 1,
+                "counts": None,
+            },
+        )
     finally:
         for p in (csv_path, sess_path, scalar_path):
             try:
                 remove(p)
             except OSError:
                 pass
+        try:
+            remove(error_file)
+        except OSError:
+            pass
 
 
 @staff_member_required
@@ -563,7 +752,7 @@ def upload_csv(request: HttpRequest) -> HttpResponse:
                     for chunk in csv_file.chunks():
                         f.write(chunk)
                 job_id = str(uuid.uuid4())
-                _jobs[job_id] = {"done": False}
+                _write_job(job_id, {"done": False})
                 threading.Thread(
                     target=_run_script, args=(job_id, table, tmp_path), daemon=True
                 ).start()
@@ -576,21 +765,69 @@ def upload_csv(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "admin/upload.html",
-        {"message": message, "message_class": message_class, "title": "Update Tables"},
+        {
+            "message": message,
+            "message_class": message_class,
+            "title": "Upload Teeth CSV",
+        },
     )
 
 
 @staff_member_required
 def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
-    job = _jobs.get(job_id)
+    job = _read_job(job_id)
     if job is None:
         return HttpResponse("Job not found.", status=404)
     if request.headers.get("Accept") == "application/json":
         return HttpResponse(json.dumps(job), content_type="application/json")
+    if job.get("done"):
+        try:
+            remove(_job_path(job_id))
+        except OSError:
+            pass
     return render(
         request,
         "admin/upload_status.html",
-        {"job": job, "job_id": job_id, "title": "Update Tables — Processing"},
+        {"job": job, "job_id": job_id, "title": "Upload Teeth CSV — Processing"},
+    )
+
+
+@staff_member_required
+def upload_specimen_csv(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    if request.method == "POST":
+        csv_file = request.FILES.get("csv_file")
+        if not csv_file:
+            message = "No file selected."
+            message_class = "errornote"
+        elif not csv_file.name or not csv_file.name.endswith(".csv"):
+            message = "File must be a CSV."
+            message_class = "errornote"
+        else:
+            filename: str = csv_file.name
+            tmp_path = path.join(settings.DOWNLOAD_ROOT, filename)
+            try:
+                with open(tmp_path, "wb") as f:
+                    for chunk in csv_file.chunks():
+                        f.write(chunk)
+                job_id = str(uuid.uuid4())
+                _write_job(job_id, {"done": False})
+                threading.Thread(
+                    target=_run_specimen_script, args=(job_id, tmp_path), daemon=True
+                ).start()
+                return redirect(f"/admin/upload/status/{job_id}/")
+            except Exception as e:
+                message = f"Upload failed: {e}"
+                message_class = "errornote"
+    return render(
+        request,
+        "admin/upload_specimen.html",
+        {
+            "message": message,
+            "message_class": message_class,
+            "title": "Upload Specimen CSV",
+        },
     )
 
 
