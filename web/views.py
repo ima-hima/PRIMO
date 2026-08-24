@@ -430,15 +430,17 @@ def _upsert_teeth_data(sess_path: str, scalar_path: str) -> list[str]:
                         """
                         INSERT INTO session
                             (id, observer_id, group_id, specimen_id,
-                             original_id, protocol_id, comments, filename)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                             original_id, protocol_id, comments, filename,
+                             updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
                         ON DUPLICATE KEY UPDATE
                             observer_id = VALUES(observer_id),
                             group_id = VALUES(group_id),
                             original_id = VALUES(original_id),
                             protocol_id = VALUES(protocol_id),
                             comments = VALUES(comments),
-                            filename = VALUES(filename)
+                            filename = VALUES(filename),
+                            updated_at = NOW()
                         """,
                         [
                             row["id"],
@@ -464,10 +466,11 @@ def _upsert_teeth_data(sess_path: str, scalar_path: str) -> list[str]:
                     cursor.execute(
                         """
                         INSERT INTO data_scalar
-                            (id, session_id, variable_id, value)
-                        VALUES (%s, %s, %s, %s)
+                            (id, session_id, variable_id, value, updated_at)
+                        VALUES (%s, %s, %s, %s, NOW())
                         ON DUPLICATE KEY UPDATE
-                            value = VALUES(value)
+                            value = VALUES(value),
+                            updated_at = NOW()
                         """,
                         [
                             row["id"],
