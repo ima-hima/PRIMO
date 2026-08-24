@@ -66,14 +66,17 @@ def process_teeth(
 ) -> None:
     """Read a teeth CSV and write session and scalar output CSVs."""
     entries: defaultdict[Any, Any] = defaultdict(dict)
-    comments: defaultdict[Any, str] = defaultdict(str)
 
     with open(teeth_path, "r") as f:
-        rows = DictReader(f, fieldnames=v.field_names, delimiter=",", quotechar='"')
+        rows = DictReader(f, delimiter=",", quotechar='"')
+
+        # Identify measurement columns: everything between group_id and COMMENT.
+        fieldnames = list(rows.fieldnames or [])
+        start = fieldnames.index("UMXTOOTH") + 1
+        end = fieldnames.index("COMMENT")
+        measurement_cols = fieldnames[start:end]
 
         scalar_out.write("id,session_id,variable_id,value\n")
-        for i in range(7):
-            next(rows)
         session_id = 0
         prev_session_id = 0
         cur_uid: Any = -1
@@ -83,9 +86,9 @@ def process_teeth(
             if verbose > 3:
                 print(f"line: {row}")
                 print(f"\t {row['group_id']}, {row['hypocode']}")
-            unique_id = row["uid"]
+            unique_id = row["id"]
             if not unique_id:
-                if not row["hypocode"] and not row["tooth"]:
+                if not row["hypocode"] and not row["tooth_id"]:
                     # Mostly Excel adding blank rows at the end.
                     continue
                 error_out.write(f"unique_id missing: {row}\n")
@@ -94,31 +97,31 @@ def process_teeth(
                 prev_session_id = session_id
                 session_id += 1
                 entries[unique_id]["session"] = session_id
-            elif prev_session_id == session_id and cur_observer != row["observer"]:
+            elif prev_session_id == session_id and cur_observer != row["observer_id"]:
                 error_out.write(
                     "Warning: observer changed but session didn't: "
-                    f"unique_id: {row['uid']} hypocode: {row['hypocode']}\n"
+                    f"unique_id: {row['id']} hypocode: {row['hypocode']}\n"
                 )
-            cur_observer = row["observer"]
+            cur_observer = row["observer_id"]
             entries[unique_id]["hypocode"] = row["hypocode"]
             entries[unique_id]["group_id"] = row["group_id"]
-            entries[unique_id]["observer"] = row["observer"]
+            entries[unique_id]["observer"] = row["observer_id"]
             if "comments" not in entries[unique_id]:
                 entries[unique_id]["comments"] = ""
-            if row["comments"]:
-                entries[unique_id]["comments"] += row["comments"]
-            if row["cast"] == "cast":
+            if row["COMMENT"]:
+                entries[unique_id]["comments"] += row["COMMENT"]
+            if row["cast?"] == "cast":
                 entries[unique_id]["original"] = 2
             else:
                 entries[unique_id]["original"] = 1
             if "values" not in entries[unique_id]:
                 entries[unique_id]["values"] = {}
-            tooth_name = row["tooth"].strip()
+            tooth_name = row["tooth_id"].strip()
             if tooth_name.endswith("X"):
                 unknown_teeth(tooth_name, unique_id, row, entries, error_out)
-            for num in range(1, 22):
-                value = f"m{num}"
-                if row[value]:
+            for num, col in enumerate(measurement_cols, start=1):
+                cell = row.get(col, "")
+                if cell:
                     try:
                         variable_name = v.variable_names[tooth_name][num]
                     except Exception as e:
@@ -128,20 +131,16 @@ def process_teeth(
                         )
                         break
                     if variable_name:
-                        var_id = v.variable_ids[variable_name]
                         if variable_name in entries[unique_id]["values"]:
                             duplicate_teeth.add(unique_id)
-                        scalar_out.write(
-                            f"{unique_id},{session_id},{var_id},{row[value]}\n"
-                        )
-                        entries[unique_id]["values"][variable_name] = row[value]
+                        entries[unique_id]["values"][variable_name] = cell
                     else:
                         error_out.write(
                             "Warning: data entry with a value where "
                             "there shouldn't be one.\n"
-                            f"    unique_id: {row['uid']} hypocode: {row['hypocode']} "
-                            f"tooth: {row['tooth']}"
-                            f"    value: {row[value]}\n"
+                            f"    unique_id: {row['id']} hypocode: {row['hypocode']} "
+                            f"tooth: {row['tooth_id']}"
+                            f"    value: {cell}\n"
                         )
         if duplicate_teeth:
             count = len(duplicate_teeth)
@@ -172,7 +171,7 @@ def process_teeth(
             f"{uid},"
             f"{entries[uid]['original']},"
             "5,"
-            f"{comments[uid]},"
+            f"{entries[uid]['comments']},"
             "teeth\n"
         )
         for variable_name in entries[uid]["values"]:
@@ -195,7 +194,7 @@ def unknown_teeth(
     """
     if tooth_name.endswith("UMX"):
         try:
-            entries[unique_id]["comments"] += f" {v.UMXTOOTH[row['xtooth']]}"
+            entries[unique_id]["comments"] += f" {v.UMXTOOTH[row['UMXTOOTH']]}"
         except Exception as e:
             if str(e) != "''" and str(e) != "'0'":
                 error_out.write(
@@ -206,7 +205,7 @@ def unknown_teeth(
             entries[unique_id]["comments"] += f" {v.UMXTOOTH['9']}"
     elif tooth_name.endswith("UPX"):
         try:
-            entries[unique_id]["comments"] += f" {v.UPXTOOTH[row['xtooth']]}"
+            entries[unique_id]["comments"] += f" {v.UPXTOOTH[row['UMXTOOTH']]}"
         except Exception as e:
             if str(e) != "''" and str(e) != "'0'":
                 error_out.write(
@@ -217,7 +216,7 @@ def unknown_teeth(
             entries[unique_id]["comments"] += f" {v.UPXTOOTH['9']}"
     elif tooth_name.endswith("LMX"):
         try:
-            entries[unique_id]["comments"] += f" {v.LMXTOOTH[row['xtooth']]}"
+            entries[unique_id]["comments"] += f" {v.LMXTOOTH[row['UMXTOOTH']]}"
         except Exception as e:
             if str(e) != "''" and str(e) != "'0'":
                 error_out.write(
