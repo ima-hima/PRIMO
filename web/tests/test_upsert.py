@@ -48,7 +48,7 @@ class UpsertTeethDataTest(TestCase):
             scf.write(scalar_content)
             sess_path = sf.name
             scalar_path = scf.name
-        return _upsert_teeth_data(sess_path, scalar_path)
+        return _upsert_teeth_data(sess_path, scalar_path, set())
 
     def _session_row(self, id: int) -> dict | None:
         with connection.cursor() as c:

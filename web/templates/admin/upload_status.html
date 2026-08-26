@@ -2,11 +2,14 @@
 {% block content %}
 <div id="status-container">
 {% if job.done %}
-    {% if job.success %}
-    <p class="success">Script completed successfully.</p>
-    {% else %}
-    <p class="errornote">Script completed with errors.</p>
-    {% endif %}
+    {% if job.errors %}
+    <p class="errornote">Processing completed with errors. No changes have been made to the database.</p>
+    <h3>Errors{% if job.truncated %} (first {{ job.errors|length }} of {{ job.total_errors }}){% endif %}</h3>
+    <pre>{% for line in job.errors %}{{ line }}
+{% endfor %}</pre>
+    <p><a href="{% url 'upload_csv' %}">Upload another file</a></p>
+    {% elif job.confirmed %}
+    <p class="success">Changes applied successfully.</p>
     {% if job.counts %}
     <pre>{% if job.counts.sessions_inserted is not None %}Sessions inserted: {{ job.counts.sessions_inserted }}
 Sessions updated: {{ job.counts.sessions_updated }}
@@ -14,16 +17,30 @@ Scalar rows inserted: {{ job.counts.scalars_inserted }}
 Scalar rows updated: {{ job.counts.scalars_updated }}{% endif %}{% if job.counts.specimens_inserted is not None %}Specimens inserted: {{ job.counts.specimens_inserted }}
 Specimens updated: {{ job.counts.specimens_updated }}{% endif %}</pre>
     {% endif %}
-    {% if job.errors %}
-    <h3>Output{% if job.truncated %} (first {{ job.errors|length }} of {{ job.total_errors }} lines){% endif %}</h3>
-    <pre>{% for line in job.errors %}{{ line }}
-{% endfor %}</pre>
-    {% else %}
-    <p>No output.</p>
-    {% endif %}
     <p><a href="{% url 'upload_csv' %}">Upload another file</a></p>
+    {% else %}
+    <p class="success">Processing complete. Review the preview below before confirming.</p>
+    {% if job.missing_specimens %}
+    <p class="errornote">Warning: {{ job.missing_specimens|length }} specimen ID(s) not found in the database — sessions referencing them will be skipped.</p>
+    {% endif %}
+    {% if job.preview %}
+    <pre>{% if job.preview.sessions_insert is not None %}Sessions to insert: {{ job.preview.sessions_insert }}
+Sessions to update: {{ job.preview.sessions_update }}
+Scalar rows to insert: {{ job.preview.scalars_insert }}
+Scalar rows to update: {{ job.preview.scalars_update }}{% endif %}{% if job.preview.specimens_insert is not None %}Specimens to insert: {{ job.preview.specimens_insert }}
+Specimens to update: {{ job.preview.specimens_update }}{% endif %}</pre>
+    {% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <p>
+            <button type="submit" name="action" value="confirm" class="button">Confirm — apply changes</button>
+            &nbsp;
+            <button type="submit" name="action" value="cancel">Cancel</button>
+        </p>
+    </form>
+    {% endif %}
 {% else %}
-    <p>Processing… <span id="spinner">⏳</span></p>
+    <p>Processing <strong>{{ job.filename }}</strong>… <span id="spinner">⏳</span></p>
     <script>
     (function poll() {
         fetch(window.location.href, {headers: {Accept: "application/json"}})

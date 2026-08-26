@@ -425,17 +425,103 @@ def _read_job(job_id: str) -> Dict[str, Any] | None:
         return None
 
 
-def _upsert_teeth_data(
+def _query_existing_ids(
+    cursor: Any, table: str, ids: list[str], batch: int = 500
+) -> set[str]:
+    """Return the subset of ids that already exist in table."""
+    existing: set[str] = set()
+    for i in range(0, len(ids), batch):
+        chunk = ids[i : i + batch]
+        fmt = ",".join(["%s"] * len(chunk))
+        cursor.execute(f"SELECT id FROM `{table}` WHERE id IN ({fmt})", chunk)
+        existing.update(str(r[0]) for r in cursor.fetchall())
+    return existing
+
+
+def _find_missing_specimens(
+    cursor: Any, sess_rows: list[dict]
+) -> tuple[list[str], set[str]]:
+    """
+    Return (missing_specimen_ids, skipped_session_ids).
+    missing_specimen_ids: specimen IDs referenced by sess_rows not in DB.
+    skipped_session_ids: session IDs whose specimen is missing.
+    """
+    all_specimen_ids = list({row["specimen_id"] for row in sess_rows})
+    if not all_specimen_ids:
+        return [], set()
+    found = _query_existing_ids(cursor, "specimen", all_specimen_ids)
+    missing = sorted(
+        {sid for sid in all_specimen_ids if sid not in found},
+        key=lambda x: int(x),
+    )
+    skipped = {row["id"] for row in sess_rows if row["specimen_id"] in missing}
+    return missing, skipped
+
+
+def _preview_teeth_counts(
     sess_path: str, scalar_path: str
+) -> tuple[dict[str, int], list[str], list[str]]:
+    """
+    Count what _would_ be inserted/updated without touching the DB.
+    Returns (preview_counts, missing_specimen_ids, skipped_session_ids).
+    """
+    import csv as csv_mod
+
+    with connection.cursor() as cursor:
+        with open(sess_path, newline="") as f:
+            sess_rows = list(csv_mod.DictReader(f))
+        missing, skipped_set = _find_missing_specimens(cursor, sess_rows)
+
+        eligible_sess_ids = [r["id"] for r in sess_rows if r["id"] not in skipped_set]
+        existing_sess = _query_existing_ids(cursor, "session", eligible_sess_ids)
+
+        with open(scalar_path, newline="") as f:
+            scalar_rows = list(csv_mod.DictReader(f))
+        eligible_scalar_ids = [
+            r["id"] for r in scalar_rows if r["session_id"] not in skipped_set
+        ]
+        existing_scalar = _query_existing_ids(
+            cursor, "data_scalar", eligible_scalar_ids
+        )
+
+    sessions_insert = len(eligible_sess_ids) - len(existing_sess)
+    sessions_update = len(existing_sess)
+    scalars_insert = len(eligible_scalar_ids) - len(existing_scalar)
+    scalars_update = len(existing_scalar)
+
+    return (
+        {
+            "sessions_insert": sessions_insert,
+            "sessions_update": sessions_update,
+            "scalars_insert": scalars_insert,
+            "scalars_update": scalars_update,
+        },
+        missing,
+        list(skipped_set),
+    )
+
+
+def _preview_specimen_counts(specimen_path: str) -> dict[str, int]:
+    """Count what _would_ be inserted/updated for specimens without touching the DB."""
+    import csv as csv_mod
+
+    with open(specimen_path, newline="") as f:
+        ids = [row["id"] for row in csv_mod.DictReader(f)]
+    with connection.cursor() as cursor:
+        existing = _query_existing_ids(cursor, "specimen", ids)
+    return {
+        "specimens_insert": len(ids) - len(existing),
+        "specimens_update": len(existing),
+    }
+
+
+def _upsert_teeth_data(
+    sess_path: str, scalar_path: str, skipped_session_ids: set[str]
 ) -> tuple[list[str], dict[str, int]]:
     """
     Upsert session and scalar CSVs into the database.
-    Returns (errors, counts) where counts has keys:
-      sessions_inserted, sessions_updated, scalars_inserted, scalars_updated.
-    MySQL rowcount: 1 = inserted, 2 = updated, 0 = no change.
-    Session CSV: id,observer_id,group_id,specimen_id,original_id,protocol_id,
-                 comments,filename
-    Scalar CSV:  id,session_id,variable_id,value
+    skipped_session_ids: session IDs to skip (missing specimens, pre-computed).
+    Returns (errors, counts).  MySQL rowcount: 1=insert, 2=update.
     """
     import csv as csv_mod
 
@@ -451,30 +537,8 @@ def _upsert_teeth_data(
         with open(sess_path, newline="") as f:
             sess_rows = list(csv_mod.DictReader(f))
 
-        # Pre-check for missing specimens so we can report them clearly.
-        all_specimen_ids = list({row["specimen_id"] for row in sess_rows})
-        if all_specimen_ids:
-            fmt = ",".join(["%s"] * len(all_specimen_ids))
-            cursor.execute(
-                f"SELECT id FROM specimen WHERE id IN ({fmt})", all_specimen_ids
-            )
-            found = {str(r[0]) for r in cursor.fetchall()}
-            missing = sorted(
-                {sid for sid in all_specimen_ids if sid not in found},
-                key=lambda x: int(x),
-            )
-            if missing:
-                errors.append(
-                    f"Skipped {len(missing)} session(s) — specimen IDs not in "
-                    f"specimen table: {', '.join(missing)}"
-                )
-        else:
-            missing = []
-
-        skipped_session_ids: set[str] = set()
         for row in sess_rows:
-            if row["specimen_id"] in missing:
-                skipped_session_ids.add(row["id"])
+            if row["id"] in skipped_session_ids:
                 continue
             try:
                 cursor.execute(
@@ -515,8 +579,7 @@ def _upsert_teeth_data(
                 )
 
         with open(scalar_path, newline="") as f:
-            reader = csv_mod.DictReader(f)
-            for row in reader:
+            for row in csv_mod.DictReader(f):
                 if row["session_id"] in skipped_session_ids:
                     continue
                 try:
@@ -612,7 +675,7 @@ def _upsert_specimen_data(
     return errors, counts
 
 
-def _run_specimen_script(job_id: str, csv_path: str) -> None:
+def _run_specimen_script(job_id: str, csv_path: str, filename: str) -> None:
     script = path.join(_SCRIPTS_DIR, "process_specimen_csv.py")
     out_path = csv_path + ".specimen.csv"
     try:
@@ -623,23 +686,44 @@ def _run_specimen_script(job_id: str, csv_path: str) -> None:
             cwd=_SCRIPTS_DIR,
         )
         lines = (result.stdout + result.stderr).splitlines()
-        upsert_counts: dict[str, int] | None = None
-        if result.returncode == 0:
-            upsert_errors, upsert_counts = _upsert_specimen_data(out_path)
-            lines += upsert_errors
         error_lines = [line for line in lines if line.strip()]
-        truncated = len(error_lines) > _MAX_ERRORS
+        if result.returncode != 0 or error_lines:
+            truncated = len(error_lines) > _MAX_ERRORS
+            _write_job(
+                job_id,
+                {
+                    "done": True,
+                    "success": False,
+                    "errors": error_lines[:_MAX_ERRORS],
+                    "truncated": truncated,
+                    "total_errors": len(error_lines),
+                    "filename": filename,
+                    "kind": "specimen",
+                },
+            )
+            for p in (csv_path, out_path):
+                try:
+                    remove(p)
+                except OSError:
+                    pass
+            return
+        preview = _preview_specimen_counts(out_path)
         _write_job(
             job_id,
             {
                 "done": True,
-                "success": result.returncode == 0 and not error_lines,
-                "errors": error_lines[:_MAX_ERRORS],
-                "truncated": truncated,
-                "total_errors": len(error_lines),
-                "counts": upsert_counts,
+                "success": True,
+                "errors": [],
+                "preview": preview,
+                "specimen_path": out_path,
+                "filename": filename,
+                "kind": "specimen",
             },
         )
+        try:
+            remove(csv_path)
+        except OSError:
+            pass
     except Exception as e:
         _write_job(
             job_id,
@@ -649,10 +733,10 @@ def _run_specimen_script(job_id: str, csv_path: str) -> None:
                 "errors": [str(e)],
                 "truncated": False,
                 "total_errors": 1,
-                "counts": None,
+                "filename": filename,
+                "kind": "specimen",
             },
         )
-    finally:
         for p in (csv_path, out_path):
             try:
                 remove(p)
@@ -660,7 +744,7 @@ def _run_specimen_script(job_id: str, csv_path: str) -> None:
                 pass
 
 
-def _run_script(job_id: str, table: str, csv_path: str) -> None:
+def _run_script(job_id: str, table: str, csv_path: str, filename: str) -> None:
     script = path.join(_SCRIPTS_DIR, "create_teeth_scalar.py")
     sess_path = csv_path + ".sess.csv"
     scalar_path = csv_path + ".scalar.csv"
@@ -687,23 +771,48 @@ def _run_script(job_id: str, table: str, csv_path: str) -> None:
                 lines += ef.read().splitlines()
         except OSError:
             pass
-        upsert_counts: dict[str, int] | None = None
-        if result.returncode == 0:
-            upsert_errors, upsert_counts = _upsert_teeth_data(sess_path, scalar_path)
-            lines += upsert_errors
         error_lines = [line for line in lines if line.strip()]
-        truncated = len(error_lines) > _MAX_ERRORS
+        if result.returncode != 0 or error_lines:
+            truncated = len(error_lines) > _MAX_ERRORS
+            _write_job(
+                job_id,
+                {
+                    "done": True,
+                    "success": False,
+                    "errors": error_lines[:_MAX_ERRORS],
+                    "truncated": truncated,
+                    "total_errors": len(error_lines),
+                    "filename": filename,
+                    "kind": "teeth",
+                },
+            )
+            for p in (csv_path, sess_path, scalar_path):
+                try:
+                    remove(p)
+                except OSError:
+                    pass
+            return
+        preview, missing, skipped = _preview_teeth_counts(sess_path, scalar_path)
         _write_job(
             job_id,
             {
                 "done": True,
-                "success": result.returncode == 0 and not error_lines,
-                "errors": error_lines[:_MAX_ERRORS],
-                "truncated": truncated,
-                "total_errors": len(error_lines),
-                "counts": upsert_counts,
+                "success": True,
+                "errors": [],
+                "preview": preview,
+                "missing_specimens": missing,
+                "skipped_session_ids": skipped,
+                "sess_path": sess_path,
+                "scalar_path": scalar_path,
+                "filename": filename,
+                "kind": "teeth",
             },
         )
+        try:
+            remove(csv_path)
+            remove(error_file)
+        except OSError:
+            pass
     except Exception as e:
         _write_job(
             job_id,
@@ -713,19 +822,15 @@ def _run_script(job_id: str, table: str, csv_path: str) -> None:
                 "errors": [str(e)],
                 "truncated": False,
                 "total_errors": 1,
-                "counts": None,
+                "filename": filename,
+                "kind": "teeth",
             },
         )
-    finally:
         for p in (csv_path, sess_path, scalar_path):
             try:
                 remove(p)
             except OSError:
                 pass
-        try:
-            remove(error_file)
-        except OSError:
-            pass
 
 
 @staff_member_required
@@ -752,9 +857,11 @@ def upload_csv(request: HttpRequest) -> HttpResponse:
                     for chunk in csv_file.chunks():
                         f.write(chunk)
                 job_id = str(uuid.uuid4())
-                _write_job(job_id, {"done": False})
+                _write_job(job_id, {"done": False, "filename": filename})
                 threading.Thread(
-                    target=_run_script, args=(job_id, table, tmp_path), daemon=True
+                    target=_run_script,
+                    args=(job_id, table, tmp_path, filename),
+                    daemon=True,
                 ).start()
                 from django.shortcuts import redirect as _redirect
 
@@ -778,17 +885,72 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     job = _read_job(job_id)
     if job is None:
         return HttpResponse("Job not found.", status=404)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "cancel":
+            for key in ("sess_path", "scalar_path", "specimen_path"):
+                p = job.get(key)
+                if p:
+                    try:
+                        remove(p)
+                    except OSError:
+                        pass
+            try:
+                remove(_job_path(job_id))
+            except OSError:
+                pass
+            kind = job.get("kind", "teeth")
+            url = "/admin/upload/specimen/" if kind == "specimen" else "/admin/upload/"
+            return redirect(url)
+        if action == "confirm":
+            kind = job.get("kind", "teeth")
+            if kind == "specimen":
+                specimen_path = job.get("specimen_path", "")
+                upsert_errors, counts = _upsert_specimen_data(specimen_path)
+                try:
+                    remove(specimen_path)
+                except OSError:
+                    pass
+            else:
+                sess_path = job.get("sess_path", "")
+                scalar_path = job.get("scalar_path", "")
+                skipped = set(job.get("skipped_session_ids", []))
+                upsert_errors, counts = _upsert_teeth_data(
+                    sess_path, scalar_path, skipped
+                )
+                for p in (sess_path, scalar_path):
+                    try:
+                        remove(p)
+                    except OSError:
+                        pass
+            confirmed_job = {
+                "done": True,
+                "success": not upsert_errors,
+                "errors": upsert_errors[:_MAX_ERRORS],
+                "truncated": len(upsert_errors) > _MAX_ERRORS,
+                "total_errors": len(upsert_errors),
+                "counts": counts,
+                "filename": job.get("filename", ""),
+                "kind": kind,
+                "confirmed": True,
+            }
+            _write_job(job_id, confirmed_job)
+            return redirect(f"/admin/upload/status/{job_id}/")
+
     if request.headers.get("Accept") == "application/json":
         return HttpResponse(json.dumps(job), content_type="application/json")
-    if job.get("done"):
+
+    if job.get("done") and (job.get("confirmed") or job.get("errors")):
         try:
             remove(_job_path(job_id))
         except OSError:
             pass
+
     return render(
         request,
         "admin/upload_status.html",
-        {"job": job, "job_id": job_id, "title": "Upload Teeth CSV — Processing"},
+        {"job": job, "job_id": job_id, "title": "Upload Status"},
     )
 
 
@@ -812,9 +974,11 @@ def upload_specimen_csv(request: HttpRequest) -> HttpResponse:
                     for chunk in csv_file.chunks():
                         f.write(chunk)
                 job_id = str(uuid.uuid4())
-                _write_job(job_id, {"done": False})
+                _write_job(job_id, {"done": False, "filename": filename})
                 threading.Thread(
-                    target=_run_specimen_script, args=(job_id, tmp_path), daemon=True
+                    target=_run_specimen_script,
+                    args=(job_id, tmp_path, filename),
+                    daemon=True,
                 ).start()
                 return redirect(f"/admin/upload/status/{job_id}/")
             except Exception as e:

@@ -145,7 +145,9 @@ def process_teeth(
         if duplicate_teeth:
             count = len(duplicate_teeth)
             error_out.write(
-                f"Error: the {count} following teeth have duplicate lines:\n"
+                "Error: the following "
+                f"{'tooth has' if count == 1 else f'{count} teeth have'} "
+                "duplicate lines:\n"
             )
             for tooth in sorted(duplicate_teeth):
                 error_out.write(f" {tooth}\n")
