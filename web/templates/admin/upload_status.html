@@ -33,9 +33,11 @@ Specimens to update: {{ job.preview.specimens_update }}{% endif %}</pre>
     <form method="post">
         {% csrf_token %}
         <p>
-            <button type="submit" name="action" value="confirm" class="button">Confirm — apply changes</button>
-            &nbsp;
-            <button type="submit" name="action" value="cancel">Cancel</button>
+            <button type="submit" name="action" value="confirm" class="button default"
+                style="padding: 10px 20px; font-size: 1.1em;">Confirm — apply changes</button>
+            &nbsp;&nbsp;
+            <button type="submit" name="action" value="cancel"
+                style="padding: 10px 20px; font-size: 1.1em;">Cancel</button>
         </p>
     </form>
     {% endif %}
