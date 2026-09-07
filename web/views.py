@@ -685,8 +685,8 @@ def _run_specimen_script(job_id: str, csv_path: str, filename: str) -> None:
             text=True,
             cwd=_SCRIPTS_DIR,
         )
-        lines = (result.stdout + result.stderr).splitlines()
-        error_lines = [line for line in lines if line.strip()]
+        # stdout carries the "N specimens written" summary; only stderr has errors.
+        error_lines = [line for line in result.stderr.splitlines() if line.strip()]
         if result.returncode != 0 or error_lines:
             truncated = len(error_lines) > _MAX_ERRORS
             _write_job(
@@ -800,7 +800,8 @@ def _run_script(job_id: str, table: str, csv_path: str, filename: str) -> None:
                 "success": True,
                 "errors": [],
                 "preview": preview,
-                "missing_specimens": missing,
+                "missing_specimens": missing[:25],
+                "total_missing": len(missing),
                 "skipped_session_ids": skipped,
                 "sess_path": sess_path,
                 "scalar_path": scalar_path,
@@ -1001,6 +1002,7 @@ def backup_table(request: HttpRequest) -> HttpResponse:
     message_class = "success"
     if request.method == "POST":
         table = request.POST.get("table", "")
+        next_url = request.POST.get("next", "")
         if table not in BACKUP_TABLES:
             message = f"Invalid table: {table}"
             message_class = "errornote"
@@ -1012,6 +1014,8 @@ def backup_table(request: HttpRequest) -> HttpResponse:
                     cursor.execute(
                         f"CREATE TABLE `{backup_name}` AS SELECT * FROM `{table}`"
                     )
+                if next_url and next_url.startswith("/"):
+                    return redirect(next_url)
                 message = f"Backup created: {backup_name}"
             except Exception as e:
                 message = f"Backup failed: {e}"

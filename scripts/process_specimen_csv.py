@@ -2,8 +2,8 @@
 Process a specimen CSV and write a cleaned CSV ready for DB import.
 
 Input CSV columns (case-sensitive):
-  UNIQUEID, HYPOCODE, taxon ID, inst ID, CATNUM, MASS,
-  LOC ID, sex, Fossil, captive, TYPE, COMMENTS
+  id, hypocode, taxon_id, institute_id, catalog_no, mass,
+  location_id, sex_id, fossil_id, captive_id, type_id, comments
 
 Output CSV columns (matching specimen table):
   id, hypocode, taxon_id, institute_id, catalog_number, mass,
@@ -61,15 +61,15 @@ def process_specimens(in_path: str, out: TextIO, error_out: TextIO) -> int:
 
     with open(in_path, encoding="utf-8-sig") as f:
         for row in DictReader(f):
-            uid = row["UNIQUEID"]
-            hypo = row["HYPOCODE"]
+            uid = row["id"]
+            hypo = row["hypocode"]
             key = (hypo, uid)
             if key in seen:
                 error_out.write(f"Repeated specimen: {uid}\n")
                 continue
             seen.add(key)
 
-            fossil = row["Fossil"]
+            fossil = row["fossil_id"]
             if fossil == "F":
                 fossil = "1"
             elif fossil == "E":
@@ -80,16 +80,16 @@ def process_specimens(in_path: str, out: TextIO, error_out: TextIO) -> int:
                 error_out.write(f"Specimen {uid} has incorrect fossil type: {fossil}\n")
                 fossil = "9"
 
-            sex = row["sex"]
+            sex = row["sex_id"]
             if sex not in _VALID_SEX:
                 if sex == "":
                     error_out.write(f"Specimen {uid} missing sex\n")
                 else:
                     error_out.write(f"Specimen {uid} has incorrect sex: {sex}\n")
 
-            mass = row["MASS"] or "0"
+            mass = row["mass"] or "0"
 
-            taxonomic_type = row["TYPE"].strip().upper()
+            taxonomic_type = row["type_id"].strip().upper()
             if taxonomic_type and taxonomic_type not in _TYPE_LOOKUP:
                 error_out.write(
                     f"Specimen {uid} has incorrect taxonomic type: "
@@ -99,9 +99,9 @@ def process_specimens(in_path: str, out: TextIO, error_out: TextIO) -> int:
             elif taxonomic_type:
                 taxonomic_type = _TYPE_LOOKUP[taxonomic_type]
 
-            locality_id = row["LOC ID"] or "10000"
+            locality_id = row["locality_id"] or "10000"
 
-            captive = row["captive"].upper()
+            captive = row["captive_id"].upper()
             if captive in _CAPTIVE_LOOKUP:
                 captive = _CAPTIVE_LOOKUP[captive]
             elif captive == "":
@@ -112,15 +112,15 @@ def process_specimens(in_path: str, out: TextIO, error_out: TextIO) -> int:
                 )
                 captive = "9"
 
-            comments = row["COMMENTS"].replace('"', '""')
+            comments = row["comments"].replace('"', '""')
 
             writer.writerow(
                 {
                     "id": uid,
                     "hypocode": hypo,
-                    "taxon_id": row["taxon ID"],
-                    "institute_id": row["inst ID"],
-                    "catalog_number": row["CATNUM"],
+                    "taxon_id": row["taxon_id"],
+                    "institute_id": row["institute_id"],
+                    "catalog_number": row["catalog_number"],
                     "mass": mass,
                     "locality_id": locality_id,
                     "sex_id": sex,
