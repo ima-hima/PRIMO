@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import threading
 import uuid
@@ -266,8 +267,6 @@ UPLOAD_TABLES = {"session", "data_scalar"}
 
 def _get_backups() -> dict[str, list[tuple[str, str]]]:
     """Return {base_table: [(backup_name, label), ...]} sorted newest-first."""
-    import re
-
     pattern = re.compile(r"^(.+)_(\d{8})_(\d{4})$")
     with connection.cursor() as cursor:
         cursor.execute("SHOW TABLES")
@@ -458,6 +457,62 @@ def _find_missing_specimens(
     return missing, skipped
 
 
+def _preview_counts_via_db(
+    cursor: Any,
+    table: str,
+    compare_cols: list[str],
+    csv_rows: list[dict],
+    batch: int = 500,
+) -> tuple[int, int]:
+    """
+    Count true inserts and actual-change updates by comparing CSV rows against
+    the DB in batches.  Uses <=> (NULL-safe equality).  Returns (inserts, updates).
+    """
+    if not csv_rows:
+        return 0, 0
+
+    all_ids = [r["id"] for r in csv_rows]
+    csv_by_id = {r["id"]: r for r in csv_rows}
+
+    # Find existing IDs
+    existing_ids: set[str] = set()
+    for i in range(0, len(all_ids), batch):
+        chunk = all_ids[i : i + batch]
+        fmt = ",".join(["%s"] * len(chunk))
+        cursor.execute(f"SELECT id FROM `{table}` WHERE id IN ({fmt})", chunk)
+        existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
+    inserts = len(all_ids) - len(existing_ids)
+
+    # For existing rows, fetch and compare using NULL-safe equality in SQL.
+    # Build a VALUES clause so MySQL does the comparison without a temp table.
+    updates = 0
+    existing_list = list(existing_ids)
+    col_list = ["id"] + compare_cols
+    col_sql = ", ".join(f"`{c}`" for c in col_list)
+    diff_clause = " OR ".join(f"NOT (s.`{col}` <=> v.`{col}`)" for col in compare_cols)
+    for i in range(0, len(existing_list), batch):
+        chunk = existing_list[i : i + batch]
+        rows = [csv_by_id[eid] for eid in chunk]
+        params = [
+            val if (val := row.get(c, "")) != "" else None
+            for row in rows
+            for c in col_list
+        ]
+        # Build a derived table via UNION ALL so each CSV row becomes one row.
+        placeholders_row = ", ".join(["%s"] * len(col_list))
+        union_sql = " UNION ALL ".join(f"SELECT {placeholders_row}" for _ in rows)
+        cursor.execute(
+            f"SELECT COUNT(*) FROM `{table}` s "
+            f"JOIN ({union_sql}) v ({col_sql}) "
+            f"ON s.id = v.id WHERE {diff_clause}",
+            params,
+        )
+        updates += cursor.fetchone()[0]
+
+    return inserts, updates
+
+
 def _preview_teeth_counts(
     sess_path: str, scalar_path: str
 ) -> tuple[dict[str, int], list[str], list[str]]:
@@ -467,27 +522,36 @@ def _preview_teeth_counts(
     """
     import csv as csv_mod
 
+    sess_compare_cols = [
+        "observer_id",
+        "group_id",
+        "specimen_id",
+        "original_id",
+        "protocol_id",
+        "comments",
+        "filename",
+    ]
+    scalar_compare_cols = ["session_id", "variable_id", "value"]
+
     with connection.cursor() as cursor:
         with open(sess_path, newline="") as f:
-            sess_rows = list(csv_mod.DictReader(f))
-        missing, skipped_set = _find_missing_specimens(cursor, sess_rows)
+            all_sess_rows = list(csv_mod.DictReader(f))
+        missing, skipped_set = _find_missing_specimens(cursor, all_sess_rows)
 
-        eligible_sess_ids = [r["id"] for r in sess_rows if r["id"] not in skipped_set]
-        existing_sess = _query_existing_ids(cursor, "session", eligible_sess_ids)
+        eligible_sess = [r for r in all_sess_rows if r["id"] not in skipped_set]
 
         with open(scalar_path, newline="") as f:
-            scalar_rows = list(csv_mod.DictReader(f))
-        eligible_scalar_ids = [
-            r["id"] for r in scalar_rows if r["session_id"] not in skipped_set
+            all_scalar_rows = list(csv_mod.DictReader(f))
+        eligible_scalars = [
+            r for r in all_scalar_rows if r["session_id"] not in skipped_set
         ]
-        existing_scalar = _query_existing_ids(
-            cursor, "data_scalar", eligible_scalar_ids
-        )
 
-    sessions_insert = len(eligible_sess_ids) - len(existing_sess)
-    sessions_update = len(existing_sess)
-    scalars_insert = len(eligible_scalar_ids) - len(existing_scalar)
-    scalars_update = len(existing_scalar)
+        sessions_insert, sessions_update = _preview_counts_via_db(
+            cursor, "session", sess_compare_cols, eligible_sess
+        )
+        scalars_insert, scalars_update = _preview_counts_via_db(
+            cursor, "data_scalar", scalar_compare_cols, eligible_scalars
+        )
 
     return (
         {
@@ -505,14 +569,38 @@ def _preview_specimen_counts(specimen_path: str) -> dict[str, int]:
     """Count what _would_ be inserted/updated for specimens without touching the DB."""
     import csv as csv_mod
 
+    compare_cols = [
+        "hypocode",
+        "taxon_id",
+        "institute_id",
+        "catalog_number",
+        "mass",
+        "locality_id",
+        "sex_id",
+        "fossil_id",
+        "captive_id",
+        "taxonomic_type_id",
+        "comments",
+    ]
     with open(specimen_path, newline="") as f:
-        ids = [row["id"] for row in csv_mod.DictReader(f)]
+        csv_rows = list(csv_mod.DictReader(f))
     with connection.cursor() as cursor:
-        existing = _query_existing_ids(cursor, "specimen", ids)
-    return {
-        "specimens_insert": len(ids) - len(existing),
-        "specimens_update": len(existing),
-    }
+        inserts, updates = _preview_counts_via_db(
+            cursor, "specimen", compare_cols, csv_rows
+        )
+    return {"specimens_insert": inserts, "specimens_update": updates}
+
+
+def _format_db_error(e: Exception, row: dict) -> str:
+    msg = str(e)
+    fk_col = re.search(r"FOREIGN KEY \(`(\w+)`\)", msg)
+    ref_table = re.search(r"REFERENCES `(\w+)`", msg)
+    if fk_col and ref_table:
+        col = fk_col.group(1)
+        table = ref_table.group(1)
+        val = row.get(col, "?")
+        return f"No {table} with id {val} exists."
+    return msg
 
 
 def _upsert_teeth_data(
@@ -574,8 +662,8 @@ def _upsert_teeth_data(
                     counts["sessions_updated"] += 1
             except Exception as e:
                 errors.append(
-                    f"Session insert failed for specimen "
-                    f"{row.get('specimen_id')}: {e}"
+                    f"Failed to insert session {row.get('id')}: "
+                    f"{_format_db_error(e, row)}"
                 )
 
         with open(scalar_path, newline="") as f:
@@ -604,7 +692,10 @@ def _upsert_teeth_data(
                     elif cursor.rowcount == 2:
                         counts["scalars_updated"] += 1
                 except Exception as e:
-                    errors.append(f"Scalar insert failed id={row.get('id')}: {e}")
+                    errors.append(
+                        f"Failed to insert scalar {row.get('id')}: "
+                        f"{_format_db_error(e, row)}"
+                    )
 
     return errors, counts
 
@@ -670,7 +761,10 @@ def _upsert_specimen_data(
                 elif cursor.rowcount == 2:
                     counts["specimens_updated"] += 1
             except Exception as e:
-                errors.append(f"Specimen insert failed for id={row.get('id')}: {e}")
+                errors.append(
+                    f"Failed to insert specimen {row.get('id')}: "
+                    f"{_format_db_error(e, row)}"
+                )
 
     return errors, counts
 
@@ -948,10 +1042,38 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
         except OSError:
             pass
 
+    backup_name = request.GET.get("backup_msg", "")
+    backup_msg = ""
+    if backup_name:
+        m = re.match(r"^.+_(\d{8})_(\d{4})$", backup_name)
+        if m:
+            try:
+                dt = datetime.strptime(f"{m.group(1)}_{m.group(2)}", "%Y%m%d_%H%M")
+                label = dt.strftime("%-d %B %Y, %H:%M").replace(
+                    dt.strftime("%-d"), _ordinal(dt.day), 1
+                )
+                backup_msg = label
+            except ValueError:
+                backup_msg = backup_name
+    last_backup_label = ""
+    if job.get("done") and not job.get("errors") and not job.get("confirmed"):
+        kind = job.get("kind", "teeth")
+        tables = ["specimen"] if kind == "specimen" else ["session", "data_scalar"]
+        backups = _get_backups()
+        candidates = [backups[t][0][1] for t in tables if backups.get(t)]
+        if candidates:
+            last_backup_label = candidates[0]
+
     return render(
         request,
         "admin/upload_status.html",
-        {"job": job, "job_id": job_id, "title": "Upload Status"},
+        {
+            "job": job,
+            "job_id": job_id,
+            "title": "Upload Status",
+            "backup_msg": backup_msg,
+            "last_backup_label": last_backup_label,
+        },
     )
 
 
@@ -1015,7 +1137,7 @@ def backup_table(request: HttpRequest) -> HttpResponse:
                         f"CREATE TABLE `{backup_name}` AS SELECT * FROM `{table}`"
                     )
                 if next_url and next_url.startswith("/"):
-                    return redirect(next_url)
+                    return redirect(f"{next_url}?backup_msg={backup_name}")
                 message = f"Backup created: {backup_name}"
             except Exception as e:
                 message = f"Backup failed: {e}"
