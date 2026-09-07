@@ -3,10 +3,11 @@ from contextlib import contextmanager
 from typing import Generator
 
 from django.db import connection
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
-from web.views import (
+from web.views import (  # type: ignore[attr-defined]
     _find_missing_specimens,
+    _format_db_error,
     _preview_specimen_counts,
     _preview_teeth_counts,
     _upsert_specimen_data,
@@ -137,7 +138,7 @@ class UpsertTeethDataTest(TestCase):
             _scalar_csv("100,1,225,1.0"),
         )
         self.assertTrue(len(errors) > 0)
-        self.assertIn("Session insert failed", errors[0])
+        self.assertIn("Failed to insert session", errors[0])
         # scalar still inserted despite session error
         with connection.cursor() as c:
             c.execute("SELECT COUNT(*) FROM data_scalar WHERE session_id=1")
@@ -312,10 +313,11 @@ class PreviewTeethCountsTest(TestCase):
             c.execute(
                 "INSERT INTO session (id, observer_id, group_id, specimen_id,"
                 " original_id, protocol_id, comments, filename, updated_at)"
-                " VALUES (1, 9, 2, 100, 1, 5, '', 'teeth', NOW())"
+                " VALUES (1, 9, 2, 100, 1, 5, 'old comment', 'teeth', NOW())"
             )
+        # CSV has a changed comment for session 1 and a new session 2
         sess_path, scalar_path = self._make_csvs(
-            _sess_csv("1,9,2,100,1,5,,teeth", "2,9,2,101,1,5,,teeth"),
+            _sess_csv("1,9,2,100,1,5,new comment,teeth", "2,9,2,101,1,5,,teeth"),
             _scalar_csv("10,1,225,1.1", "11,2,225,2.2"),
         )
         counts, missing, _ = _preview_teeth_counts(sess_path, scalar_path)
@@ -464,3 +466,32 @@ class PreviewSpecimenCountsTest(TestCase):
         path = self._make_csv(SPECIMEN_HEADER)
         counts = _preview_specimen_counts(path)
         self.assertEqual(counts, {"specimens_insert": 0, "specimens_update": 0})
+
+
+class FormatDbErrorTest(SimpleTestCase):
+    def _fk_error(self, col: str, ref_table: str) -> Exception:
+        return Exception(
+            f"(1452, 'Cannot add or update a child row: a foreign key constraint "
+            f"fails (`db`.`specimen`, CONSTRAINT `specimen_{col}_fk` "
+            f"FOREIGN KEY (`{col}`) REFERENCES `{ref_table}` (`id`))')"
+        )
+
+    def test_fk_error_produces_clean_message(self) -> None:
+        row = {"id": "53097", "institute_id": "42"}
+        msg = _format_db_error(self._fk_error("institute_id", "institute"), row)
+        self.assertEqual(msg, "No institute with id 42 exists.")
+
+    def test_fk_error_different_column(self) -> None:
+        row = {"id": "100", "taxon_id": "999"}
+        msg = _format_db_error(self._fk_error("taxon_id", "taxon"), row)
+        self.assertEqual(msg, "No taxon with id 999 exists.")
+
+    def test_non_fk_error_returns_raw_message(self) -> None:
+        row = {"id": "1"}
+        msg = _format_db_error(Exception("some unexpected error"), row)
+        self.assertEqual(msg, "some unexpected error")
+
+    def test_missing_col_value_shows_question_mark(self) -> None:
+        row = {"id": "1"}  # institute_id not present
+        msg = _format_db_error(self._fk_error("institute_id", "institute"), row)
+        self.assertEqual(msg, "No institute with id ? exists.")
