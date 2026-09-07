@@ -13,8 +13,8 @@ if str(_SCRIPTS_DIR) not in sys.path:
 from process_specimen_csv import process_specimens  # noqa: E402
 
 _HEADER = (
-    "UNIQUEID,HYPOCODE,taxon ID,inst ID,CATNUM,MASS,LOC ID,sex,"
-    "Fossil,captive,TYPE,COMMENTS"
+    "id,hypocode,taxon_id,institute_id,catalog_number,mass,"
+    "locality_id,sex_id,fossil_id,captive_id,type_id,comments"
 )
 
 
