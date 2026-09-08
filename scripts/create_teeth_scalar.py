@@ -67,7 +67,7 @@ def process_teeth(
     """Read a teeth CSV and write session and scalar output CSVs."""
     entries: defaultdict[Any, Any] = defaultdict(dict)
 
-    with open(teeth_path, "r") as f:
+    with open(teeth_path, "r", encoding="utf-8-sig") as f:
         rows = DictReader(f, delimiter=",", quotechar='"')
 
         # Identify measurement columns: everything between group_id and COMMENT.
@@ -145,7 +145,9 @@ def process_teeth(
         if duplicate_teeth:
             count = len(duplicate_teeth)
             error_out.write(
-                f"Error: the {count} following teeth have duplicate lines:\n"
+                "Error: the following "
+                f"{'tooth has' if count == 1 else f'{count} teeth have'} "
+                "duplicate lines:\n"
             )
             for tooth in sorted(duplicate_teeth):
                 error_out.write(f" {tooth}\n")

@@ -81,10 +81,6 @@ def process_specimens(
     sex_lookup = {"1", "2", "3", "4", "5", "6", "9"}
 
     specimen_id = 0
-    try:
-        os.mkdir(data_path)
-    except FileExistsError:
-        pass
     with open(specimen_inname, mode="r", encoding="utf-8-sig") as infile, open(
         specimen_outname, "w"
     ) as outfile:
@@ -95,13 +91,18 @@ def process_specimens(
             "age_class_id,fossil_id,captive_id,taxonomic_type_id,comments\n"
         )
         specimen_list = dict()
+        seen_uids: set[str] = set()
+        dup_uids: set[str] = set()
         for row in rows:
-            # Write error and skip if specimen is dupe.
-            if (row["HYPOCODE"], row["UNIQUEID"]) in specimen_list:
-                error_out.write(f"Repeated specimen: {row['UNIQUEID']}\n")
+            uid = row["UNIQUEID"]
+            if uid in seen_uids:
+                if uid not in dup_uids:
+                    error_out.write(f"Repeated specimen id: {uid}\n")
+                    dup_uids.add(uid)
                 continue
+            seen_uids.add(uid)
             count += 1
-            specimen_list[(row["HYPOCODE"], row["UNIQUEID"])] = specimen_id
+            specimen_list[(row["HYPOCODE"], uid)] = specimen_id
             specimen_id += 1
 
             # Now, do lookup and replacements

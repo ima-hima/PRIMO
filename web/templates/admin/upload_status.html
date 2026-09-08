@@ -2,21 +2,78 @@
 {% block content %}
 <div id="status-container">
 {% if job.done %}
-    {% if job.success %}
-    <p class="success">Script completed successfully.</p>
-    {% else %}
-    <p class="errornote">Script completed with errors.</p>
-    {% endif %}
     {% if job.errors %}
-    <h3>Output{% if job.truncated %} (first {{ job.errors|length }} of {{ job.total_errors }} lines){% endif %}</h3>
+    <p class="errornote">Processing completed with errors. No changes have been made to the database.</p>
+    <h3>Errors{% if job.truncated %} (first {{ job.errors|length }} of {{ job.total_errors }}){% endif %}</h3>
     <pre>{% for line in job.errors %}{{ line }}
 {% endfor %}</pre>
-    {% else %}
-    <p>No output.</p>
+    <p><a href="{% if job.kind == 'specimen' %}{% url 'upload_specimen_csv' %}{% else %}{% url 'upload_csv' %}{% endif %}">Upload a replacement {% if job.kind == 'specimen' %}specimen{% else %}teeth{% endif %} file</a></p>
+    {% elif job.confirmed %}
+    <p class="success">Changes applied successfully.</p>
+    {% if job.counts %}
+    <pre>{% if job.counts.sessions_inserted is not None %}Sessions inserted: {{ job.counts.sessions_inserted }}
+Sessions updated: {{ job.counts.sessions_updated }}
+Scalar rows inserted: {{ job.counts.scalars_inserted }}
+Scalar rows updated: {{ job.counts.scalars_updated }}{% endif %}{% if job.counts.specimens_inserted is not None %}Specimens inserted: {{ job.counts.specimens_inserted }}
+Specimens updated: {{ job.counts.specimens_updated }}{% endif %}</pre>
     {% endif %}
-    <p><a href="{% url 'upload_csv' %}">Upload another file</a></p>
+    <p><a href="{% if job.kind == 'specimen' %}{% url 'upload_specimen_csv' %}{% else %}{% url 'upload_csv' %}{% endif %}">Upload another file</a></p>
+    {% else %}
+    <p class="success">Processing complete. Review the preview below before confirming.</p>
+    {% if job.missing_specimens %}
+    <p class="errornote">Warning: {{ job.total_missing }} specimen ID(s) not found in the database — sessions referencing them will be skipped.</p>
+    <pre>{% for id in job.missing_specimens %}{{ id }}
+{% endfor %}{% if job.total_missing > job.missing_specimens|length %}… and {{ job.total_missing|add:"-25" }} more{% endif %}</pre>
+    {% endif %}
+    {% if job.preview %}
+    <pre>{% if job.preview.sessions_insert is not None %}Sessions to insert: {{ job.preview.sessions_insert }}
+Sessions to update: {{ job.preview.sessions_update }}
+Scalar rows to insert: {{ job.preview.scalars_insert }}
+Scalar rows to update: {{ job.preview.scalars_update }}{% endif %}{% if job.preview.specimens_insert is not None %}Specimens to insert: {{ job.preview.specimens_insert }}
+Specimens to update: {{ job.preview.specimens_update }}{% endif %}</pre>
+    {% endif %}
+    {% if backup_msg %}
+    <p style="font-size:1.1em;" class="success">Backup successful at {{ backup_msg }}.</p>
+    {% else %}
+    <p style="font-size:1.1em;">Most recent backup was at {{ last_backup_label|default:"unknown" }}. Backup again before continuing?</p>
+    {% endif %}
+    <p>
+        {% if job.kind == "specimen" %}
+            <form method="post" action="{% url 'backup_table' %}" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="table" value="specimen" />
+                <input type="hidden" name="next" value="{% url 'upload_status' job_id %}" />
+                <button type="submit" class="button">Back up specimen</button>
+            </form>
+        {% else %}
+            <form method="post" action="{% url 'backup_table' %}" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="table" value="session" />
+                <input type="hidden" name="next" value="{% url 'upload_status' job_id %}" />
+                <button type="submit" class="button">Back up session</button>
+            </form>
+            &middot;
+            <form method="post" action="{% url 'backup_table' %}" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="table" value="data_scalar" />
+                <input type="hidden" name="next" value="{% url 'upload_status' job_id %}" />
+                <button type="submit" class="button">Back up data_scalar</button>
+            </form>
+        {% endif %}
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <p>
+            <button type="submit" name="action" value="confirm" class="button default"
+                style="padding: 10px 20px; font-size: 1.1em;">Confirm — apply changes</button>
+            &nbsp;&nbsp;
+            <button type="submit" name="action" value="cancel"
+                style="padding: 10px 20px; font-size: 1.1em;">Cancel</button>
+        </p>
+    </form>
+    {% endif %}
 {% else %}
-    <p>Processing… <span id="spinner">⏳</span></p>
+    <p>Processing <strong>{{ job.filename }}</strong>… <span id="spinner">⏳</span></p>
     <script>
     (function poll() {
         fetch(window.location.href, {headers: {Accept: "application/json"}})
