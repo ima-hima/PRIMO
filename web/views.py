@@ -21,7 +21,7 @@ from django.contrib.auth.models import (
     User,
 )
 from django.core.files import File
-from django.db import connection
+from django.db import connection, transaction
 from django.http import (
     Http404,
     HttpRequest,
@@ -466,7 +466,8 @@ def _preview_counts_via_db(
 ) -> tuple[int, int]:
     """
     Count true inserts and actual-change updates by comparing CSV rows against
-    the DB in batches.  Uses <=> (NULL-safe equality).  Returns (inserts, updates).
+    the DB in batches.  Fetches DB rows and compares in Python to avoid
+    MySQL type-coercion surprises.  Returns (inserts, updates).
     """
     if not csv_rows:
         return 0, 0
@@ -474,7 +475,6 @@ def _preview_counts_via_db(
     all_ids = [r["id"] for r in csv_rows]
     csv_by_id = {r["id"]: r for r in csv_rows}
 
-    # Find existing IDs
     existing_ids: set[str] = set()
     for i in range(0, len(all_ids), batch):
         chunk = all_ids[i : i + batch]
@@ -482,33 +482,26 @@ def _preview_counts_via_db(
         cursor.execute(f"SELECT id FROM `{table}` WHERE id IN ({fmt})", chunk)
         existing_ids.update(str(r[0]) for r in cursor.fetchall())
 
-    inserts = len(all_ids) - len(existing_ids)
+    inserts = len(set(all_ids) - existing_ids)
 
-    # For existing rows, fetch and compare using NULL-safe equality in SQL.
-    # Build a VALUES clause so MySQL does the comparison without a temp table.
+    # Fetch existing rows and compare field-by-field in Python.
     updates = 0
+    col_sql = ", ".join(f"`{c}`" for c in ["id"] + compare_cols)
     existing_list = list(existing_ids)
-    col_list = ["id"] + compare_cols
-    col_sql = ", ".join(f"`{c}`" for c in col_list)
-    diff_clause = " OR ".join(f"NOT (s.`{col}` <=> v.`{col}`)" for col in compare_cols)
     for i in range(0, len(existing_list), batch):
         chunk = existing_list[i : i + batch]
-        rows = [csv_by_id[eid] for eid in chunk]
-        params = [
-            val if (val := row.get(c, "")) != "" else None
-            for row in rows
-            for c in col_list
-        ]
-        # Build a derived table via UNION ALL so each CSV row becomes one row.
-        placeholders_row = ", ".join(["%s"] * len(col_list))
-        union_sql = " UNION ALL ".join(f"SELECT {placeholders_row}" for _ in rows)
-        cursor.execute(
-            f"SELECT COUNT(*) FROM `{table}` s "
-            f"JOIN ({union_sql}) v ({col_sql}) "
-            f"ON s.id = v.id WHERE {diff_clause}",
-            params,
-        )
-        updates += cursor.fetchone()[0]
+        fmt = ",".join(["%s"] * len(chunk))
+        cursor.execute(f"SELECT {col_sql} FROM `{table}` WHERE id IN ({fmt})", chunk)
+        cols = [d[0] for d in cursor.description]
+        for db_row in cursor.fetchall():
+            db = dict(zip(cols, db_row))
+            csv = csv_by_id[str(db["id"])]
+            for col in compare_cols:
+                db_val = "" if db[col] is None else str(db[col]).strip()
+                csv_val = (csv.get(col) or "").strip()
+                if db_val != csv_val:
+                    updates += 1
+                    break
 
     return inserts, updates
 
@@ -625,52 +618,82 @@ def _upsert_teeth_data(
         with open(sess_path, newline="") as f:
             sess_rows = list(csv_mod.DictReader(f))
 
-        for row in sess_rows:
-            if row["id"] in skipped_session_ids:
-                continue
+        eligible_sess = [r for r in sess_rows if r["id"] not in skipped_session_ids]
+        sess_ids = [r["id"] for r in eligible_sess]
+        existing_sess_ids: set[str] = set()
+        for i in range(0, len(sess_ids), 500):
+            chunk = sess_ids[i : i + 500]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM session WHERE id IN ({fmt})", chunk)
+            existing_sess_ids.update(str(r[0]) for r in cursor.fetchall())
+
+        for row in eligible_sess:
+            row_id = row["id"]
             try:
-                cursor.execute(
-                    """
-                    INSERT INTO session
-                        (id, observer_id, group_id, specimen_id,
-                         original_id, protocol_id, comments, filename,
-                         updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON DUPLICATE KEY UPDATE
-                        observer_id = VALUES(observer_id),
-                        group_id = VALUES(group_id),
-                        original_id = VALUES(original_id),
-                        protocol_id = VALUES(protocol_id),
-                        comments = VALUES(comments),
-                        filename = VALUES(filename),
-                        updated_at = NOW()
-                    """,
-                    [
-                        row["id"],
-                        row["observer_id"],
-                        row["group_id"],
-                        row["specimen_id"],
-                        row["original_id"],
-                        row["protocol_id"],
-                        row["comments"],
-                        row["filename"],
-                    ],
-                )
-                if cursor.rowcount == 1:
+                with transaction.atomic():
+                    cursor.execute(
+                        """
+                        INSERT INTO session
+                            (id, observer_id, group_id, specimen_id,
+                             original_id, protocol_id, comments, filename,
+                             updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        ON DUPLICATE KEY UPDATE
+                            observer_id = VALUES(observer_id),
+                            group_id = VALUES(group_id),
+                            original_id = VALUES(original_id),
+                            protocol_id = VALUES(protocol_id),
+                            comments = VALUES(comments),
+                            filename = VALUES(filename),
+                            updated_at = IF(
+                                NOT (observer_id <=> VALUES(observer_id)) OR
+                                NOT (group_id <=> VALUES(group_id)) OR
+                                NOT (original_id <=> VALUES(original_id)) OR
+                                NOT (protocol_id <=> VALUES(protocol_id)) OR
+                                NOT (comments <=> VALUES(comments)) OR
+                                NOT (filename <=> VALUES(filename)),
+                                NOW(), updated_at
+                            )
+                        """,
+                        [
+                            row_id,
+                            row["observer_id"],
+                            row["group_id"],
+                            row["specimen_id"],
+                            row["original_id"],
+                            row["protocol_id"],
+                            row["comments"],
+                            row["filename"],
+                        ],
+                    )
+                    rc = cursor.rowcount
+                if row_id not in existing_sess_ids:
                     counts["sessions_inserted"] += 1
-                elif cursor.rowcount == 2:
+                elif rc == 2:
                     counts["sessions_updated"] += 1
             except Exception as e:
                 errors.append(
-                    f"Failed to insert session {row.get('id')}: "
-                    f"{_format_db_error(e, row)}"
+                    f"Failed to insert session {row_id}: " f"{_format_db_error(e, row)}"
                 )
 
         with open(scalar_path, newline="") as f:
-            for row in csv_mod.DictReader(f):
-                if row["session_id"] in skipped_session_ids:
-                    continue
-                try:
+            scalar_rows = [
+                r
+                for r in csv_mod.DictReader(f)
+                if r["session_id"] not in skipped_session_ids
+            ]
+        scalar_ids = [r["id"] for r in scalar_rows]
+        existing_scalar_ids: set[str] = set()
+        for i in range(0, len(scalar_ids), 500):
+            chunk = scalar_ids[i : i + 500]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM data_scalar WHERE id IN ({fmt})", chunk)
+            existing_scalar_ids.update(str(r[0]) for r in cursor.fetchall())
+
+        for row in scalar_rows:
+            row_id = row["id"]
+            try:
+                with transaction.atomic():
                     cursor.execute(
                         """
                         INSERT INTO data_scalar
@@ -678,24 +701,27 @@ def _upsert_teeth_data(
                         VALUES (%s, %s, %s, %s, NOW())
                         ON DUPLICATE KEY UPDATE
                             value = VALUES(value),
-                            updated_at = NOW()
+                            updated_at = IF(
+                                NOT (value <=> VALUES(value)),
+                                NOW(), updated_at
+                            )
                         """,
                         [
-                            row["id"],
+                            row_id,
                             row["session_id"],
                             row["variable_id"],
                             row["value"],
                         ],
                     )
-                    if cursor.rowcount == 1:
-                        counts["scalars_inserted"] += 1
-                    elif cursor.rowcount == 2:
-                        counts["scalars_updated"] += 1
-                except Exception as e:
-                    errors.append(
-                        f"Failed to insert scalar {row.get('id')}: "
-                        f"{_format_db_error(e, row)}"
-                    )
+                    rc = cursor.rowcount
+                if row_id not in existing_scalar_ids:
+                    counts["scalars_inserted"] += 1
+                elif rc == 2:
+                    counts["scalars_updated"] += 1
+            except Exception as e:
+                errors.append(
+                    f"Failed to insert scalar {row_id}: " f"{_format_db_error(e, row)}"
+                )
 
     return errors, counts
 
@@ -718,51 +744,76 @@ def _upsert_specimen_data(
         with open(specimen_path, newline="") as f:
             rows = list(csv_mod.DictReader(f))
 
+        all_ids = [r["id"] for r in rows]
+        existing_ids: set[str] = set()
+        batch = 500
+        for i in range(0, len(all_ids), batch):
+            chunk = all_ids[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM specimen WHERE id IN ({fmt})", chunk)
+            existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
         for row in rows:
+            row_id = row["id"]
             try:
-                cursor.execute(
-                    """
-                    INSERT INTO specimen
-                        (id, hypocode, taxon_id, institute_id, catalog_number,
-                         mass, locality_id, sex_id, fossil_id, captive_id,
-                         taxonomic_type_id, comments, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON DUPLICATE KEY UPDATE
-                        hypocode = VALUES(hypocode),
-                        taxon_id = VALUES(taxon_id),
-                        institute_id = VALUES(institute_id),
-                        catalog_number = VALUES(catalog_number),
-                        mass = VALUES(mass),
-                        locality_id = VALUES(locality_id),
-                        sex_id = VALUES(sex_id),
-                        fossil_id = VALUES(fossil_id),
-                        captive_id = VALUES(captive_id),
-                        taxonomic_type_id = VALUES(taxonomic_type_id),
-                        comments = VALUES(comments),
-                        updated_at = NOW()
-                    """,
-                    [
-                        row["id"],
-                        row["hypocode"],
-                        row["taxon_id"],
-                        row["institute_id"],
-                        row["catalog_number"],
-                        row["mass"],
-                        row["locality_id"],
-                        row["sex_id"],
-                        row["fossil_id"],
-                        row["captive_id"],
-                        row["taxonomic_type_id"],
-                        row["comments"],
-                    ],
-                )
-                if cursor.rowcount == 1:
+                with transaction.atomic():
+                    cursor.execute(
+                        """
+                        INSERT INTO specimen
+                            (id, hypocode, taxon_id, institute_id, catalog_number,
+                             mass, locality_id, sex_id, fossil_id, captive_id,
+                             taxonomic_type_id, comments, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        ON DUPLICATE KEY UPDATE
+                            hypocode = VALUES(hypocode),
+                            taxon_id = VALUES(taxon_id),
+                            institute_id = VALUES(institute_id),
+                            catalog_number = VALUES(catalog_number),
+                            mass = VALUES(mass),
+                            locality_id = VALUES(locality_id),
+                            sex_id = VALUES(sex_id),
+                            fossil_id = VALUES(fossil_id),
+                            captive_id = VALUES(captive_id),
+                            taxonomic_type_id = VALUES(taxonomic_type_id),
+                            comments = VALUES(comments),
+                            updated_at = IF(
+                                NOT (hypocode <=> VALUES(hypocode)) OR
+                                NOT (taxon_id <=> VALUES(taxon_id)) OR
+                                NOT (institute_id <=> VALUES(institute_id)) OR
+                                NOT (catalog_number <=> VALUES(catalog_number)) OR
+                                NOT (mass <=> VALUES(mass)) OR
+                                NOT (locality_id <=> VALUES(locality_id)) OR
+                                NOT (sex_id <=> VALUES(sex_id)) OR
+                                NOT (fossil_id <=> VALUES(fossil_id)) OR
+                                NOT (captive_id <=> VALUES(captive_id)) OR
+                                NOT (taxonomic_type_id <=> VALUES(taxonomic_type_id)) OR
+                                NOT (comments <=> VALUES(comments)),
+                                NOW(), updated_at
+                            )
+                        """,
+                        [
+                            row_id,
+                            row["hypocode"],
+                            row["taxon_id"],
+                            row["institute_id"],
+                            row["catalog_number"],
+                            row["mass"],
+                            row["locality_id"],
+                            row["sex_id"],
+                            row["fossil_id"],
+                            row["captive_id"],
+                            row["taxonomic_type_id"],
+                            row["comments"],
+                        ],
+                    )
+                    rc = cursor.rowcount
+                if row_id not in existing_ids:
                     counts["specimens_inserted"] += 1
-                elif cursor.rowcount == 2:
+                elif rc == 2:
                     counts["specimens_updated"] += 1
             except Exception as e:
                 errors.append(
-                    f"Failed to insert specimen {row.get('id')}: "
+                    f"Failed to insert specimen {row_id}: "
                     f"{_format_db_error(e, row)}"
                 )
 

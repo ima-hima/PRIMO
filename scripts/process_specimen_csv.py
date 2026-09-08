@@ -54,20 +54,23 @@ def process_specimens(in_path: str, out: TextIO, error_out: TextIO) -> int:
     Read specimen CSV at in_path, write cleaned rows to out.
     Returns the number of specimens written.
     """
-    seen: set[tuple[str, str]] = set()
+    seen_ids: set[str] = set()
+    dup_ids: set[str] = set()
     writer = DictWriter(out, fieldnames=_OUT_FIELDS)
     writer.writeheader()
     count = 0
 
     with open(in_path, encoding="utf-8-sig") as f:
-        for row in DictReader(f):
+        for raw in DictReader(f):
+            row = {k: v.strip() for k, v in raw.items()}
             uid = row["id"]
             hypo = row["hypocode"]
-            key = (hypo, uid)
-            if key in seen:
-                error_out.write(f"Repeated specimen: {uid}\n")
+            if uid in seen_ids:
+                if uid not in dup_ids:
+                    error_out.write(f"Repeated specimen id: {uid}\n")
+                    dup_ids.add(uid)
                 continue
-            seen.add(key)
+            seen_ids.add(uid)
 
             fossil = row["fossil_id"]
             if fossil == "F":
@@ -89,7 +92,7 @@ def process_specimens(in_path: str, out: TextIO, error_out: TextIO) -> int:
 
             mass = row["mass"] or "0"
 
-            taxonomic_type = row["type_id"].strip().upper()
+            taxonomic_type = row["type_id"].upper()
             if taxonomic_type and taxonomic_type not in _TYPE_LOOKUP:
                 error_out.write(
                     f"Specimen {uid} has incorrect taxonomic type: "

@@ -164,7 +164,7 @@ class ProcessSpecimenCsvTest(SimpleTestCase):
         self.assertEqual(len(rows), 1)
         self.assertIn("missing sex", errors)
 
-    def test_duplicate_hypo_uid_skipped_with_error(self) -> None:
+    def test_duplicate_id_skipped_with_error(self) -> None:
         rows, errors = _run(
             _make_csv(
                 _blank_row(uid="1001", hypo="ABC001"),
@@ -172,16 +172,38 @@ class ProcessSpecimenCsvTest(SimpleTestCase):
             )
         )
         self.assertEqual(len(rows), 1)
-        self.assertIn("Repeated specimen", errors)
+        self.assertIn("Repeated specimen id: 1001", errors)
 
-    def test_same_uid_different_hypo_both_written(self) -> None:
+    def test_duplicate_id_different_hypo_skipped_with_error(self) -> None:
         rows, errors = _run(
             _make_csv(
                 _blank_row(uid="1001", hypo="ABC001"),
                 _blank_row(uid="1001", hypo="XYZ999"),
             )
         )
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("Repeated specimen id: 1001", errors)
+
+    def test_duplicate_id_reported_only_once(self) -> None:
+        rows, errors = _run(
+            _make_csv(
+                _blank_row(uid="1001"),
+                _blank_row(uid="1001"),
+                _blank_row(uid="1001"),
+            )
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(errors.count("1001"), 1)
+
+    def test_no_duplicate_ids_no_error(self) -> None:
+        rows, errors = _run(
+            _make_csv(
+                _blank_row(uid="1001"),
+                _blank_row(uid="1002"),
+                _blank_row(uid="1003"),
+            )
+        )
+        self.assertEqual(len(rows), 3)
         self.assertEqual(errors, "")
 
     def test_multiple_valid_rows(self) -> None:

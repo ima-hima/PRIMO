@@ -32,7 +32,12 @@ Scalar rows to insert: {{ job.preview.scalars_insert }}
 Scalar rows to update: {{ job.preview.scalars_update }}{% endif %}{% if job.preview.specimens_insert is not None %}Specimens to insert: {{ job.preview.specimens_insert }}
 Specimens to update: {{ job.preview.specimens_update }}{% endif %}</pre>
     {% endif %}
-    <p class="help">Before confirming, consider backing up the affected tables:
+    {% if backup_msg %}
+    <p style="font-size:1.1em;" class="success">Backup successful at {{ backup_msg }}.</p>
+    {% else %}
+    <p style="font-size:1.1em;">Most recent backup was at {{ last_backup_label|default:"unknown" }}. Backup again before continuing?</p>
+    {% endif %}
+    <p>
         {% if job.kind == "specimen" %}
             <form method="post" action="{% url 'backup_table' %}" style="display:inline">
                 {% csrf_token %}

@@ -259,13 +259,13 @@ class PreviewTeethCountsTest(TestCase):
         self.assertEqual(missing, [])
 
     def test_existing_rows_counted_as_updates(self) -> None:
-        # Insert first so the preview sees them as existing.
+        # Insert with old comment and value; CSV has different values.
         with connection.cursor() as c:
             c.execute("SET FOREIGN_KEY_CHECKS=0")
             c.execute(
                 "INSERT INTO session (id, observer_id, group_id, specimen_id,"
                 " original_id, protocol_id, comments, filename, updated_at)"
-                " VALUES (1, 9, 2, 100, 1, 5, '', 'teeth', NOW())"
+                " VALUES (1, 9, 2, 100, 1, 5, 'old comment', 'teeth', NOW())"
             )
             c.execute(
                 "INSERT INTO data_scalar (id, session_id, variable_id,"
@@ -273,7 +273,7 @@ class PreviewTeethCountsTest(TestCase):
                 " VALUES (10, 1, 225, '1.1', NOW())"
             )
         sess_path, scalar_path = self._make_csvs(
-            _sess_csv("1,9,2,100,1,5,,teeth"),
+            _sess_csv("1,9,2,100,1,5,new comment,teeth"),
             _scalar_csv("10,1,225,9.9"),
         )
         counts, missing, skipped = _preview_teeth_counts(sess_path, scalar_path)
@@ -466,6 +466,162 @@ class PreviewSpecimenCountsTest(TestCase):
         path = self._make_csv(SPECIMEN_HEADER)
         counts = _preview_specimen_counts(path)
         self.assertEqual(counts, {"specimens_insert": 0, "specimens_update": 0})
+
+
+class PreviewMatchesUpsertSpecimenTest(TestCase):
+    """Preview counts must match the counts returned by the actual upsert."""
+
+    def setUp(self) -> None:
+        with connection.cursor() as c:
+            c.execute("SET FOREIGN_KEY_CHECKS=0")
+
+    def tearDown(self) -> None:
+        with connection.cursor() as c:
+            c.execute("SET FOREIGN_KEY_CHECKS=1")
+
+    def _csv_path(self, content: str) -> str:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".specimen.csv", delete=False
+        ) as f:
+            f.write(content)
+            return f.name
+
+    def test_insert_preview_matches_upsert(self) -> None:
+        csv = _spec_csv(_spec_row(id="400"), _spec_row(id="401", hypo="XYZ002"))
+        path = self._csv_path(csv)
+        preview = _preview_specimen_counts(path)
+        _, counts = _upsert_specimen_data(path)
+        self.assertEqual(preview["specimens_insert"], counts["specimens_inserted"])
+        self.assertEqual(preview["specimens_update"], counts["specimens_updated"])
+
+    def test_update_preview_matches_upsert(self) -> None:
+        # Seed with old comment, then re-upload with a different comment.
+        _upsert_specimen_data(
+            self._csv_path(_spec_csv(_spec_row(id="400", comments="old")))
+        )
+        csv = _spec_csv(_spec_row(id="400", comments="new"))
+        path = self._csv_path(csv)
+        preview = _preview_specimen_counts(path)
+        _, counts = _upsert_specimen_data(path)
+        self.assertEqual(preview["specimens_insert"], counts["specimens_inserted"])
+        self.assertEqual(preview["specimens_update"], counts["specimens_updated"])
+        self.assertEqual(counts["specimens_updated"], 1)
+
+    def test_noop_row_counts_as_neither_insert_nor_update(self) -> None:
+        # Upload once to insert, then upload the same data again.
+        csv = _spec_csv(_spec_row(id="400"))
+        path = self._csv_path(csv)
+        _upsert_specimen_data(path)
+        # Second upload: nothing changed, should be 0 inserts and 0 updates.
+        preview = _preview_specimen_counts(path)
+        _, counts = _upsert_specimen_data(path)
+        self.assertEqual(preview["specimens_insert"], 0)
+        self.assertEqual(preview["specimens_update"], 0)
+        self.assertEqual(counts["specimens_inserted"], 0)
+        self.assertEqual(counts["specimens_updated"], 0)
+
+    def test_mixed_preview_matches_upsert(self) -> None:
+        # Seed 400 with old comment; 401 is new.
+        _upsert_specimen_data(
+            self._csv_path(_spec_csv(_spec_row(id="400", comments="old")))
+        )
+        csv = _spec_csv(
+            _spec_row(id="400", comments="new"),
+            _spec_row(id="401", hypo="XYZ002"),
+        )
+        path = self._csv_path(csv)
+        preview = _preview_specimen_counts(path)
+        _, counts = _upsert_specimen_data(path)
+        self.assertEqual(preview["specimens_insert"], counts["specimens_inserted"])
+        self.assertEqual(preview["specimens_update"], counts["specimens_updated"])
+        self.assertEqual(counts["specimens_inserted"], 1)
+        self.assertEqual(counts["specimens_updated"], 1)
+
+
+class UpsertSpecimenRollbackTest(TestCase):
+    """Verify that a row-level error doesn't roll back surrounding rows."""
+
+    def setUp(self) -> None:
+        with connection.cursor() as c:
+            c.execute("SET FOREIGN_KEY_CHECKS=0")
+
+    def tearDown(self) -> None:
+        with connection.cursor() as c:
+            c.execute("SET FOREIGN_KEY_CHECKS=1")
+
+    def _run(self, content: str) -> tuple[list[str], dict[str, int]]:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".specimen.csv", delete=False
+        ) as f:
+            f.write(content)
+        return _upsert_specimen_data(f.name)
+
+    def test_failed_row_does_not_roll_back_subsequent_rows(self) -> None:
+        # Row with id="BADID" causes a DB error (non-numeric PK).
+        # Rows 200 and 202 are valid and should still be written.
+        csv = _spec_csv(
+            _spec_row(id="200", comments="first"),
+            _spec_row(id="BADID"),
+            _spec_row(id="202", comments="third"),
+        )
+        errors, counts = self._run(csv)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("BADID", errors[0])
+        with connection.cursor() as c:
+            c.execute("SELECT comments FROM specimen WHERE id=200")
+            self.assertEqual(c.fetchone()[0], "first")
+            c.execute("SELECT comments FROM specimen WHERE id=202")
+            self.assertEqual(c.fetchone()[0], "third")
+        self.assertEqual(counts["specimens_inserted"], 2)
+
+
+class UpsertTeethRollbackTest(TestCase):
+    """Verify that a row-level error doesn't roll back surrounding rows."""
+
+    def setUp(self) -> None:
+        with connection.cursor() as c:
+            c.execute("SET FOREIGN_KEY_CHECKS=0")
+            c.execute(
+                "INSERT IGNORE INTO specimen (id, taxonomic_type_id, updated_at)"
+                " VALUES (100, 1, NOW()), (101, 1, NOW())"
+            )
+
+    def tearDown(self) -> None:
+        with connection.cursor() as c:
+            c.execute("SET FOREIGN_KEY_CHECKS=1")
+
+    def _run(
+        self, sess_content: str, scalar_content: str
+    ) -> tuple[list[str], dict[str, int]]:
+        with (
+            tempfile.NamedTemporaryFile(
+                mode="w", suffix=".sess.csv", delete=False
+            ) as sf,
+            tempfile.NamedTemporaryFile(
+                mode="w", suffix=".scalar.csv", delete=False
+            ) as scf,
+        ):
+            sf.write(sess_content)
+            scf.write(scalar_content)
+        return _upsert_teeth_data(sf.name, scf.name, set())
+
+    def test_failed_session_does_not_roll_back_subsequent_sessions(self) -> None:
+        # Row with id="BADID" causes a DB error (non-numeric PK).
+        # Sessions 1 and 3 are valid and should still be written.
+        csv = _sess_csv(
+            "1,9,2,100,1,5,first,teeth",
+            "BADID,9,2,100,1,5,bad,teeth",
+            "3,9,2,101,1,5,third,teeth",
+        )
+        errors, counts = self._run(csv, _scalar_csv())
+        self.assertEqual(len(errors), 1)
+        self.assertIn("BADID", errors[0])
+        with connection.cursor() as c:
+            c.execute("SELECT comments FROM session WHERE id=1")
+            self.assertEqual(c.fetchone()[0], "first")
+            c.execute("SELECT comments FROM session WHERE id=3")
+            self.assertEqual(c.fetchone()[0], "third")
+        self.assertEqual(counts["sessions_inserted"], 2)
 
 
 class FormatDbErrorTest(SimpleTestCase):
