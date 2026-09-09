@@ -7,6 +7,8 @@ Modified April 2007 to include standard fields for the session table.
 
 Edited and ported to Python by Eric Ford January 2023
 
+Moved into PRIMO September 2026.
+
 Session table: from the teeth table, grab the hyponum (column C)
 and the observer (F), and make a list (without duplicates).
 Then, print out the session table:
