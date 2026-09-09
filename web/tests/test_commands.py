@@ -1,6 +1,10 @@
+from io import StringIO
+
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
+
+_DEVNULL = StringIO()
 
 
 class InvalidatePasswordsTest(TestCase):
@@ -13,7 +17,7 @@ class InvalidatePasswordsTest(TestCase):
 
     def test_invalidates_sha1_passwords(self) -> None:
         user = self._make_user("sha1user", "irrelevant")
-        call_command("invalidate_passwords")
+        call_command("invalidate_passwords", stdout=_DEVNULL)
         user.refresh_from_db()
         self.assertFalse(user.has_usable_password())
 
@@ -23,7 +27,7 @@ class InvalidatePasswordsTest(TestCase):
         )
         superuser.password = "sha1$salt$adminhash"
         superuser.save(update_fields=["password"])
-        call_command("invalidate_passwords")
+        call_command("invalidate_passwords", stdout=_DEVNULL)
         superuser.refresh_from_db()
         self.assertTrue(superuser.password.startswith("sha1"))
 
@@ -32,7 +36,7 @@ class InvalidatePasswordsTest(TestCase):
         user.set_unusable_password()
         user.save(update_fields=["password"])
         original_password = user.password
-        call_command("invalidate_passwords")
+        call_command("invalidate_passwords", stdout=_DEVNULL)
         user.refresh_from_db()
         self.assertEqual(user.password, original_password)
 
@@ -49,6 +53,6 @@ class InvalidatePasswordsTest(TestCase):
         user = User.objects.create_user(username="emptypass", password="x")
         user.password = ""
         user.save(update_fields=["password"])
-        call_command("invalidate_passwords")
+        call_command("invalidate_passwords", stdout=_DEVNULL)
         user.refresh_from_db()
         self.assertEqual(user.password, "")

@@ -142,8 +142,6 @@ def process_specimens(
                 )
             elif row["TYPE"] != "":
                 row["TYPE"] = type_lookup[row["TYPE"]]
-            if row["TYPE"] != "":
-                print("after", row["TYPE"], type_lookup[row["TYPE"]])
             if row["LOC ID"] == "":
                 row["LOC ID"] = "10000"
             row["captive"] = row["captive"].upper()
@@ -158,21 +156,6 @@ def process_specimens(
             else:
                 row["captive"] = captive_lookup[row["captive"]]
             row["COMMENTS"] = row["COMMENTS"].replace('"', '""')
-            print(
-                f"{row['UNIQUEID']},"
-                f"{row['HYPOCODE']},"
-                f"{row['taxon ID']},"
-                f"{row['inst ID']},"
-                f"{row['CATNUM']},"
-                f"{row['MASS']},"
-                f"{row['LOC ID']},"
-                f"{row['sex']},"
-                f"{row['Fossil']},"
-                f"{row['captive']},"
-                f"{row['TYPE']},"
-                f"\"{row['COMMENTS']}\""
-                "\n"
-            )
             outfile.write(
                 f"{row['UNIQUEID']},"
                 f"{row['HYPOCODE']},"
@@ -187,8 +170,6 @@ def process_specimens(
                 f"\"{row['COMMENTS']}\""
                 "\n"
             )
-
-        print(f"{count} specimens were processed.")
 
         return specimen_list
 
@@ -217,9 +198,6 @@ def process_teeth(
         cur_observer: Any = -1
         duplicate_teeth = set()
         for row in rows:
-            if args["verbose"] > 3:
-                print(f"line: {row}")
-                print(f"\t {row['group_id']}, {row['hypocode']}")
             unique_id = row["uid"]
             lookup_tuple = (row["hypocode"], row["uid"])
             if lookup_tuple not in specimen_list and (row["hypocode"], row["uid"]):
@@ -311,15 +289,6 @@ def process_teeth(
         )
         # scalar_out.write("id,session_id,variable_id,value\n")
         for uid in sorted(entries.keys()):
-            if args["verbose"] > 2:
-                try:
-                    print(
-                        f"{entries[uid]['hypocode']} group {entries[uid]['group_id']} "
-                        f"has {len(entries[uid]['values'])} measurements and is "
-                        f"assigned the uniqueid {uid}."
-                    )
-                except Exception as e:
-                    print(f"{e}, {uid}\n")
             # Set up a hash for the session data, to be used to build the scalar table.
             # session[uid] = uid
             session_out.write(
@@ -356,10 +325,6 @@ def unknown_teeth(
     if tooth_name.endswith("UMX"):
         try:
             entries[unique_id]["comments"] += f" {v.UMXTOOTH[row['xtooth']]}"
-            if args["verbose"] > 2:
-                print(
-                    f"Added comment to {unique_id}: " f'"{v.UMXTOOTH[row["xtooth"]]}"'
-                )
         except Exception as e:
             if str(e) != "''" and str(e) != "'0'":
                 error_out.write(
@@ -371,10 +336,6 @@ def unknown_teeth(
     elif tooth_name.endswith("UPX"):
         try:
             entries[unique_id]["comments"] += f" {v.UPXTOOTH[row['xtooth']]}"
-            if args["verbose"] > 2:
-                print(
-                    f"Added comment to {unique_id}: " f'"{v.UPXTOOTH[row["xtooth"]]}"'
-                )
         except Exception as e:
             if str(e) != "''" and str(e) != "'0'":
                 error_out.write(
@@ -386,10 +347,6 @@ def unknown_teeth(
     elif tooth_name.endswith("LMX"):
         try:
             entries[unique_id]["comments"] += f" {v.LMXTOOTH[row['xtooth']]}"
-            if args["verbose"] > 2:
-                print(
-                    f"Added comment to {unique_id}: " f'"{v.LMXTOOTH[row["xtooth"]]}"'
-                )
         except Exception as e:
             if str(e) != "''" and str(e) != "'0'":
                 error_out.write(
