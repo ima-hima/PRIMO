@@ -1,3 +1,4 @@
+import csv as csv_mod
 import json
 import re
 import subprocess
@@ -305,7 +306,6 @@ def delete_backup(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         backup_name = request.POST.get("backup", "")
-        import re
 
         m = re.match(r"^(.+)_\d{8}_\d{4}$", backup_name)
         if not m or m.group(1) not in BACKUP_TABLES:
@@ -358,7 +358,6 @@ def restore_table(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         backup_name = request.POST.get("backup", "")
-        import re
 
         m = re.match(r"^(.+)_\d{8}_\d{4}$", backup_name)
         if not m or m.group(1) not in BACKUP_TABLES:
@@ -513,7 +512,6 @@ def _preview_teeth_counts(
     Count what _would_ be inserted/updated without touching the DB.
     Returns (preview_counts, missing_specimen_ids, skipped_session_ids).
     """
-    import csv as csv_mod
 
     sess_compare_cols = [
         "observer_id",
@@ -560,7 +558,6 @@ def _preview_teeth_counts(
 
 def _preview_specimen_counts(specimen_path: str) -> dict[str, int]:
     """Count what _would_ be inserted/updated for specimens without touching the DB."""
-    import csv as csv_mod
 
     compare_cols = [
         "hypocode",
@@ -604,7 +601,6 @@ def _upsert_teeth_data(
     skipped_session_ids: session IDs to skip (missing specimens, pre-computed).
     Returns (errors, counts).  MySQL rowcount: 1=insert, 2=update.
     """
-    import csv as csv_mod
 
     errors: list[str] = []
     counts = {
@@ -735,7 +731,6 @@ def _upsert_specimen_data(
                  mass, locality_id, sex_id, fossil_id, captive_id,
                  taxonomic_type_id, comments
     """
-    import csv as csv_mod
 
     errors: list[str] = []
     counts = {"specimens_inserted": 0, "specimens_updated": 0}
