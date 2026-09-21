@@ -19,14 +19,15 @@ Institutes updated: {{ job.counts.institutes_updated }}{% endif %}</pre>
     {% endif %}
     <p><a href="{% if job.kind == 'institute' %}{% url 'upload_institute_csv' %}{% else %}{% url 'upload_csv' %}{% endif %}">Upload another file</a></p>
     {% else %}
-    <p class="success">Processing complete. Review the preview below before confirming.</p>
     {% if job.preview %}
-    <pre>{% if job.preview.sessions_insert is not None %}Sessions to insert: {{ job.preview.sessions_insert }}
-Sessions to update: {{ job.preview.sessions_update }}
-Scalar rows to insert: {{ job.preview.scalars_insert }}
-Scalar rows to update: {{ job.preview.scalars_update }}{% endif %}{% if job.preview.institutes_insert is not None %}Institutes to insert: {{ job.preview.institutes_insert }}
-Institutes to update: {{ job.preview.institutes_update }}{% endif %}</pre>
-    {% endif %}
+    {% with p=job.preview %}
+    {% if p.institutes_insert or p.institutes_update or p.sessions_insert or p.sessions_update or p.scalars_insert or p.scalars_update %}
+    <p class="success">Processing complete. Review the preview below before confirming.</p>
+    <pre>{% if p.sessions_insert is not None %}Sessions to insert: {{ p.sessions_insert }}
+Sessions to update: {{ p.sessions_update }}
+Scalar rows to insert: {{ p.scalars_insert }}
+Scalar rows to update: {{ p.scalars_update }}{% endif %}{% if p.institutes_insert is not None %}Institutes to insert: {{ p.institutes_insert }}
+Institutes to update: {{ p.institutes_update }}{% endif %}</pre>
     {% if backup_msg %}
     <p style="font-size:1.1em;" class="success">Backup successful at {{ backup_msg }}.</p>
     {% else %}
@@ -66,6 +67,18 @@ Institutes to update: {{ job.preview.institutes_update }}{% endif %}</pre>
                 style="padding: 10px 20px; font-size: 1.1em;">Cancel</button>
         </p>
     </form>
+    {% else %}
+    <p class="success">No changes to make — the database is already up to date.</p>
+    <form method="post">
+        {% csrf_token %}
+        <p>
+            <button type="submit" name="action" value="cancel"
+                style="padding: 10px 20px; font-size: 1.1em;">Done</button>
+        </p>
+    </form>
+    {% endif %}
+    {% endwith %}
+    {% endif %}
     {% endif %}
 {% else %}
     <p>Processing <strong>{{ job.filename }}</strong>… <span id="spinner">⏳</span></p>

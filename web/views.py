@@ -542,19 +542,21 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     if request.headers.get("Accept") == "application/json":
         return HttpResponse(json.dumps(job), content_type="application/json")
 
-    backup_name = request.GET.get("backup_msg", "")
+    import re
+
     backup_msg = ""
+    backup_name = request.GET.get("backup_msg", "")
     if backup_name:
         m = re.match(r"^.+_(\d{8})_(\d{4})$", backup_name)
         if m:
             try:
                 dt = datetime.strptime(f"{m.group(1)}_{m.group(2)}", "%Y%m%d_%H%M")
-                label = dt.strftime("%-d %B %Y, %H:%M").replace(
+                backup_msg = dt.strftime("%-d %B %Y, %H:%M").replace(
                     dt.strftime("%-d"), _ordinal(dt.day), 1
                 )
-                backup_msg = label
             except ValueError:
                 backup_msg = backup_name
+
     last_backup_label = ""
     if job.get("done") and not job.get("errors") and not job.get("confirmed"):
         backups = _get_backups()
@@ -565,7 +567,13 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     return render(
         request,
         "admin/upload_status.html",
-        {"job": job, "job_id": job_id, "title": "Update Tables — Processing"},
+        {
+            "job": job,
+            "job_id": job_id,
+            "title": "Update Tables — Processing",
+            "backup_msg": backup_msg,
+            "last_backup_label": last_backup_label,
+        },
     )
 
 
@@ -576,7 +584,10 @@ def _preview_counts_via_db(
     csv_rows: list[dict],
     batch: int = 500,
 ) -> tuple[int, int]:
-    """Count true inserts and actual-change updates by comparing CSV rows against the DB."""
+    """
+    Count true inserts and actual-change updates by comparing CSV rows against
+    the DB.
+    """
     if not csv_rows:
         return 0, 0
 
@@ -660,7 +671,7 @@ def _preview_institute_counts(csv_path: str) -> dict[str, int]:
                 "abbr": r.get("instabbr", ""),
                 "institute_name": r.get("instname", ""),
                 "institute_department": r.get("instdept", ""),
-                "locality_id": r.get("locality_id", ""),
+                "locality_id": str(r.get("locality_id") or 10000),
                 "comments": r.get("comments", ""),
             }
             for r in csv_mod.DictReader(f)
@@ -731,6 +742,7 @@ def _upsert_institute_data(
                     counts["institutes_updated"] += 1
             except Exception as e:
                 import re as _re
+
                 msg = str(e)
                 fk_col = _re.search(r"FOREIGN KEY \(`(\w+)`\)", msg)
                 ref_table = _re.search(r"REFERENCES `(\w+)`", msg)
