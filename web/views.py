@@ -513,7 +513,9 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
                     remove(institute_path)
                 except OSError:
                     pass
-            return redirect("/admin/upload/institute/")
+            if institute_path:
+                return redirect("/admin/upload/institute/")
+            return redirect("/admin/")
         if action == "confirm":
             institute_path = job.get("institute_path", "")
             upsert_errors, counts = _upsert_institute_data(institute_path)
