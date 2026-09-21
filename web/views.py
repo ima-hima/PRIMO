@@ -1041,8 +1041,18 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
                 remove(_job_path(job_id))
             except OSError:
                 pass
-            kind = job.get("kind", "teeth")
-            url = "/admin/upload/specimen/" if kind == "specimen" else "/admin/upload/"
+            has_pending = any(
+                job.get(k) for k in ("sess_path", "scalar_path", "specimen_path")
+            )
+            if has_pending:
+                kind = job.get("kind", "teeth")
+                url = (
+                    "/admin/upload/specimen/"
+                    if kind == "specimen"
+                    else "/admin/upload/"
+                )
+            else:
+                url = "/admin/"
             return redirect(url)
         if action == "confirm":
             kind = job.get("kind", "teeth")
