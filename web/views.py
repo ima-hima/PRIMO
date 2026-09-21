@@ -260,7 +260,7 @@ def download_success(request: HttpRequest) -> HttpResponse:
     return render(request, "web/download_success.jinja", {})
 
 
-BACKUP_TABLES = {"specimen", "session", "data_scalar"}
+BACKUP_TABLES = {"specimen", "session", "data_scalar", "institute"}
 UPLOAD_TABLES = {"session", "data_scalar"}
 
 
@@ -507,12 +507,205 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     job = _jobs.get(job_id)
     if job is None:
         return HttpResponse("Job not found.", status=404)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "cancel":
+            institute_path = job.get("institute_path")
+            if institute_path:
+                try:
+                    remove(institute_path)
+                except OSError:
+                    pass
+            return redirect("/admin/upload/institute/")
+        if action == "confirm":
+            institute_path = job.get("institute_path", "")
+            upsert_errors, counts = _upsert_institute_data(institute_path)
+            try:
+                remove(institute_path)
+            except OSError:
+                pass
+            confirmed_job = {
+                "done": True,
+                "success": not upsert_errors,
+                "errors": upsert_errors[:_MAX_ERRORS],
+                "truncated": len(upsert_errors) > _MAX_ERRORS,
+                "total_errors": len(upsert_errors),
+                "counts": counts,
+                "filename": job.get("filename", ""),
+                "kind": "institute",
+                "confirmed": True,
+            }
+            _jobs[job_id] = confirmed_job
+            return redirect(f"/admin/upload/status/{job_id}/")
+
     if request.headers.get("Accept") == "application/json":
         return HttpResponse(json.dumps(job), content_type="application/json")
+
+    backup_name = request.GET.get("backup_msg", "")
+    backup_msg = ""
+    if backup_name:
+        m = re.match(r"^.+_(\d{8})_(\d{4})$", backup_name)
+        if m:
+            try:
+                dt = datetime.strptime(f"{m.group(1)}_{m.group(2)}", "%Y%m%d_%H%M")
+                label = dt.strftime("%-d %B %Y, %H:%M").replace(
+                    dt.strftime("%-d"), _ordinal(dt.day), 1
+                )
+                backup_msg = label
+            except ValueError:
+                backup_msg = backup_name
+    last_backup_label = ""
+    if job.get("done") and not job.get("errors") and not job.get("confirmed"):
+        backups = _get_backups()
+        candidates = [backups["institute"][0][1]] if backups.get("institute") else []
+        if candidates:
+            last_backup_label = candidates[0]
+
     return render(
         request,
         "admin/upload_status.html",
         {"job": job, "job_id": job_id, "title": "Update Tables — Processing"},
+    )
+
+
+def _preview_institute_counts(csv_path: str) -> dict[str, int]:
+    """Count what _would_ be inserted/updated for institutes without touching the DB."""
+    import csv as csv_mod
+
+    compare_cols = [
+        "abbr",
+        "institute_name",
+        "institute_department",
+        "locality_id",
+        "comments",
+    ]
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        csv_rows = [
+            {
+                "id": r["id"],
+                "abbr": r.get("instabbr", ""),
+                "institute_name": r.get("instname", ""),
+                "institute_department": r.get("instdept", ""),
+                "locality_id": r.get("locality_id", ""),
+                "comments": r.get("comments", ""),
+            }
+            for r in csv_mod.DictReader(f)
+            if r.get("id", "").strip()
+        ]
+    with connection.cursor() as cursor:
+        inserts, updates = _preview_counts_via_db(
+            cursor, "institute", compare_cols, csv_rows
+        )
+    return {"institutes_insert": inserts, "institutes_update": updates}
+
+
+def _upsert_institute_data(
+    csv_path: str,
+) -> tuple[list[str], dict[str, int]]:
+    """Upsert institute CSV into the database."""
+    import csv as csv_mod
+
+    errors: list[str] = []
+    counts = {"institutes_inserted": 0, "institutes_updated": 0}
+
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        csv_rows = list(csv_mod.DictReader(f))
+
+    all_ids = [r["id"] for r in csv_rows if r.get("id", "").strip()]
+
+    existing_ids: set[str] = set()
+    batch = 500
+    with connection.cursor() as cursor:
+        for i in range(0, len(all_ids), batch):
+            chunk = all_ids[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM institute WHERE id IN ({fmt})", chunk)
+            existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
+        for row in csv_rows:
+            row_id = row.get("id", "").strip()
+            if not row_id:
+                continue
+            try:
+                with transaction.atomic():
+                    cursor.execute(
+                        """
+                        INSERT INTO institute
+                            (id, abbr, institute_name, institute_department,
+                             locality_id, comments)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            abbr = VALUES(abbr),
+                            institute_name = VALUES(institute_name),
+                            institute_department = VALUES(institute_department),
+                            locality_id = VALUES(locality_id),
+                            comments = VALUES(comments)
+                        """,
+                        [
+                            row_id,
+                            row.get("instabbr") or None,
+                            row.get("instname", ""),
+                            row.get("instdept") or None,
+                            row.get("locality_id") or None,
+                            row.get("comments") or None,
+                        ],
+                    )
+                    rc = cursor.rowcount
+                if row_id not in existing_ids:
+                    counts["institutes_inserted"] += 1
+                elif rc == 2:
+                    counts["institutes_updated"] += 1
+            except Exception as e:
+                errors.append(
+                    f"Failed to insert institute {row_id}: {_format_db_error(e, row)}"
+                )
+
+    return errors, counts
+
+
+@staff_member_required
+def upload_institute_csv(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    if request.method == "POST":
+        csv_file = request.FILES.get("csv_file")
+        if not csv_file:
+            message = "No file selected."
+            message_class = "errornote"
+        elif not csv_file.name or not csv_file.name.endswith(".csv"):
+            message = "File must be a CSV."
+            message_class = "errornote"
+        else:
+            filename: str = csv_file.name
+            tmp_path = path.join(settings.DOWNLOAD_ROOT, filename)
+            try:
+                with open(tmp_path, "wb") as f:
+                    for chunk in csv_file.chunks():
+                        f.write(chunk)
+                preview = _preview_institute_counts(tmp_path)
+                job_id = str(uuid.uuid4())
+                _jobs[job_id] = {
+                    "done": True,
+                    "success": True,
+                    "errors": [],
+                    "preview": preview,
+                    "institute_path": tmp_path,
+                    "filename": filename,
+                    "kind": "institute",
+                }
+                return redirect(f"/admin/upload/status/{job_id}/")
+            except Exception as e:
+                message = f"Upload failed: {e}"
+                message_class = "errornote"
+    return render(
+        request,
+        "admin/upload_institute.html",
+        {
+            "message": message,
+            "message_class": message_class,
+            "title": "Upload Institute CSV",
+        },
     )
 
 

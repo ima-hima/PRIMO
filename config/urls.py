@@ -16,6 +16,11 @@ urlpatterns = [
     path("admin/backup/", views.backup_table, name="backup_table"),
     path("admin/upload/", views.upload_csv, name="upload_csv"),
     path(
+        "admin/upload/institute/",
+        views.upload_institute_csv,
+        name="upload_institute_csv",
+    ),
+    path(
         "admin/upload/status/<str:job_id>/", views.upload_status, name="upload_status"
     ),
     path("admin/restore/", views.restore_table, name="restore_table"),
