@@ -55,6 +55,44 @@ def _run(csv_content: str) -> tuple[list[dict], str]:
 
 
 class ProcessSpecimenCsvTest(SimpleTestCase):
+    def test_golden_path_all_output_fields(self) -> None:
+        """
+        Complete field check for a valid row with known inputs and expected outputs.
+        """
+        rows, errors = _run(
+            _make_csv(
+                _blank_row(
+                    uid="42",
+                    hypo="XYZ007",
+                    taxon="15",
+                    inst="3",
+                    catnum="CAT99",
+                    mass="750",
+                    loc="300",
+                    sex="2",
+                    fossil="F",
+                    captive="C",
+                    typ="L",
+                    comments="note",
+                )
+            )
+        )
+        self.assertEqual(errors, "")
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual(r["id"], "42")
+        self.assertEqual(r["hypocode"], "XYZ007")
+        self.assertEqual(r["taxon_id"], "15")
+        self.assertEqual(r["institute_id"], "3")
+        self.assertEqual(r["catalog_number"], "CAT99")
+        self.assertEqual(r["mass"], "750")
+        self.assertEqual(r["locality_id"], "300")
+        self.assertEqual(r["sex_id"], "2")
+        self.assertEqual(r["fossil_id"], "1")  # F → 1
+        self.assertEqual(r["captive_id"], "1")  # C → 1
+        self.assertEqual(r["taxonomic_type_id"], "2")  # L → 2
+        self.assertEqual(r["comments"], "note")
+
     def test_valid_row_written(self) -> None:
         rows, errors = _run(_make_csv(_blank_row()))
         self.assertEqual(len(rows), 1)
