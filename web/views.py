@@ -20,7 +20,7 @@ from django.contrib.auth.models import (
     User,
 )
 from django.core.files import File
-from django.db import connection
+from django.db import connection, transaction
 from django.http import (
     Http404,
     HttpRequest,
@@ -569,6 +569,79 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     )
 
 
+def _preview_counts_via_db(
+    cursor: Any,
+    table: str,
+    compare_cols: list[str],
+    csv_rows: list[dict],
+    batch: int = 500,
+) -> tuple[int, int]:
+    """Count true inserts and actual-change updates by comparing CSV rows against the DB."""
+    if not csv_rows:
+        return 0, 0
+
+    all_ids = [r["id"] for r in csv_rows]
+    csv_by_id = {r["id"]: r for r in csv_rows}
+
+    existing_ids: set[str] = set()
+    for i in range(0, len(all_ids), batch):
+        chunk = all_ids[i : i + batch]
+        fmt = ",".join(["%s"] * len(chunk))
+        cursor.execute(f"SELECT id FROM `{table}` WHERE id IN ({fmt})", chunk)
+        existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
+    inserts = len(set(all_ids) - existing_ids)
+
+    updates = 0
+    col_sql = ", ".join(f"`{c}`" for c in ["id"] + compare_cols)
+    existing_list = list(existing_ids)
+    for i in range(0, len(existing_list), batch):
+        chunk = existing_list[i : i + batch]
+        fmt = ",".join(["%s"] * len(chunk))
+        cursor.execute(f"SELECT {col_sql} FROM `{table}` WHERE id IN ({fmt})", chunk)
+        cols = [d[0] for d in cursor.description]
+        for db_row in cursor.fetchall():
+            db = dict(zip(cols, db_row))
+            csv = csv_by_id[str(db["id"])]
+            for col in compare_cols:
+                db_val = "" if db[col] is None else str(db[col]).strip()
+                csv_val = (csv.get(col) or "").strip()
+                if db_val != csv_val:
+                    updates += 1
+                    break
+
+    return inserts, updates
+
+
+def _validate_institute_csv(csv_path: str) -> list[str]:
+    """
+    Return a list of error strings for CSV-level problems (before touching the DB).
+    """
+    import csv as csv_mod
+
+    errors: list[str] = []
+    seen_ids: set[str] = set()
+    dup_ids: set[str] = set()
+
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        for i, row in enumerate(csv_mod.DictReader(f), start=2):
+            row_id = row.get("id", "").strip()
+            name = row.get("instname", "").strip()
+            if not row_id:
+                errors.append(f"Row {i}: missing id")
+                continue
+            if not name:
+                errors.append(f"Row {i} (id={row_id}): missing institute name")
+            if row_id in seen_ids:
+                if row_id not in dup_ids:
+                    errors.append(f"Repeated institute id: {row_id}")
+                    dup_ids.add(row_id)
+            else:
+                seen_ids.add(row_id)
+
+    return errors
+
+
 def _preview_institute_counts(csv_path: str) -> dict[str, int]:
     """Count what _would_ be inserted/updated for institutes without touching the DB."""
     import csv as csv_mod
@@ -647,7 +720,7 @@ def _upsert_institute_data(
                             row.get("instabbr") or None,
                             row.get("instname", ""),
                             row.get("instdept") or None,
-                            row.get("locality_id") or None,
+                            row.get("locality_id") or 10000,
                             row.get("comments") or None,
                         ],
                     )
@@ -657,9 +730,18 @@ def _upsert_institute_data(
                 elif rc == 2:
                     counts["institutes_updated"] += 1
             except Exception as e:
-                errors.append(
-                    f"Failed to insert institute {row_id}: {_format_db_error(e, row)}"
-                )
+                import re as _re
+                msg = str(e)
+                fk_col = _re.search(r"FOREIGN KEY \(`(\w+)`\)", msg)
+                ref_table = _re.search(r"REFERENCES `(\w+)`", msg)
+                if fk_col and ref_table:
+                    col = fk_col.group(1)
+                    table = ref_table.group(1)
+                    val = row.get(col, "?")
+                    friendly = f"No {table} with id {val} exists."
+                else:
+                    friendly = msg
+                errors.append(f"Failed to insert institute {row_id}: {friendly}")
 
     return errors, counts
 
@@ -683,17 +765,33 @@ def upload_institute_csv(request: HttpRequest) -> HttpResponse:
                 with open(tmp_path, "wb") as f:
                     for chunk in csv_file.chunks():
                         f.write(chunk)
-                preview = _preview_institute_counts(tmp_path)
+                validation_errors = _validate_institute_csv(tmp_path)
                 job_id = str(uuid.uuid4())
-                _jobs[job_id] = {
-                    "done": True,
-                    "success": True,
-                    "errors": [],
-                    "preview": preview,
-                    "institute_path": tmp_path,
-                    "filename": filename,
-                    "kind": "institute",
-                }
+                if validation_errors:
+                    try:
+                        remove(tmp_path)
+                    except OSError:
+                        pass
+                    _jobs[job_id] = {
+                        "done": True,
+                        "success": False,
+                        "errors": validation_errors[:_MAX_ERRORS],
+                        "truncated": len(validation_errors) > _MAX_ERRORS,
+                        "total_errors": len(validation_errors),
+                        "filename": filename,
+                        "kind": "institute",
+                    }
+                else:
+                    preview = _preview_institute_counts(tmp_path)
+                    _jobs[job_id] = {
+                        "done": True,
+                        "success": True,
+                        "errors": [],
+                        "preview": preview,
+                        "institute_path": tmp_path,
+                        "filename": filename,
+                        "kind": "institute",
+                    }
                 return redirect(f"/admin/upload/status/{job_id}/")
             except Exception as e:
                 message = f"Upload failed: {e}"
