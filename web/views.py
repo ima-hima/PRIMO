@@ -1,4 +1,6 @@
+import csv as csv_mod
 import json
+import re
 import subprocess
 import threading
 import uuid
@@ -266,8 +268,6 @@ UPLOAD_TABLES = {"session", "data_scalar"}
 
 def _get_backups() -> dict[str, list[tuple[str, str]]]:
     """Return {base_table: [(backup_name, label), ...]} sorted newest-first."""
-    import re
-
     pattern = re.compile(r"^(.+)_(\d{8})_(\d{4})$")
     with connection.cursor() as cursor:
         cursor.execute("SHOW TABLES")
@@ -306,8 +306,6 @@ def delete_backup(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         backup_name = request.POST.get("backup", "")
-        import re
-
         m = re.match(r"^(.+)_\d{8}_\d{4}$", backup_name)
         if not m or m.group(1) not in BACKUP_TABLES:
             message = f"Invalid backup: {backup_name}"
@@ -359,8 +357,6 @@ def restore_table(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         backup_name = request.POST.get("backup", "")
-        import re
-
         m = re.match(r"^(.+)_\d{8}_\d{4}$", backup_name)
         if not m or m.group(1) not in BACKUP_TABLES:
             message = f"Invalid backup: {backup_name}"
@@ -542,8 +538,6 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     if request.headers.get("Accept") == "application/json":
         return HttpResponse(json.dumps(job), content_type="application/json")
 
-    import re
-
     backup_msg = ""
     backup_name = request.GET.get("backup_msg", "")
     if backup_name:
@@ -628,8 +622,6 @@ def _validate_institute_csv(csv_path: str) -> list[str]:
     """
     Return a list of error strings for CSV-level problems (before touching the DB).
     """
-    import csv as csv_mod
-
     errors: list[str] = []
     seen_ids: set[str] = set()
     dup_ids: set[str] = set()
@@ -655,8 +647,6 @@ def _validate_institute_csv(csv_path: str) -> list[str]:
 
 def _preview_institute_counts(csv_path: str) -> dict[str, int]:
     """Count what _would_ be inserted/updated for institutes without touching the DB."""
-    import csv as csv_mod
-
     compare_cols = [
         "abbr",
         "institute_name",
@@ -688,8 +678,6 @@ def _upsert_institute_data(
     csv_path: str,
 ) -> tuple[list[str], dict[str, int]]:
     """Upsert institute CSV into the database."""
-    import csv as csv_mod
-
     errors: list[str] = []
     counts = {"institutes_inserted": 0, "institutes_updated": 0}
 
@@ -741,11 +729,9 @@ def _upsert_institute_data(
                 elif rc == 2:
                     counts["institutes_updated"] += 1
             except Exception as e:
-                import re as _re
-
                 msg = str(e)
-                fk_col = _re.search(r"FOREIGN KEY \(`(\w+)`\)", msg)
-                ref_table = _re.search(r"REFERENCES `(\w+)`", msg)
+                fk_col = re.search(r"FOREIGN KEY \(`(\w+)`\)", msg)
+                ref_table = re.search(r"REFERENCES `(\w+)`", msg)
                 if fk_col and ref_table:
                     col = fk_col.group(1)
                     table = ref_table.group(1)
