@@ -2,7 +2,6 @@
 Test some __str__() methods for models. This is just proof-of-concept.
 """
 
-from django.db import IntegrityError
 from django.test import TestCase
 
 import web.models as m
@@ -58,7 +57,6 @@ def _make_specimen(**kwargs: object) -> m.Specimen:
     captive, _ = m.Captive.objects.get_or_create(captive_or_wild="unknown")
     taxon = _make_taxon()
     defaults: dict[str, object] = {
-        "primo_id": 9999,
         "taxon": taxon,
         "institute": institute,
         "locality": locality,
@@ -69,33 +67,3 @@ def _make_specimen(**kwargs: object) -> m.Specimen:
     }
     defaults.update(kwargs)
     return m.Specimen.objects.create(**defaults)
-
-
-class SpecimenPrimoIdTest(TestCase):
-    def test_primo_id_is_set(self) -> None:
-        specimen = _make_specimen(primo_id=42)
-        self.assertEqual(specimen.primo_id, 42)
-
-    def test_primo_id_is_independent_of_id(self) -> None:
-        specimen = _make_specimen(primo_id=1000)
-        self.assertNotEqual(specimen.id, specimen.primo_id)
-
-    def test_primo_id_must_be_unique(self) -> None:
-        _make_specimen(primo_id=77)
-        with self.assertRaises(IntegrityError):
-            _make_specimen(primo_id=77)
-
-    def test_primo_id_can_be_updated(self) -> None:
-        specimen = _make_specimen(primo_id=100)
-        specimen.primo_id = 200
-        specimen.save(update_fields=["primo_id"])
-        specimen.refresh_from_db()
-        self.assertEqual(specimen.primo_id, 200)
-
-    def test_id_is_not_editable_via_save(self) -> None:
-        specimen = _make_specimen(primo_id=300)
-        original_id = specimen.id
-        specimen.primo_id = 301
-        specimen.save(update_fields=["primo_id"])
-        specimen.refresh_from_db()
-        self.assertEqual(specimen.id, original_id)

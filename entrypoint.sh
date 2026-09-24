@@ -3,4 +3,6 @@
 python manage.py collectstatic --noinput
 python manage.py migrate
 
-exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+WORKERS=3
+if [ "${DEBUG}" = "true" ]; then WORKERS=1; fi
+exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers $WORKERS --timeout 120

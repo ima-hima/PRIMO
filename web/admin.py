@@ -566,7 +566,6 @@ class SexAdmin(admin.ModelAdmin):
 class SpecimenAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "primo_id",
         "hypocode",
         "taxon",
         "institute",
@@ -583,7 +582,6 @@ class SpecimenAdmin(admin.ModelAdmin):
     readonly_fields = ("id",)
     fields = (
         "id",
-        "primo_id",
         "hypocode",
         "taxon",
         "institute",

@@ -3,10 +3,9 @@
 {% if message %}
 <p class="{{ message_class }}">{{ message }}</p>
 {% endif %}
-<p>Upload a tooth scalar CSV to update the tooth and session tables.</p>
+<p>Upload a specimen CSV to add or update specimens in the database.</p>
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
-    <input type="hidden" name="table" value="session" />
     <p>
         <label for="csv_file">CSV file:</label>
         <input type="file" name="csv_file" id="csv_file" accept=".csv" />

@@ -16,6 +16,9 @@ urlpatterns = [
     path("admin/backup/", views.backup_table, name="backup_table"),
     path("admin/upload/", views.upload_csv, name="upload_csv"),
     path(
+        "admin/upload/specimen/", views.upload_specimen_csv, name="upload_specimen_csv"
+    ),
+    path(
         "admin/upload/status/<str:job_id>/", views.upload_status, name="upload_status"
     ),
     path("admin/restore/", views.restore_table, name="restore_table"),
