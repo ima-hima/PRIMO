@@ -53,6 +53,60 @@ class ProcessTeethOutputTest(SimpleTestCase):
         process_teeth(tmp, session_out, scalar_out, error_out)
         return session_out.getvalue(), scalar_out.getvalue(), error_out.getvalue()
 
+    def test_golden_path_session_and_scalar_fields(self) -> None:
+        """Full field check: one specimen, two measurements on the same tooth type."""
+        # 01UIC: m5=UI1W(225), m7=UI1L(227)
+        csv = _make_csv(
+            _blank_row(
+                uid="99",
+                tooth="01UIC",
+                observer="7",
+                group_id="4",
+                cast="",
+                m5="12.3",
+                m7="8.7",
+            )
+        )
+        sess, scalar, errors = self._run(csv)
+        self.assertEqual(errors, "")
+
+        # Session row: id,observer_id,group_id,specimen_id,original_id,protocol_id,
+        # comments,filename
+        sess_rows = [r for r in sess.splitlines() if not r.startswith("id")]
+        self.assertEqual(len(sess_rows), 1)
+        fields = sess_rows[0].split(",")
+        self.assertEqual(fields[0], "1")  # session id (sequential, starts at 1)
+        self.assertEqual(fields[1], "7")  # observer_id
+        self.assertEqual(fields[2], "4")  # group_id
+        self.assertEqual(fields[3], "99")  # specimen_id
+        self.assertEqual(fields[4], "1")  # original_id (not a cast)
+        self.assertEqual(fields[5], "5")  # protocol_id (hardcoded)
+        self.assertEqual(fields[7], "teeth")  # filename (hardcoded)
+
+        # Scalar rows: specimen_id,session_id,variable_id,value
+        scalar_rows = [r for r in scalar.splitlines() if not r.startswith("id")]
+        self.assertIn("99,1,225,12.3", scalar_rows)  # UI1W
+        self.assertIn("99,1,227,8.7", scalar_rows)  # UI1L
+
+    def test_golden_path_two_specimens(self) -> None:
+        """Two specimens produce two session rows with distinct session ids."""
+        # 02UPR: m1=UP3WG(242), m2=UP4WG(251)
+        csv = _make_csv(
+            _blank_row(uid="10", tooth="02UPR", observer="3", group_id="1", m1="5.1"),
+            _blank_row(uid="20", tooth="02UPR", observer="3", group_id="1", m2="6.2"),
+        )
+        sess, scalar, errors = self._run(csv)
+        self.assertEqual(errors, "")
+
+        sess_rows = [r for r in sess.splitlines() if not r.startswith("id")]
+        self.assertEqual(len(sess_rows), 2)
+        sess_ids = {r.split(",")[0] for r in sess_rows}
+        self.assertEqual(len(sess_ids), 2)  # distinct session ids
+
+        scalar_rows = [r for r in scalar.splitlines() if not r.startswith("id")]
+        self.assertTrue(any("242,5.1" in r for r in scalar_rows))  # UP3WG
+        self.assertTrue(any("251,6.2" in r for r in scalar_rows))  # UP4WG
+
     def test_valid_row_produces_session_and_scalar(self) -> None:
         # 01UIC m5=UI1W (index 5), variable_id 225
         csv = _make_csv(_blank_row(uid="42", tooth="01UIC", m5="12.3"))
