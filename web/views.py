@@ -981,10 +981,10 @@ def _validate_locality_csv(csv_path: str) -> list[str]:
 
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
         for i, row in enumerate(csv_mod.DictReader(f), start=2):
-            row_id = row.get("uniqueid", "").strip()
+            row_id = row.get("id", "").strip()
             name = row.get("locality_name", "").strip()
             if not row_id:
-                errors.append(f"Row {i}: missing uniqueid")
+                errors.append(f"Row {i}: missing id")
                 continue
             if not name:
                 errors.append(f"Row {i} (id={row_id}): missing locality_name")
@@ -1010,7 +1010,7 @@ def _preview_locality_counts(csv_path: str) -> dict[str, int]:
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
         csv_rows = [
             {
-                "id": r["uniqueid"],
+                "id": r["id"],
                 "locality_name": r.get("locality_name", ""),
                 "continent_id": r.get("cont", ""),
                 "country_id": r.get("countryID", ""),
@@ -1019,7 +1019,7 @@ def _preview_locality_counts(csv_path: str) -> dict[str, int]:
                 "comments": r.get("comments", ""),
             }
             for r in csv_mod.DictReader(f)
-            if r.get("uniqueid", "").strip()
+            if r.get("id", "").strip()
         ]
 
     if not csv_rows:
@@ -1066,7 +1066,7 @@ def _upsert_locality_data(csv_path: str) -> tuple[list[str], dict[str, int]]:
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
         csv_rows = list(csv_mod.DictReader(f))
 
-    all_ids = [r["uniqueid"] for r in csv_rows if r.get("uniqueid", "").strip()]
+    all_ids = [r["id"] for r in csv_rows if r.get("id", "").strip()]
 
     existing_ids: set[str] = set()
     batch = 500
@@ -1078,7 +1078,7 @@ def _upsert_locality_data(csv_path: str) -> tuple[list[str], dict[str, int]]:
             existing_ids.update(str(r[0]) for r in cursor.fetchall())
 
         for row in csv_rows:
-            row_id = row.get("uniqueid", "").strip()
+            row_id = row.get("id", "").strip()
             if not row_id:
                 continue
             try:
