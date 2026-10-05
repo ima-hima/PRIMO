@@ -122,9 +122,6 @@ class Country(models.Model):
         unique=False,
         default=10000,
     )
-    abbr = models.CharField(
-        "Abbreviation", max_length=8, blank=True, null=True, unique=True
-    )
     comments = models.TextField(blank=True, null=True)
 
     def __str__(self) -> str:

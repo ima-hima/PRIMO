@@ -21,6 +21,7 @@ urlpatterns = [
     path(
         "admin/upload/locality/", views.upload_locality_csv, name="upload_locality_csv"
     ),
+    path("admin/upload/country/", views.upload_country_csv, name="upload_country_csv"),
     path(
         "admin/upload/status/<str:job_id>/", views.upload_status, name="upload_status"
     ),

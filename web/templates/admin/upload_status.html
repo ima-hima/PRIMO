@@ -7,7 +7,7 @@
     <h3>Errors{% if job.truncated %} (first {{ job.errors|length }} of {{ job.total_errors }}){% endif %}</h3>
     <pre>{% for line in job.errors %}{{ line }}
 {% endfor %}</pre>
-    <p><a href="{% if job.kind == 'specimen' %}{% url 'upload_specimen_csv' %}{% elif job.kind == 'locality' %}{% url 'upload_locality_csv' %}{% else %}{% url 'upload_csv' %}{% endif %}">Upload a replacement {% if job.kind == 'specimen' %}specimen{% elif job.kind == 'locality' %}locality{% else %}teeth{% endif %} file</a></p>
+    <p><a href="{% if job.kind == 'specimen' %}{% url 'upload_specimen_csv' %}{% elif job.kind == 'locality' %}{% url 'upload_locality_csv' %}{% elif job.kind == 'country' %}{% url 'upload_country_csv' %}{% else %}{% url 'upload_csv' %}{% endif %}">Upload a replacement {% if job.kind == 'specimen' %}specimen{% elif job.kind == 'locality' %}locality{% elif job.kind == 'country' %}country{% else %}teeth{% endif %} file</a></p>
     {% elif job.confirmed %}
     <p class="success">Changes applied successfully.</p>
     {% if job.counts %}
@@ -16,13 +16,14 @@ Sessions updated: {{ job.counts.sessions_updated }}
 Scalar rows inserted: {{ job.counts.scalars_inserted }}
 Scalar rows updated: {{ job.counts.scalars_updated }}{% endif %}{% if job.counts.specimens_inserted is not None %}Specimens inserted: {{ job.counts.specimens_inserted }}
 Specimens updated: {{ job.counts.specimens_updated }}{% endif %}{% if job.counts.localities_inserted is not None %}Localities inserted: {{ job.counts.localities_inserted }}
-Localities updated: {{ job.counts.localities_updated }}{% endif %}</pre>
+Localities updated: {{ job.counts.localities_updated }}{% endif %}{% if job.counts.countries_inserted is not None %}Countries inserted: {{ job.counts.countries_inserted }}
+Countries updated: {{ job.counts.countries_updated }}{% endif %}</pre>
     {% endif %}
-    <p><a href="{% if job.kind == 'specimen' %}{% url 'upload_specimen_csv' %}{% elif job.kind == 'locality' %}{% url 'upload_locality_csv' %}{% else %}{% url 'upload_csv' %}{% endif %}">Upload another file</a></p>
+    <p><a href="{% if job.kind == 'specimen' %}{% url 'upload_specimen_csv' %}{% elif job.kind == 'locality' %}{% url 'upload_locality_csv' %}{% elif job.kind == 'country' %}{% url 'upload_country_csv' %}{% else %}{% url 'upload_csv' %}{% endif %}">Upload another file</a></p>
     {% else %}
     {% if job.preview %}
     {% with p=job.preview %}
-    {% if p.specimens_insert or p.specimens_update or p.localities_insert or p.localities_update or p.sessions_insert or p.sessions_update or p.scalars_insert or p.scalars_update %}
+    {% if p.specimens_insert or p.specimens_update or p.localities_insert or p.localities_update or p.countries_insert or p.countries_update or p.sessions_insert or p.sessions_update or p.scalars_insert or p.scalars_update %}
     <p class="success">Processing complete. Review the preview below before confirming.</p>
     {% if job.missing_specimens %}
     <p class="errornote">Warning: {{ job.total_missing }} specimen ID(s) not found in the database — sessions referencing them will be skipped.</p>
@@ -34,7 +35,8 @@ Sessions to update: {{ p.sessions_update }}
 Scalar rows to insert: {{ p.scalars_insert }}
 Scalar rows to update: {{ p.scalars_update }}{% endif %}{% if p.specimens_insert is not None %}Specimens to insert: {{ p.specimens_insert }}
 Specimens to update: {{ p.specimens_update }}{% endif %}{% if p.localities_insert is not None %}Localities to insert: {{ p.localities_insert }}
-Localities to update: {{ p.localities_update }}{% endif %}</pre>
+Localities to update: {{ p.localities_update }}{% endif %}{% if p.countries_insert is not None %}Countries to insert: {{ p.countries_insert }}
+Countries to update: {{ p.countries_update }}{% endif %}</pre>
     {% if backup_msg %}
     <p style="font-size:1.1em;" class="success">Backup successful at {{ backup_msg }}.</p>
     {% else %}
@@ -54,6 +56,13 @@ Localities to update: {{ p.localities_update }}{% endif %}</pre>
                 <input type="hidden" name="table" value="locality" />
                 <input type="hidden" name="next" value="{% url 'upload_status' job_id %}" />
                 <button type="submit" class="button">Back up locality</button>
+            </form>
+        {% elif job.kind == "country" %}
+            <form method="post" action="{% url 'backup_table' %}" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="table" value="country" />
+                <input type="hidden" name="next" value="{% url 'upload_status' job_id %}" />
+                <button type="submit" class="button">Back up country</button>
             </form>
         {% else %}
             <form method="post" action="{% url 'backup_table' %}" style="display:inline">

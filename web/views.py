@@ -262,7 +262,7 @@ def download_success(request: HttpRequest) -> HttpResponse:
     return render(request, "web/download_success.jinja", {})
 
 
-BACKUP_TABLES = {"specimen", "session", "data_scalar", "locality"}
+BACKUP_TABLES = {"specimen", "session", "data_scalar", "locality", "country"}
 UPLOAD_TABLES = {"session", "data_scalar"}
 
 
@@ -403,6 +403,12 @@ def restore_table(request: HttpRequest) -> HttpResponse:
 
 
 _MAX_ERRORS = 25
+
+
+def _is_empty_row(row: dict) -> bool:
+    return not any(v.strip() for v in row.values() if isinstance(v, str))
+
+
 _SCRIPTS_DIR = path.join(path.dirname(path.dirname(path.abspath(__file__))), "scripts")
 
 
@@ -981,6 +987,8 @@ def _validate_locality_csv(csv_path: str) -> list[str]:
 
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
         for i, row in enumerate(csv_mod.DictReader(f), start=2):
+            if _is_empty_row(row):
+                continue
             row_id = row.get("id", "").strip()
             name = row.get("locality_name", "").strip()
             if not row_id:
@@ -1019,7 +1027,7 @@ def _preview_locality_counts(csv_path: str) -> dict[str, int]:
                 "comments": r.get("comments", ""),
             }
             for r in csv_mod.DictReader(f)
-            if r.get("id", "").strip()
+            if not _is_empty_row(r) and r.get("id", "").strip()
         ]
 
     if not csv_rows:
@@ -1064,7 +1072,7 @@ def _upsert_locality_data(csv_path: str) -> tuple[list[str], dict[str, int]]:
     counts = {"localities_inserted": 0, "localities_updated": 0}
 
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
-        csv_rows = list(csv_mod.DictReader(f))
+        csv_rows = [r for r in csv_mod.DictReader(f) if not _is_empty_row(r)]
 
     all_ids = [r["id"] for r in csv_rows if r.get("id", "").strip()]
 
@@ -1189,6 +1197,193 @@ def upload_locality_csv(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _validate_country_csv(csv_path: str) -> list[str]:
+    errors: list[str] = []
+    seen_ids: set[str] = set()
+    dup_ids: set[str] = set()
+
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        for i, row in enumerate(csv_mod.DictReader(f), start=2):
+            if _is_empty_row(row):
+                continue
+            row_id = row.get("uniqueid", "").strip()
+            name = row.get("country name", "").strip()
+            if not row_id:
+                errors.append(f"Row {i}: missing uniqueid")
+                continue
+            if not name:
+                errors.append(f"Row {i} (id={row_id}): missing country name")
+            if row_id in seen_ids:
+                if row_id not in dup_ids:
+                    errors.append(f"Repeated country id: {row_id}")
+                    dup_ids.add(row_id)
+            else:
+                seen_ids.add(row_id)
+
+    return errors
+
+
+def _preview_country_counts(csv_path: str) -> dict[str, int]:
+    compare_cols = ["country_name", "comments"]
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        csv_rows = [
+            {
+                "id": r["uniqueid"],
+                "country_name": r.get("country name", ""),
+                "comments": r.get("Comments", ""),
+            }
+            for r in csv_mod.DictReader(f)
+            if not _is_empty_row(r) and r.get("uniqueid", "").strip()
+        ]
+
+    if not csv_rows:
+        return {"countries_insert": 0, "countries_update": 0}
+
+    all_ids = [r["id"] for r in csv_rows]
+    csv_by_id = {r["id"]: r for r in csv_rows}
+
+    existing_ids: set[str] = set()
+    with connection.cursor() as cursor:
+        batch = 500
+        for i in range(0, len(all_ids), batch):
+            chunk = all_ids[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM country WHERE id IN ({fmt})", chunk)
+            existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
+        inserts = len(set(all_ids) - existing_ids)
+        updates = 0
+        col_sql = ", ".join(f"`{c}`" for c in ["id"] + compare_cols)
+        existing_list = list(existing_ids)
+        for i in range(0, len(existing_list), batch):
+            chunk = existing_list[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT {col_sql} FROM country WHERE id IN ({fmt})", chunk)
+            cols = [d[0] for d in cursor.description]
+            for db_row in cursor.fetchall():
+                db = dict(zip(cols, db_row))
+                csv = csv_by_id[str(db["id"])]
+                for col in compare_cols:
+                    db_val = "" if db[col] is None else str(db[col]).strip()
+                    csv_val = (csv.get(col) or "").strip()
+                    if db_val != csv_val:
+                        updates += 1
+                        break
+
+    return {"countries_insert": inserts, "countries_update": updates}
+
+
+def _upsert_country_data(csv_path: str) -> tuple[list[str], dict[str, int]]:
+    errors: list[str] = []
+    counts = {"countries_inserted": 0, "countries_updated": 0}
+
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        csv_rows = [r for r in csv_mod.DictReader(f) if not _is_empty_row(r)]
+
+    all_ids = [r["uniqueid"] for r in csv_rows if r.get("uniqueid", "").strip()]
+
+    existing_ids: set[str] = set()
+    batch = 500
+    with connection.cursor() as cursor:
+        for i in range(0, len(all_ids), batch):
+            chunk = all_ids[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM country WHERE id IN ({fmt})", chunk)
+            existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
+        for row in csv_rows:
+            row_id = row.get("uniqueid", "").strip()
+            if not row_id:
+                continue
+            try:
+                with transaction.atomic():
+                    cursor.execute(
+                        """
+                        INSERT INTO country (id, country_name, comments)
+                        VALUES (%s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            country_name = VALUES(country_name),
+                            comments = VALUES(comments)
+                        """,
+                        [
+                            row_id,
+                            row.get("country name", ""),
+                            row.get("Comments") or None,
+                        ],
+                    )
+                    rc = cursor.rowcount
+                if row_id not in existing_ids:
+                    counts["countries_inserted"] += 1
+                elif rc == 2:
+                    counts["countries_updated"] += 1
+            except Exception as e:
+                msg = str(e)
+                errors.append(f"Failed to insert country {row_id}: {msg}")
+
+    return errors, counts
+
+
+@staff_member_required
+def upload_country_csv(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    if request.method == "POST":
+        csv_file = request.FILES.get("csv_file")
+        if not csv_file:
+            message = "No file selected."
+            message_class = "errornote"
+        elif not csv_file.name or not csv_file.name.endswith(".csv"):
+            message = "File must be a CSV."
+            message_class = "errornote"
+        else:
+            filename: str = csv_file.name
+            tmp_path = path.join(settings.DOWNLOAD_ROOT, filename)
+            try:
+                with open(tmp_path, "wb") as f:
+                    for chunk in csv_file.chunks():
+                        f.write(chunk)
+                validation_errors = _validate_country_csv(tmp_path)
+                job_id = str(uuid.uuid4())
+                if validation_errors:
+                    try:
+                        remove(tmp_path)
+                    except OSError:
+                        pass
+                    _jobs[job_id] = {
+                        "done": True,
+                        "success": False,
+                        "errors": validation_errors[:_MAX_ERRORS],
+                        "truncated": len(validation_errors) > _MAX_ERRORS,
+                        "total_errors": len(validation_errors),
+                        "filename": filename,
+                        "kind": "country",
+                    }
+                else:
+                    preview = _preview_country_counts(tmp_path)
+                    _jobs[job_id] = {
+                        "done": True,
+                        "success": True,
+                        "errors": [],
+                        "preview": preview,
+                        "country_path": tmp_path,
+                        "filename": filename,
+                        "kind": "country",
+                    }
+                return redirect(f"/admin/upload/status/{job_id}/")
+            except Exception as e:
+                message = f"Upload failed: {e}"
+                message_class = "errornote"
+    return render(
+        request,
+        "admin/upload_country.html",
+        {
+            "message": message,
+            "message_class": message_class,
+            "title": "Upload Country CSV",
+        },
+    )
+
+
 @staff_member_required
 def upload_csv(request: HttpRequest) -> HttpResponse:
     message = None
@@ -1245,7 +1440,7 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "cancel":
-            for key in ("sess_path", "scalar_path", "specimen_path", "locality_path"):
+            for key in ("sess_path", "scalar_path", "specimen_path", "locality_path", "country_path"):
                 p = job.get(key)
                 if p:
                     try:
@@ -1258,13 +1453,15 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
                 pass
             kind = job.get("kind", "teeth")
             has_pending = any(
-                job.get(k) for k in ("sess_path", "scalar_path", "specimen_path", "locality_path")
+                job.get(k) for k in ("sess_path", "scalar_path", "specimen_path", "locality_path", "country_path")
             )
             if has_pending:
                 if kind == "specimen":
                     url = "/admin/upload/specimen/"
                 elif kind == "locality":
                     url = "/admin/upload/locality/"
+                elif kind == "country":
+                    url = "/admin/upload/country/"
                 else:
                     url = "/admin/upload/"
             else:
@@ -1284,6 +1481,13 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
                 upsert_errors, counts = _upsert_locality_data(locality_path)
                 try:
                     remove(locality_path)
+                except OSError:
+                    pass
+            elif kind == "country":
+                country_path = job.get("country_path", "")
+                upsert_errors, counts = _upsert_country_data(country_path)
+                try:
+                    remove(country_path)
                 except OSError:
                     pass
             else:
@@ -1341,6 +1545,8 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
             tables = ["specimen"]
         elif kind == "locality":
             tables = ["locality"]
+        elif kind == "country":
+            tables = ["country"]
         else:
             tables = ["session", "data_scalar"]
         backups = _get_backups()
