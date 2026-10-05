@@ -33,8 +33,10 @@
   <div class="app-web module">
     <table>
       <caption><a href="#" class="section">Data tools</a></caption>
-      <tr><th scope="row"><a href="{% url 'upload_csv' %}">Upload teeth CSV</a></th><td></td><td></td></tr>
+      <tr><th scope="row"><a href="{% url 'upload_csv' %}">Upload teeth/scalar CSV</a></th><td></td><td></td></tr>
       <tr><th scope="row"><a href="{% url 'upload_specimen_csv' %}">Upload specimen CSV</a></th><td></td><td></td></tr>
+      <tr><th scope="row"><a href="{% url 'upload_locality_csv' %}">Upload locality CSV</a></th><td></td><td></td></tr>
+      <tr><th scope="row"><a href="{% url 'upload_country_csv' %}">Upload country CSV</a></th><td></td><td></td></tr>
       <tr><th scope="row"><a href="{% url 'backup_table' %}">Back up table</a></th><td></td><td></td></tr>
       <tr><th scope="row"><a href="{% url 'restore_table' %}">Restore / delete backup</a></th><td></td><td></td></tr>
     </table>
