@@ -262,7 +262,7 @@ def download_success(request: HttpRequest) -> HttpResponse:
     return render(request, "web/download_success.jinja", {})
 
 
-BACKUP_TABLES = {"specimen", "session", "data_scalar"}
+BACKUP_TABLES = {"specimen", "session", "data_scalar", "locality"}
 UPLOAD_TABLES = {"session", "data_scalar"}
 
 
@@ -974,6 +974,221 @@ def _run_script(job_id: str, table: str, csv_path: str, filename: str) -> None:
                 pass
 
 
+def _validate_locality_csv(csv_path: str) -> list[str]:
+    errors: list[str] = []
+    seen_ids: set[str] = set()
+    dup_ids: set[str] = set()
+
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        for i, row in enumerate(csv_mod.DictReader(f), start=2):
+            row_id = row.get("uniqueid", "").strip()
+            name = row.get("locality_name", "").strip()
+            if not row_id:
+                errors.append(f"Row {i}: missing uniqueid")
+                continue
+            if not name:
+                errors.append(f"Row {i} (id={row_id}): missing locality_name")
+            if row_id in seen_ids:
+                if row_id not in dup_ids:
+                    errors.append(f"Repeated locality id: {row_id}")
+                    dup_ids.add(row_id)
+            else:
+                seen_ids.add(row_id)
+
+    return errors
+
+
+def _preview_locality_counts(csv_path: str) -> dict[str, int]:
+    compare_cols = [
+        "locality_name",
+        "continent_id",
+        "country_id",
+        "latitude",
+        "longitude",
+        "comments",
+    ]
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        csv_rows = [
+            {
+                "id": r["uniqueid"],
+                "locality_name": r.get("locality_name", ""),
+                "continent_id": r.get("cont", ""),
+                "country_id": r.get("countryID", ""),
+                "latitude": r.get("latitude", ""),
+                "longitude": r.get("longitud", ""),
+                "comments": r.get("comments", ""),
+            }
+            for r in csv_mod.DictReader(f)
+            if r.get("uniqueid", "").strip()
+        ]
+
+    if not csv_rows:
+        return {"localities_insert": 0, "localities_update": 0}
+
+    all_ids = [r["id"] for r in csv_rows]
+    csv_by_id = {r["id"]: r for r in csv_rows}
+
+    existing_ids: set[str] = set()
+    with connection.cursor() as cursor:
+        batch = 500
+        for i in range(0, len(all_ids), batch):
+            chunk = all_ids[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM locality WHERE id IN ({fmt})", chunk)
+            existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
+        inserts = len(set(all_ids) - existing_ids)
+        updates = 0
+        col_sql = ", ".join(f"`{c}`" for c in ["id"] + compare_cols)
+        existing_list = list(existing_ids)
+        for i in range(0, len(existing_list), batch):
+            chunk = existing_list[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT {col_sql} FROM locality WHERE id IN ({fmt})", chunk)
+            cols = [d[0] for d in cursor.description]
+            for db_row in cursor.fetchall():
+                db = dict(zip(cols, db_row))
+                csv = csv_by_id[str(db["id"])]
+                for col in compare_cols:
+                    db_val = "" if db[col] is None else str(db[col]).strip()
+                    csv_val = (csv.get(col) or "").strip()
+                    if db_val != csv_val:
+                        updates += 1
+                        break
+
+    return {"localities_insert": inserts, "localities_update": updates}
+
+
+def _upsert_locality_data(csv_path: str) -> tuple[list[str], dict[str, int]]:
+    errors: list[str] = []
+    counts = {"localities_inserted": 0, "localities_updated": 0}
+
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
+        csv_rows = list(csv_mod.DictReader(f))
+
+    all_ids = [r["uniqueid"] for r in csv_rows if r.get("uniqueid", "").strip()]
+
+    existing_ids: set[str] = set()
+    batch = 500
+    with connection.cursor() as cursor:
+        for i in range(0, len(all_ids), batch):
+            chunk = all_ids[i : i + batch]
+            fmt = ",".join(["%s"] * len(chunk))
+            cursor.execute(f"SELECT id FROM locality WHERE id IN ({fmt})", chunk)
+            existing_ids.update(str(r[0]) for r in cursor.fetchall())
+
+        for row in csv_rows:
+            row_id = row.get("uniqueid", "").strip()
+            if not row_id:
+                continue
+            try:
+                with transaction.atomic():
+                    cursor.execute(
+                        """
+                        INSERT INTO locality
+                            (id, locality_name, continent_id, country_id,
+                             latitude, longitude, comments)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            locality_name = VALUES(locality_name),
+                            continent_id = VALUES(continent_id),
+                            country_id = VALUES(country_id),
+                            latitude = VALUES(latitude),
+                            longitude = VALUES(longitude),
+                            comments = VALUES(comments)
+                        """,
+                        [
+                            row_id,
+                            row.get("locality_name", ""),
+                            row.get("cont") or None,
+                            row.get("countryID") or None,
+                            row.get("latitude") or None,
+                            row.get("longitud") or None,
+                            row.get("comments") or None,
+                        ],
+                    )
+                    rc = cursor.rowcount
+                if row_id not in existing_ids:
+                    counts["localities_inserted"] += 1
+                elif rc == 2:
+                    counts["localities_updated"] += 1
+            except Exception as e:
+                msg = str(e)
+                fk_col = re.search(r"FOREIGN KEY \(`(\w+)`\)", msg)
+                ref_table = re.search(r"REFERENCES `(\w+)`", msg)
+                if fk_col and ref_table:
+                    col = fk_col.group(1)
+                    tbl = ref_table.group(1)
+                    val = row.get(col, "?")
+                    friendly = f"No {tbl} with id {val} exists."
+                else:
+                    friendly = msg
+                errors.append(f"Failed to insert locality {row_id}: {friendly}")
+
+    return errors, counts
+
+
+@staff_member_required
+def upload_locality_csv(request: HttpRequest) -> HttpResponse:
+    message = None
+    message_class = "success"
+    if request.method == "POST":
+        csv_file = request.FILES.get("csv_file")
+        if not csv_file:
+            message = "No file selected."
+            message_class = "errornote"
+        elif not csv_file.name or not csv_file.name.endswith(".csv"):
+            message = "File must be a CSV."
+            message_class = "errornote"
+        else:
+            filename: str = csv_file.name
+            tmp_path = path.join(settings.DOWNLOAD_ROOT, filename)
+            try:
+                with open(tmp_path, "wb") as f:
+                    for chunk in csv_file.chunks():
+                        f.write(chunk)
+                validation_errors = _validate_locality_csv(tmp_path)
+                job_id = str(uuid.uuid4())
+                if validation_errors:
+                    try:
+                        remove(tmp_path)
+                    except OSError:
+                        pass
+                    _jobs[job_id] = {
+                        "done": True,
+                        "success": False,
+                        "errors": validation_errors[:_MAX_ERRORS],
+                        "truncated": len(validation_errors) > _MAX_ERRORS,
+                        "total_errors": len(validation_errors),
+                        "filename": filename,
+                        "kind": "locality",
+                    }
+                else:
+                    preview = _preview_locality_counts(tmp_path)
+                    _jobs[job_id] = {
+                        "done": True,
+                        "success": True,
+                        "errors": [],
+                        "preview": preview,
+                        "locality_path": tmp_path,
+                        "filename": filename,
+                        "kind": "locality",
+                    }
+                return redirect(f"/admin/upload/status/{job_id}/")
+            except Exception as e:
+                message = f"Upload failed: {e}"
+                message_class = "errornote"
+    return render(
+        request,
+        "admin/upload_locality.html",
+        {
+            "message": message,
+            "message_class": message_class,
+            "title": "Upload Locality CSV",
+        },
+    )
+
+
 @staff_member_required
 def upload_csv(request: HttpRequest) -> HttpResponse:
     message = None
@@ -1030,7 +1245,7 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "cancel":
-            for key in ("sess_path", "scalar_path", "specimen_path"):
+            for key in ("sess_path", "scalar_path", "specimen_path", "locality_path"):
                 p = job.get(key)
                 if p:
                     try:
@@ -1041,16 +1256,17 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
                 remove(_job_path(job_id))
             except OSError:
                 pass
+            kind = job.get("kind", "teeth")
             has_pending = any(
-                job.get(k) for k in ("sess_path", "scalar_path", "specimen_path")
+                job.get(k) for k in ("sess_path", "scalar_path", "specimen_path", "locality_path")
             )
             if has_pending:
-                kind = job.get("kind", "teeth")
-                url = (
-                    "/admin/upload/specimen/"
-                    if kind == "specimen"
-                    else "/admin/upload/"
-                )
+                if kind == "specimen":
+                    url = "/admin/upload/specimen/"
+                elif kind == "locality":
+                    url = "/admin/upload/locality/"
+                else:
+                    url = "/admin/upload/"
             else:
                 url = "/admin/"
             return redirect(url)
@@ -1061,6 +1277,13 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
                 upsert_errors, counts = _upsert_specimen_data(specimen_path)
                 try:
                     remove(specimen_path)
+                except OSError:
+                    pass
+            elif kind == "locality":
+                locality_path = job.get("locality_path", "")
+                upsert_errors, counts = _upsert_locality_data(locality_path)
+                try:
+                    remove(locality_path)
                 except OSError:
                     pass
             else:
@@ -1105,16 +1328,21 @@ def upload_status(request: HttpRequest, job_id: str) -> HttpResponse:
         if m:
             try:
                 dt = datetime.strptime(f"{m.group(1)}_{m.group(2)}", "%Y%m%d_%H%M")
-                label = dt.strftime("%-d %B %Y, %H:%M").replace(
+                backup_msg = dt.strftime("%-d %B %Y, %H:%M").replace(
                     dt.strftime("%-d"), _ordinal(dt.day), 1
                 )
-                backup_msg = label
             except ValueError:
                 backup_msg = backup_name
+
     last_backup_label = ""
     if job.get("done") and not job.get("errors") and not job.get("confirmed"):
         kind = job.get("kind", "teeth")
-        tables = ["specimen"] if kind == "specimen" else ["session", "data_scalar"]
+        if kind == "specimen":
+            tables = ["specimen"]
+        elif kind == "locality":
+            tables = ["locality"]
+        else:
+            tables = ["session", "data_scalar"]
         backups = _get_backups()
         candidates = [backups[t][0][1] for t in tables if backups.get(t)]
         if candidates:
@@ -1187,13 +1415,15 @@ def backup_table(request: HttpRequest) -> HttpResponse:
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M")
             backup_name = f"{table}_{timestamp}"
+            next_url = request.POST.get("next", "")
             try:
                 with connection.cursor() as cursor:
                     cursor.execute(
                         f"CREATE TABLE `{backup_name}` AS SELECT * FROM `{table}`"
                     )
                 if next_url and next_url.startswith("/"):
-                    return redirect(f"{next_url}?backup_msg={backup_name}")
+                    sep = "&" if "?" in next_url else "?"
+                    return redirect(f"{next_url}{sep}backup_msg={backup_name}")
                 message = f"Backup created: {backup_name}"
             except Exception as e:
                 message = f"Backup failed: {e}"
